@@ -1,36 +1,20 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Holo · marketplace de cartas coleccionables (Panamá)
 
-## Getting Started
+MVP de un marketplace de cartas Pokémon, NBA y NFL, con precio estimado y Compra Protegida.
 
-First, run the development server:
+- Negocio: [docs/01-business-analysis.md](docs/01-business-analysis.md)
+- Producto: [docs/02-product-spec.md](docs/02-product-spec.md)
+- Arquitectura: [docs/03-architecture.md](docs/03-architecture.md)
+- Decisiones: [docs/decisions.md](docs/decisions.md)
+
+## Desarrollo
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+export PATH="$HOME/.local/node/bin:$PATH"
+cp .env.example .env.local   # llena las claves que tengas
+npm install
+npm run dev                  # http://localhost:3000
+npm test                     # comisiones, estimación de precios, filtros
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Sin `NEXT_PUBLIC_SUPABASE_URL` la app corre con datos demo (`src/lib/data/seed.ts`).

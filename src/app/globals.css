@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f5f3ee;
+  --surface: #ffffff;
+  --surface-2: #edeae3;
+  --ink: #15130f;
+  --ink-2: #5e5a52;
+  --line: #e2ded5;
+  --accent: #1f4bff;
+  --accent-ink: #ffffff;
+  --good: #0f8a5f;
+  --good-bg: #e3f4ec;
+  --warn: #9a6200;
+  --warn-bg: #fbf0d9;
+  --bad: #b93c0c;
+  --bad-bg: #fbe6dc;
+  --holo: linear-gradient(115deg, #7cf3d5 0%, #8ab6ff 35%, #d59bff 65%, #ffc98a 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0e0e10;
+    --surface: #17171a;
+    --surface-2: #212126;
+    --ink: #f2f0eb;
+    --ink-2: #a19d95;
+    --line: #2c2c32;
+    --accent: #7390ff;
+    --accent-ink: #0e0e10;
+    --good: #4fd19c;
+    --good-bg: #13291f;
+    --warn: #f0b54a;
+    --warn-bg: #2e2412;
+    --bad: #ff8a5c;
+    --bad-bg: #321a10;
   }
 }
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-good: var(--good);
+  --color-good-bg: var(--good-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-bricolage);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.holo-text {
+  background: var(--holo);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.holo-border {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    var(--holo) border-box;
+}
+
+/* Trading cards are 63×88 mm. */
+.card-ratio {
+  aspect-ratio: 63 / 88;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lift {
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -12px rgb(0 0 0 / 0.25);
+  }
 }
