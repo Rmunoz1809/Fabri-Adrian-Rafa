@@ -65,6 +65,12 @@ export default async function ListingPage({ params }: PageProps<"/carta/[id]">) 
             <p className="mt-3 font-display text-4xl font-bold">{formatUsd(price)}</p>
           </div>
 
+          {listing.isDemo && (
+            <p className="rounded-xl bg-warn-bg p-3 text-sm text-warn">
+              Anuncio de ejemplo para mostrar cómo funciona la plataforma. No está a la venta.
+            </p>
+          )}
+
           <EstimatePanel estimate={listing.estimate} priceUsd={listing.priceUsd} />
 
           {quote && (

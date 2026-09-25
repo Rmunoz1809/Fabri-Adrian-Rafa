@@ -17,6 +17,11 @@ export function ListingCard({ listing, priority }: { listing: Listing; priority?
         <div className="absolute left-2 top-2 flex gap-1">
           <ConditionBadge listing={listing} />
         </div>
+        {listing.isDemo && (
+          <span className="absolute right-2 top-2 rounded-md bg-surface/90 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-ink-2">
+            Ejemplo
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <p className="line-clamp-2 text-sm font-medium leading-snug">{listing.title}</p>

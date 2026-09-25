@@ -79,4 +79,6 @@ export interface Listing {
   estimate: PriceEstimate | null;
   protectedEligible: boolean;
   createdAt: string;
+  /** Example data shown before real inventory exists. */
+  isDemo?: boolean;
 }

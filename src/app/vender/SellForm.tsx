@@ -6,6 +6,7 @@ import { formatUsd, toCents } from "@/lib/fees";
 import { priceVerdict } from "@/lib/pricing/estimate";
 import type { PriceEstimate } from "@/lib/types";
 import type { Recognition } from "@/lib/ai/recognize";
+import { compressImage } from "@/lib/image";
 import { publishListing, type PublishState } from "./actions";
 
 type RecognizeResponse = {
@@ -46,13 +47,27 @@ export function SellForm() {
     [priceNum, ai],
   );
 
-  function onFiles(list: FileList | null) {
-    const picked = Array.from(list ?? []).slice(0, 2);
+  const [preparing, setPreparing] = useState(false);
+
+  async function onFiles(list: FileList | null) {
+    const picked = Array.from(list ?? []).slice(0, 4);
+    if (picked.length === 0) return;
+    setPreparing(true);
+    const compressed = await Promise.all(picked.map(compressImage));
+    setPreparing(false);
     previews.forEach((u) => URL.revokeObjectURL(u));
-    setFiles(picked);
-    setPreviews(picked.map((f) => URL.createObjectURL(f)));
+    setFiles(compressed);
+    setPreviews(compressed.map((f) => URL.createObjectURL(f)));
     setAi(null);
     setScanError(null);
+  }
+
+  // Photos live in state (not the file input) so a failed submit doesn't lose them:
+  // React resets uncontrolled form fields after every action.
+  function submit(fd: FormData) {
+    fd.delete("photos");
+    files.forEach((f) => fd.append("photos", f));
+    return formAction(fd);
   }
 
   async function scan() {
@@ -61,7 +76,7 @@ export function SellForm() {
     setScanError(null);
     try {
       const body = new FormData();
-      files.forEach((f) => body.append("photos", f));
+      files.slice(0, 2).forEach((f) => body.append("photos", f));
       const res = await fetch("/api/recognize", { method: "POST", body });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "No se pudo identificar la carta.");
@@ -92,7 +107,7 @@ export function SellForm() {
   const loc = LOCATIONS.flatMap((l) => l.neighborhoods.map((n) => ({ ...l, neighborhood: n })));
 
   return (
-    <form action={formAction} className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <form action={submit} className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       {/* Step 1: photos + AI */}
       <section className="flex flex-col gap-3 lg:sticky lg:top-20 lg:self-start">
         <h2 className="font-display text-lg font-bold">1. Fotos</h2>
@@ -104,21 +119,25 @@ export function SellForm() {
             <>
               <span className="text-4xl" aria-hidden>📸</span>
               <span className="font-medium">Toma o sube una foto</span>
-              <span className="px-6 text-xs text-ink-2">Frente y reverso, con buena luz y sin reflejos. JPG, PNG o WebP de hasta 5 MB.</span>
+              <span className="px-6 text-xs text-ink-2">Frente y reverso (hasta 4 fotos), con buena luz y sin reflejos.</span>
             </>
           )}
           <input
             type="file"
-            name="photos"
             accept="image/jpeg,image/png,image/webp"
-            capture="environment"
             multiple
             className="sr-only"
             onChange={(e) => onFiles(e.target.files)}
           />
         </label>
+        {preparing && <p className="text-xs text-ink-2">Preparando fotos…</p>}
         {previews.length > 1 && (
-          <p className="text-xs text-ink-2">{previews.length} fotos seleccionadas</p>
+          <div className="flex gap-2">
+            {previews.map((u, i) => (
+              // eslint-disable-next-line @next/next/no-img-element -- local blob preview
+              <img key={u} src={u} alt={`Foto ${i + 1}`} className="h-16 w-12 rounded-md border border-line object-cover" />
+            ))}
+          </div>
         )}
         <button
           type="button"

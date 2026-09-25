@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Inter } from "next/font/google";
 import Link from "next/link";
 import { APP_NAME } from "@/lib/catalog";
+import { getCurrentUser } from "@/lib/supabase/server";
+import { signOut } from "./entrar/actions";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -19,7 +21,8 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const user = await getCurrentUser();
   return (
     <html lang="es-PA" className={`${inter.variable} ${bricolage.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
@@ -42,6 +45,17 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/protegida" className="hidden rounded-full px-3 py-2 text-ink-2 hover:text-ink md:block">
                 Compra Protegida
               </Link>
+              {user ? (
+                <form action={signOut} className="hidden sm:block">
+                  <button className="rounded-full px-3 py-2 text-ink-2 hover:text-ink" title="Salir">
+                    {user.displayName} · Salir
+                  </button>
+                </form>
+              ) : (
+                <Link href="/entrar" className="rounded-full px-3 py-2 text-ink-2 hover:text-ink">
+                  Entrar
+                </Link>
+              )}
               <Link
                 href="/vender"
                 className="rounded-full bg-accent px-4 py-2 font-semibold text-accent-ink hover:opacity-90"

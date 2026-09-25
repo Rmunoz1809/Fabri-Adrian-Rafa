@@ -20,14 +20,31 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
--- Public projection without private columns.
-create view public.public_profiles with (security_invoker = true) as
+-- Public projection without private columns. Deliberately NOT security_invoker:
+-- profiles RLS only exposes a user's own row, and this view must show every
+-- seller's public fields (and nothing else) to everyone.
+create view public.public_profiles as
   select id, display_name, avatar_url, is_shop, verified, created_at from public.profiles;
+grant select on public.public_profiles to anon, authenticated;
 
 create function public.is_staff() returns boolean
   language sql stable security definer set search_path = public as $$
   select coalesce((select is_staff from public.profiles where id = auth.uid()), false)
 $$;
+
+-- Every new auth user gets a profile row.
+create function public.handle_new_user() returns trigger
+  language plpgsql security definer set search_path = public as $$
+declare
+  v_name text := left(coalesce(nullif(trim(new.raw_user_meta_data->>'display_name'), ''),
+                             split_part(new.email, '@', 1)), 40);
+begin
+  if char_length(coalesce(v_name, '')) < 2 then v_name := 'Coleccionista'; end if;
+  insert into public.profiles (id, display_name) values (new.id, v_name);
+  return new;
+end $$;
+create trigger on_auth_user_created after insert on auth.users
+  for each row execute function public.handle_new_user();
 
 -- -------------------------------------------------------------- categories
 create table public.categories (
@@ -80,6 +97,8 @@ create table public.listings (
   status text not null default 'active' check (status in ('draft', 'active', 'reserved', 'sold', 'removed')),
   protected_eligible boolean not null default false,
   ai_flags jsonb not null default '[]',
+  catalog_id text, -- external catalog id, e.g. pokemontcg.io "sv3pt5-199"
+  estimate jsonb, -- PriceEstimate computed at publish time
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check ((grading_company is null) = (grade is null)),
@@ -117,13 +136,14 @@ create table public.sales (
   id uuid primary key default gen_random_uuid(),
   listing_id uuid references public.listings on delete set null,
   card_id uuid references public.cards,
+  catalog_id text,
   grading_key text not null default 'raw', -- 'raw' or e.g. 'PSA10'
   condition text,
   price_cents int not null check (price_cents > 0),
   via_protected boolean not null default false,
   sold_at timestamptz not null default now()
 );
-create index sales_comp_idx on public.sales (card_id, grading_key, sold_at desc);
+create index sales_comp_idx on public.sales (catalog_id, grading_key, sold_at desc);
 
 -- ----------------------------------------------------- protected orders
 create table public.protected_orders (
@@ -195,6 +215,8 @@ create policy "sellers create listings" on public.listings for insert
 create policy "sellers edit own listings" on public.listings for update
   using (seller_id = auth.uid() or public.is_staff())
   with check (seller_id = auth.uid() or public.is_staff());
+create policy "sellers delete own listings" on public.listings for delete
+  using (seller_id = auth.uid() or public.is_staff());
 
 create policy "photos readable" on public.listing_photos for select using (
   exists (select 1 from public.listings l where l.id = listing_id

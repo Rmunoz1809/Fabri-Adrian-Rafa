@@ -34,7 +34,7 @@ function hydrate(seed: (typeof SEED_LISTINGS)[number]): Listing {
     grading: seed.grading,
     now: new Date("2026-09-25T12:00:00Z"),
   });
-  return { ...rest, seller: SELLERS[sellerKey], estimate };
+  return { ...rest, seller: SELLERS[sellerKey], estimate, isDemo: true };
 }
 
 export function matchesFilters(l: Listing, f: ListingFilters): boolean {
@@ -62,13 +62,32 @@ export function sortListings(list: Listing[], sort: SortKey = "recientes"): List
   return copy;
 }
 
-// Demo repository. Swapped for the Supabase implementation once env vars exist.
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function showDemo(): boolean {
+  return !process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SHOW_DEMO_LISTINGS === "true";
+}
+
+// Real listings come from Supabase when configured; demo listings are mixed in
+// until SHOW_DEMO_LISTINGS is turned off, and are always labeled as examples.
 export async function listListings(filters: ListingFilters = {}): Promise<Listing[]> {
-  const all = SEED_LISTINGS.map(hydrate);
-  return sortListings(all.filter((l) => matchesFilters(l, filters)), filters.sort);
+  const demo = showDemo() ? SEED_LISTINGS.map(hydrate).filter((l) => matchesFilters(l, filters)) : [];
+  let real: Listing[] = [];
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    const { fetchListings } = await import("./supabase-listings");
+    real = await fetchListings(filters).catch((e) => {
+      console.error(e);
+      return [];
+    });
+  }
+  return sortListings([...real, ...demo], filters.sort);
 }
 
 export async function getListing(id: string): Promise<Listing | null> {
+  if (UUID.test(id) && process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    const { fetchListing } = await import("./supabase-listings");
+    return fetchListing(id);
+  }
   const seed = SEED_LISTINGS.find((l) => l.id === id);
   return seed ? hydrate(seed) : null;
 }
