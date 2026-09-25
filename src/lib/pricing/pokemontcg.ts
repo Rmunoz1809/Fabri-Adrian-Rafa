@@ -23,13 +23,23 @@ function headers(): HeadersInit {
   return key ? { "X-Api-Key": key } : {};
 }
 
+// Without an API key the service returns frequent 5xx; retry those with backoff.
+const RETRIES = 3;
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    headers: headers(),
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
-  if (!res.ok) throw new Error(`pokemontcg.io ${res.status}`);
-  return res.json() as Promise<T>;
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < RETRIES; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 600 * 2 ** (attempt - 1)));
+    const res = await fetch(`${API}${path}`, {
+      headers: headers(),
+      next: { revalidate: REVALIDATE_SECONDS },
+      signal: AbortSignal.timeout(10_000),
+    }).catch(() => null);
+    if (res?.ok) return res.json() as Promise<T>;
+    lastStatus = res?.status ?? 0;
+    if (res && res.status < 500 && res.status !== 429) break;
+  }
+  throw new Error(`pokemontcg.io ${lastStatus || "network error"}`);
 }
 
 const SELECT = "id,name,number,rarity,set,images,tcgplayer";
@@ -43,14 +53,17 @@ export async function searchPokemonCards(opts: {
   number?: string;
   setName?: string;
 }): Promise<PokemonCatalogCard[]> {
-  const parts = [`name:"${escapeQuery(opts.name)}*"`];
-  if (opts.number) parts.push(`number:"${escapeQuery(opts.number.split("/")[0])}"`);
-  if (opts.setName) parts.push(`set.name:"${escapeQuery(opts.setName)}*"`);
-  const q = encodeURIComponent(parts.join(" "));
-  const data = await get<{ data: PokemonCatalogCard[] }>(
-    `/cards?q=${q}&pageSize=12&orderBy=-set.releaseDate&select=${SELECT}`,
-  );
-  return data.data;
+  // Exact phrase match: wildcards inside quotes make the API return 5xx.
+  const name = `name:"${escapeQuery(opts.name)}"`;
+  const number = opts.number?.split("/")[0].replace(/^#/, "").trim();
+  const queries = number ? [`${name} number:"${escapeQuery(number)}"`, name] : [name];
+  for (const q of queries) {
+    const data = await get<{ data: PokemonCatalogCard[] }>(
+      `/cards?q=${encodeURIComponent(q)}&pageSize=12&orderBy=-set.releaseDate&select=${SELECT}`,
+    );
+    if (data.data.length > 0) return data.data;
+  }
+  return [];
 }
 
 export async function getPokemonCard(id: string): Promise<PokemonCatalogCard | null> {

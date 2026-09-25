@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { recognizeCard, RecognitionError, type ImageMediaType } from "@/lib/ai/recognize";
-import { getPokemonCard, pickReferencePrice, searchPokemonCards } from "@/lib/pricing/pokemontcg";
+import { pickReferencePrice, searchPokemonCards } from "@/lib/pricing/pokemontcg";
 import { estimatePrice } from "@/lib/pricing/estimate";
 
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -47,8 +47,11 @@ export async function POST(req: Request) {
       const candidates = await searchPokemonCards({
         name: card.subject,
         number: card.card_number ?? undefined,
-      }).catch(() => []);
-      const best = candidates[0] ? await getPokemonCard(candidates[0].id) : null;
+      }).catch((e) => {
+        console.warn("catalog lookup failed:", e instanceof Error ? e.message : e);
+        return [];
+      });
+      const best = candidates[0] ?? null;
       if (best) {
         match = { id: best.id, name: best.name, set: best.set.name, number: best.number, image: best.images.small };
         estimate = estimatePrice({

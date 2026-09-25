@@ -14,3 +14,4 @@
 | 2026-09-25 | Stack: Next.js 16 + Supabase + Claude Opus 5; web móvil primero, Expo en v2 | Un solo codebase; la app nativa no valida nada nuevo |
 | 2026-09-25 | Nombre provisional "Holo" (constante APP_NAME) | Fácil de cambiar; falta decidir marca y dominio |
 | 2026-09-25 | Node 22 LTS instalado en ~/.local/node (sin Homebrew) | No había Node; instalación sin sudo |
+| 2026-09-25 | pokemontcg.io sigue sin API key (ya no acepta registros; la API queda obsoleta el 2027-03-01). Hay reintentos con backoff y caché de 12 h. Migrar a Scrydex (desde $29/mes, incluye precios de graduadas) cuando el MVP valide | Evita un costo fijo antes de tener señales; la fecha límite da margen |
