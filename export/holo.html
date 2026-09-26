@@ -422,6 +422,12 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
 .display { letter-spacing: -.025em; font-weight: 800; }
 .panel h2:not(.ptitle) { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
 label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
+.share-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; } .share-row .btn { flex: 1 1 130px; min-width: 0; }
+.verif img { width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; background: var(--surface-2); margin-top: 10px; }
+.verif-up img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; margin-top: 10px; background: var(--surface-2); }
+.chip-img.good { color: var(--good); padding: 0 5px; }
+details.report summary { cursor: pointer; font-size: 13px; color: var(--ink-2); display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; }
+details.report .i { width: 14px; height: 14px; }
 .row-input { display: flex; gap: 8px; }
 .row-input .input { flex: 1; min-width: 0; }
 .row-input .btn { flex-shrink: 0; }
@@ -1231,6 +1237,11 @@ let session = null;
 let profileName = null;
 let isStaff = false;
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
+// Migration 0006 adds listing_photos.kind ("card" | "verification"). Until it is applied the
+// select falls back to the old columns, so the site keeps working either way.
+let photoKinds = true;
+const listingCols = () => photoKinds ? LISTING_COLS.replace("listing_photos (storage_path, position)", "listing_photos (storage_path, position, kind)") : LISTING_COLS;
+const missingKind = (e) => photoKinds && e?.code === "42703" && /kind/.test(e?.message ?? "");
 const photoUrl = (path) => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
 
 const profilePhotoUrl = (path) => path ? `${CONFIG.SUPABASE_URL}/storage/v1/object/public/profile-photos/${path.split("/").map(encodeURIComponent).join("/")}` : null;
@@ -1246,7 +1257,8 @@ function rowToListing(r, prof) {
     card: { category: r.category, subject: r.subject, setName: r.set_name, year: r.year, number: r.number, variant: r.variant, catalogId: r.catalog_id },
     condition: r.condition, grading: r.grading_company && r.grade != null ? { company: r.grading_company, grade: Number(r.grade), cert: r.cert_number ?? null } : null,
     priceUsd: r.price_cents / 100,
-    photos: [...(r.listing_photos ?? [])].sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
+    photos: [...(r.listing_photos ?? [])].filter((p) => p.kind !== "verification").sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
+    verificationPhoto: (r.listing_photos ?? []).filter((p) => p.kind === "verification").map((p) => photoUrl(p.storage_path))[0] ?? null,
     location: { province: r.province, district: r.district, neighborhood: r.neighborhood },
     seller: profileToSeller(r.seller_id, prof),
     sellerId: r.seller_id, status: r.status, estimate: r.estimate, protectedEligible: r.protected_eligible, createdAt: r.created_at,
@@ -1273,7 +1285,7 @@ async function verifiedShopIds() {
 
 async function fetchRealListings(f) {
   if (!sb) return [];
-  let q = sb.from("listings").select(LISTING_COLS).eq("status", "active").limit(60);
+  let q = sb.from("listings").select(listingCols()).eq("status", "active").limit(60);
   if (f.seller) {
     const shops = await verifiedShopIds();
     if (f.seller === "tiendas") {
@@ -1292,12 +1304,14 @@ async function fetchRealListings(f) {
   for (const t of searchTokens(f.q)) q = q.or(["title", "subject", "set_name", "neighborhood", "district", "province"].map((c) => `${c}.ilike.%${t}%`).join(","));
   q = q.order("created_at", { ascending: false });
   const { data, error } = await q;
+  if (missingKind(error)) { photoKinds = false; return fetchRealListings(f); }
   if (error) { console.error(error); return []; }
   return withProfiles(data ?? []);
 }
 async function fetchRealListing(id) {
   if (!sb) return null;
-  const { data, error } = await sb.from("listings").select(LISTING_COLS).eq("id", id).maybeSingle();
+  const { data, error } = await sb.from("listings").select(listingCols()).eq("id", id).maybeSingle();
+  if (missingKind(error)) { photoKinds = false; return fetchRealListing(id); }
   if (error || !data) return null;
   return (await withProfiles([data]))[0];
 }
@@ -1449,6 +1463,7 @@ function verdictBadge(l) {
   return { "buen-precio": `<span class="b good">Buen precio</span>`, "en-rango": `<span class="b neutral">Precio justo</span>`, alto: `<span class="b warn">Sobre el mercado</span>` }[v] ?? "";
 }
 const protectedBadge = () => `<span class="b prot">${ic("shield")}Compra Protegida</span>`;
+const verifBadge = () => `<span class="b good" title="El vendedor subió una foto de la carta con un papel escrito a mano">${ic("camera")}Foto de verificación</span>`;
 const shopBadge = () => `<span class="b shop">${ic("store")}Tienda verificada</span>`;
 /** Price vs. the estimate's middle value, Collectr-style: arrow + amount + percent. */
 function marketDelta(l) {
@@ -1462,7 +1477,7 @@ function marketDelta(l) {
 function tile(l, i = 0) {
   return `<li style="--i:${Math.min(i, 16)}"><a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
     <div class="media card-ratio"><div class="inner">${cardArt(l)}</div>
-      <div class="corner-l">${conditionBadge(l)}${l.protectedEligible ? `<span class="chip-img prot" title="Compra Protegida disponible">${ic("shield")}<span class="sr-only">Compra Protegida disponible</span></span>` : ""}</div>
+      <div class="corner-l">${conditionBadge(l)}${l.protectedEligible ? `<span class="chip-img prot" title="Compra Protegida disponible">${ic("shield")}<span class="sr-only">Compra Protegida disponible</span></span>` : ""}${l.verificationPhoto ? `<span class="chip-img good" title="Tiene foto de verificación">${ic("camera")}<span class="sr-only">Tiene foto de verificación</span></span>` : ""}</div>
       ${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
     <p class="title">${esc(l.title)}</p>
     <p class="set">${esc([l.card.setName, l.card.number].filter(Boolean).join(" · "))}</p>
@@ -1994,6 +2009,8 @@ async function viewDetail(app, id) {
   const buy = quote ? waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.`) : null;
   const cond = CONDITIONS.find((c) => c.code === l.condition);
   const isOwner = session && l.sellerId === session.user.id;
+  const forSale = l.isDemo || l.status === "active";
+  const statusNote = { sold: "Esta carta ya se vendió.", reserved: "Esta carta está reservada: hay una Compra Protegida en curso.", removed: "Este anuncio fue retirado.", draft: "Este anuncio todavía no está publicado." }[l.status];
   const meta = [l.card.year, l.card.number, l.card.variant].filter(Boolean).map(esc).join('<span class="sep" aria-hidden="true">•</span>');
 
   app.innerHTML = `
@@ -2004,17 +2021,21 @@ async function viewDetail(app, id) {
           <h1>${esc(l.title)}</h1>
           ${l.card.setName ? `<a class="dset" href="#/?q=${encodeURIComponent(l.card.setName)}">${esc(l.card.setName)}</a>` : ""}
           ${meta ? `<p class="dmeta">${meta}</p>` : ""}
-          <div class="dbadges">${conditionBadge(l)}${l.protectedEligible ? protectedBadge() : ""}${verdictBadge(l)}</div>
+          <div class="dbadges">${conditionBadge(l)}${l.protectedEligible ? protectedBadge() : ""}${l.verificationPhoto ? verifBadge() : ""}${verdictBadge(l)}</div>
         </div>
         <div class="dprice"><p class="big">${formatUsd(price)}</p>${marketDelta(l)}</div>
       </div>
       ${l.isDemo ? `<p class="notice warn">Anuncio de ejemplo para mostrar cómo funciona la plataforma. No está a la venta.</p>` : ""}
+      ${!l.isDemo && statusNote ? `<p class="notice ${l.status === "sold" ? "good" : "warn"}" style="font-weight:600">${statusNote}</p>` : ""}
     </div></section>
     <div class="wrap dgrid">
       <div class="dmedia">
         <div class="big-art card-ratio"><div class="inner" id="bigArt">${cardArt(l)}</div></div>
         ${l.photos.length > 1 ? `<div class="thumbs">${l.photos.map((p, i) => `<img src="${esc(p)}" data-i="${i}" class="${i === 0 ? "on" : ""}" alt="Foto ${i + 1}" role="button" tabindex="0">`).join("")}</div>` : ""}
         ${l.isDemo && l.photos.length ? `<p class="media-note">Imagen de catálogo. Pide fotos reales del frente y el reverso antes de comprar.</p>` : ""}
+        ${l.verificationPhoto ? `<section class="panel verif"><h2 class="ptitle">${ic("camera")}Foto de verificación</h2>
+          <p class="sub">El vendedor fotografió la carta junto a un papel escrito a mano con “HOLO” y la fecha. Así sabes que la tiene en sus manos y que las fotos no son de internet.</p>
+          <a href="${esc(l.verificationPhoto)}" target="_blank" rel="noopener"><img src="${esc(l.verificationPhoto)}" alt="Foto de verificación de la carta" loading="lazy"></a></section>` : ""}
       </div>
       <div class="dmain">
         <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Cargando historial…</p></section>
@@ -2026,19 +2047,30 @@ async function viewDetail(app, id) {
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
       </div>
       <aside class="dside">
-        ${quote ? `<section class="panel"><h2 class="ptitle">${ic("shield")}Compra Protegida</h2>
+        ${quote && forSale ? `<section class="panel"><h2 class="ptitle">${ic("shield")}Compra Protegida</h2>
           <p class="sub">Pagas a ${esc(CONFIG.APP_NAME)}, verificamos la carta en persona y solo entonces le pagamos al vendedor. Si no es lo anunciado, te devolvemos todo.</p>
           <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección y verificación (4%)</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
           <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
           ${buy ? `<a class="btn primary block" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
-        <section class="panel"><h2 class="ptitle">${ic("chat")}Contacto</h2>
-          ${contact ? `<a class="btn outline block" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}</section>
+        ${!forSale ? "" : `<section class="panel"><h2 class="ptitle">${ic("chat")}Contacto</h2>
+          ${contact ? `<a class="btn outline block" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}</section>`}
+        <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
+          <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
+          <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a></div></section>
         ${sellerPanel(l.seller)}
         <section class="panel"><h2 class="ptitle">${ic("info")}Compra segura</h2>
           <ul class="tips">
             <li>${ic("check")}<span>Reúnete en un lugar público (mall o tienda aliada) y a la luz del día.</span></li><li>${ic("check")}<span>Revisa la carta con luz: textura, brillo holo, tipografía y reverso.</span></li>
             <li>${ic("check")}<span>Si es graduada, verifica el número de certificado en la web de la empresa.</span></li><li>${ic("check")}<span>Nunca pagues por adelantado fuera de Compra Protegida.</span></li></ul></section>
+        ${isOwner && ["active", "reserved"].includes(l.status) ? `<section class="panel"><h2 class="ptitle">${ic("tag")}¿Ya la vendiste?</h2>
+          <p class="sub">Márcala como vendida para que deje de aparecer. Si nos dices el precio final, ayudas a que los precios estimados reflejen lo que se paga en Panamá.</p>
+          <div class="row-input" style="margin-top:12px"><input class="input" id="soldPrice" type="number" min="1" step="0.01" inputmode="decimal" placeholder="Precio final (opcional)"><button type="button" class="btn primary" id="markSold">Marcar vendida</button></div></section>` : ""}
         ${isOwner ? `<button type="button" class="btn danger block" id="deleteListing">${ic("trash")}Eliminar mi anuncio</button>` : ""}
+        ${!isOwner && !l.isDemo && session ? `<details class="report"><summary>${ic("alert")}Reportar este anuncio</summary>
+          <div class="col" style="gap:10px;margin-top:10px">
+            <label class="f">Motivo<select class="select" id="repReason"><option value="replica">Parece réplica o falsificación</option><option value="estafa">Posible estafa</option><option value="precio">Precio o datos engañosos</option><option value="contenido">Contenido inapropiado</option><option value="otro">Otro</option></select></label>
+            <label class="f">Detalles (opcional)<textarea class="textarea" id="repDetails" rows="3" maxlength="500"></textarea></label>
+            <button type="button" class="btn outline" id="repSend">Enviar reporte</button></div></details>` : ""}
       </aside>
     </div>`;
 
@@ -2050,6 +2082,30 @@ async function viewDetail(app, id) {
   app.querySelectorAll(".thumbs img").forEach((t) => {
     t.addEventListener("click", () => pick(t));
     t.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(t); } });
+  });
+  setupShare(l);
+  $("#markSold")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget, raw = $("#soldPrice").value.trim(), usd = raw ? Number(raw) : null;
+    if (raw && !(usd > 0)) return toast("Escribe un precio válido o déjalo vacío.", { type: "error" });
+    const ok = await confirmDialog({ title: "¿Marcar como vendida?", body: "La carta deja de aparecer en la página.", confirm: "Marcar vendida" });
+    if (!ok || !btn.isConnected) return;
+    btn.disabled = true;
+    const { data: recorded, error } = await sb.rpc("mark_listing_sold", { p_listing_id: l.id, p_price_cents: usd ? Math.round(usd * 100) : null });
+    if (error) {
+      btn.disabled = false; console.error(error);
+      return toast(error.code === "PGRST202" ? "Esta función se activa pronto (falta la migración 0006)." : /open protected order/.test(error.message ?? "") ? "Hay una Compra Protegida en curso: el equipo la cierra por ti." : "No pudimos marcarla como vendida. Intenta de nuevo.", { type: "error" });
+    }
+    listingCache.delete(l.id);
+    toast(usd && !recorded ? "Quedó vendida. Ese precio está muy lejos del anuncio, así que no lo usamos para las estimaciones." : "¡Listo, quedó vendida!");
+    route();
+  });
+  $("#repSend")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const { error } = await sb.from("reports").insert({ listing_id: l.id, reporter_id: session.user.id, reason: $("#repReason").value, details: $("#repDetails").value.trim() || null });
+    if (error && error.code !== "23505") { btn.disabled = false; console.error(error); return toast("No pudimos enviar el reporte. Intenta de nuevo.", { type: "error" }); }
+    btn.closest("details").open = false;
+    toast(error ? "Ya habías reportado este anuncio: lo estamos revisando." : "Gracias. El equipo lo revisa pronto.");
   });
   $("#deleteListing")?.addEventListener("click", async () => {
     const btn = $("#deleteListing");
@@ -2068,6 +2124,98 @@ async function viewDetail(app, id) {
     listingCache.delete(l.id);
     toast("Anuncio eliminado");
     go("/");
+  });
+}
+
+// ------------------------------------------------------------- share
+// Sellers spread listings in WhatsApp/Facebook/Instagram groups. Hash links get no
+// preview there, so "Compartir" builds a 1080×1350 image (the Instagram portrait size).
+const listingUrl = (l) => `${location.origin}${location.pathname}#/carta/${encodeURIComponent(l.id)}`;
+function loadImg(src) {
+  return new Promise((res) => {
+    if (!src) return res(null);
+    const im = new Image(); im.crossOrigin = "anonymous";
+    im.onload = () => res(im); im.onerror = () => res(null);
+    // The page already loaded this image without CORS; a distinct URL avoids reusing
+    // that cached copy, which would taint the canvas.
+    im.src = src + (src.includes("?") ? "&" : "?") + "canvas=1";
+  });
+}
+async function shareImage(l) {
+  const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  await document.fonts?.ready;
+  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#15151a"); g.addColorStop(1, "#0b0b0d");
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const holo = x.createLinearGradient(0, 0, W, 0);
+  [["#7cf3d5", 0], ["#8ab6ff", .35], ["#d59bff", .65], ["#ffc98a", 1]].forEach(([col, at]) => holo.addColorStop(at, col));
+  x.fillStyle = holo; x.fillRect(0, 0, W, 10);
+  // card
+  const img = await loadImg(l.photos[0]);
+  const boxW = 560, boxH = 782, bx = (W - boxW) / 2, by = 70;
+  if (img) {
+    const r = Math.min(boxW / img.width, boxH / img.height), w = img.width * r, h = img.height * r;
+    x.save(); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 50; x.shadowOffsetY = 20;
+    x.drawImage(img, (W - w) / 2, by + (boxH - h) / 2, w, h); x.restore();
+  } else {
+    x.fillStyle = "#26262d"; x.beginPath(); x.roundRect(bx, by, boxW, boxH, 36); x.fill();
+    x.fillStyle = "#f2f0eb"; x.font = "700 56px 'Bricolage Grotesque', sans-serif"; x.textAlign = "center";
+    x.fillText(l.card.subject.slice(0, 18), W / 2, by + boxH / 2);
+  }
+  // text
+  x.textAlign = "left"; x.fillStyle = "#f2f0eb";
+  const pad = 80; let y = 930;
+  x.font = "600 44px Inter, sans-serif";
+  let title = l.title; while (x.measureText(title).width > W - pad * 2 && title.length > 4) title = title.slice(0, -2);
+  if (title !== l.title) title = title.trimEnd() + "…";
+  x.fillText(title, pad, y); y += 110;
+  x.font = "700 104px 'Bricolage Grotesque', sans-serif"; x.fillText(formatUsd(toCents(l.priceUsd)), pad, y);
+  y += 64; x.font = "500 36px Inter, sans-serif"; x.fillStyle = "#a19d95";
+  const bits = [];
+  if (l.estimate) bits.push(`Precio estimado ${fmtEstimate(l.estimate.low)} – ${fmtEstimate(l.estimate.high)}`);
+  bits.push(`${l.location.neighborhood}, ${l.location.district}`);
+  x.fillText(bits.join("  ·  "), pad, y);
+  // pills
+  const pills = [];
+  if (isVerifiedShop(l.seller)) pills.push(["🏪 Tienda verificada", "#4fd19c"]);
+  if (l.protectedEligible) pills.push(["🛡 Compra Protegida", "#7390ff"]);
+  if (l.verificationPhoto) pills.push(["📸 Foto de verificación", "#4fd19c"]);
+  let px = pad; y += 70; x.font = "600 30px Inter, sans-serif";
+  for (const [t, col] of pills) {
+    const w = x.measureText(t).width + 44;
+    if (px + w > W - pad) break;
+    x.fillStyle = col + "26"; x.beginPath(); x.roundRect(px, y - 38, w, 56, 28); x.fill();
+    x.fillStyle = col; x.fillText(t, px + 22, y); px += w + 14;
+  }
+  // footer
+  x.fillStyle = holo; x.beginPath(); x.roundRect(pad, H - 110, 44, 44, 12); x.fill();
+  x.fillStyle = "#f2f0eb"; x.font = "700 40px 'Bricolage Grotesque', sans-serif"; x.fillText(CONFIG.APP_NAME, pad + 60, H - 74);
+  x.fillStyle = "#a19d95"; x.font = "500 30px Inter, sans-serif"; x.textAlign = "right";
+  x.fillText("Cartas coleccionables en Panamá", W - pad, H - 76);
+  return new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
+}
+function setupShare(l) {
+  const url = listingUrl(l), text = `${l.title} · ${formatUsd(toCents(l.priceUsd))} en ${CONFIG.APP_NAME}`;
+  const wa = $("#shareWa"); if (wa) wa.href = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
+  $("#shareBtn")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget, label = btn.innerHTML;
+    btn.disabled = true; btn.textContent = "Preparando imagen…";
+    try {
+      let blob = null;
+      try { blob = await shareImage(l); } catch (err) { console.error("share image failed", err); }
+      const file = blob && new File([blob], `holo-${l.id.slice(0, 8)}.jpg`, { type: "image/jpeg" });
+      if (file && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: l.title, text: `${text}\n${url}` });
+      } else if (navigator.share && !file) {
+        await navigator.share({ title: l.title, text, url });
+      } else {
+        if (file) { const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+        try { await navigator.clipboard.writeText(`${text}\n${url}`); } catch { /* clipboard blocked */ }
+        toast(file ? "Descargamos la imagen y copiamos el link: pégalo junto a la imagen en tu grupo." : "Copiamos el link del anuncio.");
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") { console.error(err); toast("No pudimos compartir. Copia el link desde la barra del navegador.", { type: "error" }); }
+    } finally { btn.disabled = false; btn.innerHTML = label; }
   });
 }
 
@@ -2539,6 +2687,12 @@ function viewSell(app) {
           <input type="file" id="photos" accept="image/jpeg,image/png,image/webp" multiple class="sr-only"></label>
         <div id="thumbs" class="thumbs" style="justify-content:flex-start"></div>
         <p class="xs muted">Las fotos se reducen en tu teléfono antes de subirse.</p>
+        <div class="panel verif-up">
+          <p style="margin:0;font-weight:600;font-size:14px;display:flex;align-items:center;gap:6px">${ic("camera")}Foto de verificación <span class="xs muted" style="font-weight:400">(recomendada)</span></p>
+          <p class="xs muted" style="margin:4px 0 10px">Pon la carta junto a un papel escrito a mano con <b style="color:var(--ink)">HOLO</b> y la fecha de hoy. Tu anuncio lleva la insignia “Foto de verificación” y los compradores confían más.</p>
+          <label class="btn outline block"><span id="verifLbl">Agregar foto de verificación</span><input type="file" id="verifIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
+          <img id="verifPrev" alt="Vista previa de la foto de verificación" hidden>
+        </div>
       </section>
       <section class="right">
         <h2 class="step"><span class="num-badge">2</span>Detalles de la carta</h2>
@@ -2602,6 +2756,12 @@ function viewSell(app) {
     $("#verdict").innerHTML = v === "alto" ? `<span style="color:var(--warn)">Tu precio está por encima del rango estimado. Puede tardar más en venderse.</span>` : v === "buen-precio" ? `<span style="color:var(--up)">Tu precio está por debajo del rango. Se va a vender rápido.</span>` : "";
   }
 
+  $("#verifIn").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    st.verif = await compressImage(f);
+    const pv = $("#verifPrev"); pv.src = URL.createObjectURL(st.verif); pv.hidden = false;
+    $("#verifLbl").textContent = "Cambiar foto de verificación";
+  });
   $("#photos").addEventListener("change", async (e) => {
     const picked = [...e.target.files].slice(0, 4);
     if (!picked.length) return;
@@ -2874,6 +3034,17 @@ function viewSell(app) {
     step("Publicando…");
     const pr = await sb.from("listing_photos").insert(paths.map((storage_path, position) => ({ listing_id: id, storage_path, position })));
     if (pr.error) return abort(pr.error, dbMessage(pr.error, "No pudimos guardar las fotos del anuncio. Intenta de nuevo."));
+    if (st.verif && st.verif.size <= 3 * 1024 * 1024) {
+      // Optional: if it fails (e.g. migration 0006 not applied yet) the listing still publishes.
+      step("Subiendo foto de verificación…");
+      const vpath = `${uid}/${id}/verificacion.${{ "image/png": "png", "image/webp": "webp" }[st.verif.type] ?? "jpg"}`;
+      const vu = await sb.storage.from("listing-photos").upload(vpath, st.verif, { contentType: st.verif.type || "image/jpeg", cacheControl: "31536000", upsert: false });
+      if (vu.error && !dup(vu.error)) console.error("verification upload failed", vu.error);
+      else {
+        const vr = await sb.from("listing_photos").insert({ listing_id: id, storage_path: vpath, position: 99, kind: "verification" });
+        if (vr.error) { console.error("verification row failed", vr.error); sb.storage.from("listing-photos").remove([vpath]); }
+      }
+    }
     const act = await sb.from("listings").update({ status: "active" }).eq("id", id).select("id");
     if (act.error || !act.data?.length) return abort(act.error ?? "activate: 0 rows", dbMessage(act.error, "No pudimos publicar el anuncio. Intenta de nuevo."));
     toast("Anuncio publicado", { description: "Ya está visible para los compradores." });
@@ -3022,8 +3193,8 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["ordenes", "anuncios", "tiendas", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
-  const tabs = [["ordenes", "Órdenes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["resumen", "Resumen"]];
+  const tab = ["ordenes", "anuncios", "tiendas", "reportes", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["resumen", "Resumen"]];
   app.innerHTML = `<div class="admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
@@ -3032,6 +3203,7 @@ async function viewAdmin(app, params) {
     if (tab === "ordenes") await adminOrders(body);
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
     else if (tab === "tiendas") await adminShops(body);
+    else if (tab === "reportes") await adminReports(body);
     else await adminSummary(body);
   } catch (e) {
     console.error(e);
@@ -3246,13 +3418,55 @@ async function adminShops(body) {
   }));
 }
 
+// ------------------------------------------------------------- reports
+const REPORT_REASON = { replica: "Réplica o falsificación", estafa: "Posible estafa", precio: "Precio o datos engañosos", contenido: "Contenido inapropiado", otro: "Otro" };
+async function adminReports(body) {
+  const { data: reps, error } = await sb.from("reports").select("id, listing_id, reporter_id, reason, details, created_at").eq("resolved", false).order("created_at", { ascending: false }).limit(100);
+  if (error) throw error;
+  const ids = [...new Set(reps.map((r) => r.listing_id).filter(Boolean))];
+  const { data: listings } = ids.length ? await sb.from("listings").select("id, title, status, seller_id").in("id", ids) : { data: [] };
+  const byId = new Map((listings ?? []).map((l) => [l.id, l]));
+  const people = await profilesById([...reps.map((r) => r.reporter_id), ...(listings ?? []).map((l) => l.seller_id)]);
+  const perListing = reps.reduce((m, r) => m.set(r.listing_id, (m.get(r.listing_id) ?? 0) + 1), new Map());
+  body.innerHTML = reps.length ? `<p class="small muted" style="margin:0">Revisa el anuncio antes de decidir. “Quitar anuncio” lo oculta de la página (se puede reactivar en Anuncios).</p>
+    <ul class="admin-list">${reps.map((r) => {
+      const l = byId.get(r.listing_id);
+      return `<li class="panel" data-id="${r.id}" data-listing="${r.listing_id ?? ""}">
+        <div class="phead"><a href="#/carta/${encodeURIComponent(r.listing_id ?? "")}" style="font-weight:600">${esc(l?.title ?? "Anuncio eliminado")}</a><span class="b warn">${esc(REPORT_REASON[r.reason] ?? r.reason)}</span></div>
+        <dl class="rows"><div><dt>Vendedor</dt><dd>${esc(people.get(l?.seller_id)?.display_name ?? "—")}</dd></div>
+          <div><dt>Reportado por</dt><dd>${esc(people.get(r.reporter_id)?.display_name ?? "—")}</dd></div>
+          <div><dt>Reportes abiertos de este anuncio</dt><dd>${perListing.get(r.listing_id)}</dd></div>
+          <div><dt>Estado del anuncio</dt><dd>${LISTING_STATUS[l?.status] ?? "—"}</dd></div><div><dt>Fecha</dt><dd>${fmtDate(r.created_at)}</dd></div></dl>
+        ${r.details ? `<p class="small" style="margin:8px 0 0;white-space:pre-line">“${esc(r.details)}”</p>` : ""}
+        <div class="order-actions">${l && l.status !== "removed" ? `<button class="btn danger" data-act="remove">Quitar anuncio</button>` : ""}<button class="btn" data-act="dismiss">Descartar reporte</button></div>
+        <div class="order-msg"></div></li>`;
+    }).join("")}</ul>` : `<p class="muted small">No hay reportes pendientes. 🎉</p>`;
+  body.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), msg = li.querySelector(".order-msg");
+    if (b.dataset.act === "remove" && !confirm("¿Quitar este anuncio? Se marcan como resueltos todos sus reportes.")) return;
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const fail = (e) => { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); adminFail(e, msg); };
+    if (b.dataset.act === "remove") {
+      const { error } = await sb.from("listings").update({ status: "removed" }).eq("id", li.dataset.listing);
+      if (error) return fail(error);
+      const { error: e2 } = await sb.from("reports").update({ resolved: true }).eq("listing_id", li.dataset.listing).eq("resolved", false);
+      if (e2) return fail(e2);
+    } else {
+      const { error } = await sb.from("reports").update({ resolved: true }).eq("id", li.dataset.id);
+      if (error) return fail(error);
+    }
+    route();
+  }));
+}
+
 // ------------------------------------------------------------- summary
 async function adminSummary(body) {
-  const [{ data: orders, error }, { count: activeCount }, { count: shopCount }, { count: pendingShops }] = await Promise.all([
+  const [{ data: orders, error }, { count: activeCount }, { count: shopCount }, { count: pendingShops }, { count: openReports }] = await Promise.all([
     sb.from("protected_orders").select("status, price_cents, fee_cents, created_at"),
     sb.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("public_profiles").select("id", { count: "exact", head: true }).eq("is_shop", true).eq("verified", true),
     sb.from("shop_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+    sb.from("reports").select("id", { count: "exact", head: true }).eq("resolved", false),
   ]);
   if (error) throw error;
   const paid = orders.filter((o) => PAID_STATES.includes(o.status));
@@ -3275,6 +3489,7 @@ async function adminSummary(body) {
       ${stat(shopCount ?? 0, "tiendas verificadas")}
       ${stat(pendingShops ?? 0, "solicitudes de tienda")}
       ${stat(orders.filter((o) => ["refunded", "cancelled"].includes(o.status)).length, "reembolsadas o canceladas")}
+      ${stat(openReports ?? 0, "reportes por revisar")}
     </div>`;
 }
 
