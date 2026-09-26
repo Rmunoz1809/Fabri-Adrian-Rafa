@@ -1702,12 +1702,17 @@ async function fetchPriceHistory(l) {
     const { data } = await sb.from("sales").select("price_cents, sold_at").eq("catalog_id", catalogId).eq("grading_key", gradingKey).gte("sold_at", since).order("sold_at").limit(500);
     h.sales = (data ?? []).map((r) => ({ t: Date.parse(r.sold_at), v: r.price_cents / 100 }));
   }
-  // The free catalogs have no price (graded cards, NBA/NFL, catalog down): research it on the web.
+  // The free catalogs have no price (graded cards, NBA/NFL, catalog down): PriceCharting/SportsCardsPro
+  // (real sold listings per grade), and if that fails, research it on the web with the Edge Function.
   if (!h.market.length && !h.cardmarket.length && l.card.subject) {
     h.quoteTried = true;
-    h.quote = await fetchMarketQuote(l).catch((e) => { console.warn("market quote", e); return null; });
+    h.quote = await fetchPriceCharting(l, factor).catch((e) => { console.warn("pricecharting", e); return null; })
+      ?? await fetchMarketQuote(l).catch((e) => { console.warn("market quote", e); return null; });
     if (h.quote) {
-      h.web = h.quote.sales.map((s) => ({ t: noonUtc(s.date), v: s.price, src: s.source, url: s.url })).sort((a, b) => a.t - b.t);
+      const src = h.quote.sources[0];
+      h.web = h.quote.history?.length
+        ? h.quote.history.map((p) => ({ t: p.t, v: p.v, src: src.name, url: src.url, k: `${src.name} · valor del mes` }))
+        : h.quote.sales.map((s) => ({ t: noonUtc(s.date), v: s.price, src: s.source, url: s.url })).sort((a, b) => a.t - b.t);
       const today = noonUtc(isoDay(new Date()));
       if (!h.web.length || h.web.at(-1).t < today) h.web.push({ t: today, v: h.quote.market_price, src: "valor aproximado", today: true });
     }
@@ -1755,6 +1760,124 @@ function fetchMarketQuote(l) {
 function estimateFromQuote(q) {
   if (!(q?.market_price > 0)) return null;
   return { low: round2(q.low), mid: round2(q.market_price), high: round2(q.high), currency: "USD", confidence: q.sales.length >= 5 ? "media" : "baja", basis: [q.basis || "Ventas recientes encontradas en internet"], source: "web", updatedAt: q.fetched_at };
+}
+
+// PriceCharting (Pokémon) / SportsCardsPro (NBA, NFL): value per grade (Ungraded, PSA 10, CGC 10, 9.5…)
+// from real eBay/TCGplayer sold listings, a monthly history since release, and the listings themselves
+// with links. Neither site sends CORS headers, so pages are read through the r.jina.ai reader
+// (keyless, CORS-enabled, ~20 requests/min per visitor). Works without the Edge Function; 12 h cache here.
+const PC_READER = "https://r.jina.ai/";
+const pcPromises = new Map();
+const pcNorm = (s) => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/&amp;/g, "&").replace(/[^a-z0-9]+/g, " ").trim();
+const pcTokens = (s) => pcNorm(s).split(" ").filter(Boolean);
+const pcMoney = (s) => { const n = Number(String(s ?? "").replace(/[^0-9.]/g, "")); return n > 0 ? n : null; };
+const pcNum = (s) => (String(s ?? "").split("/")[0].match(/[a-z]*\d+[a-z]*/i)?.[0] ?? "").toLowerCase().replace(/^([a-z]*)0+(?=\d)/, "$1");
+async function pcPage(url) {
+  const res = await withTimeout(fetch(PC_READER + url, { headers: { "X-Return-Format": "html" } }), 45000);
+  if (!res.ok) throw new Error(`pricecharting ${res.status}`);
+  const html = await res.text();
+  return { doc: new DOMParser().parseFromString(html, "text/html"), chart: html.match(/chart_data\s*=\s*(\{.*?\});/s)?.[1] ?? null };
+}
+/** Which PriceCharting column holds this grade: chart series, sold-listings block and price-guide label. */
+function pcGrade(l) {
+  const g = l.grading;
+  if (!g) return { chart: "used", sales: "used", label: "Ungraded", name: "sin graduar" };
+  const n = Number(g.grade), c = String(g.company ?? "").toUpperCase();
+  if (n >= 10) {
+    if (c === "PSA") return { chart: "manualonly", sales: "manual-only", label: "PSA 10", name: "PSA 10" };
+    const block = { CGC: "grade-seventeen", SGC: "grade-eighteen", BGS: "loose-and-box", BECKETT: "loose-and-box", TAG: "grade-twenty-one", ACE: "grade-twenty-two" }[c];
+    return { chart: null, sales: block ?? null, label: `${c === "BECKETT" ? "BGS" : c} 10`, name: `${c} 10`, fallback: "PSA 10" };
+  }
+  if (n >= 9.5) return { chart: "boxonly", sales: "box-only", label: "Grade 9.5", name: `${c} ${n}` };
+  if (n >= 9) return { chart: "graded", sales: "graded", label: "Grade 9", name: `${c} ${n}` };
+  if (n >= 8) return { chart: "new", sales: "new", label: "Grade 8", name: `${c} ${n}` };
+  if (n >= 7) return { chart: "cib", sales: "cib", label: "Grade 7", name: `${c} ${n}` };
+  const w = ["one", "two", "three", "four", "five", "six"][Math.max(1, Math.floor(n)) - 1];
+  return { chart: null, sales: `grade-${w}`, label: `Grade ${Math.max(1, Math.floor(n))}`, name: `${c} ${n}`, fallback: "Grade 7" };
+}
+/** Best search row for this card: same number, the player/Pokémon name, the set, and the base print unless the variant says otherwise. */
+function pcPick(doc, l, site) {
+  const c = l.card, num = pcNum(c.number), subj = pcTokens(c.subject), set = pcTokens(`${c.setName ?? ""} ${c.year ?? ""}`), variant = pcTokens(c.variant);
+  let best = null;
+  for (const tr of doc.querySelectorAll("tr[id^=product-]")) {
+    const a = tr.querySelector("td.title a"), con = tr.querySelector(".console-in-title a, td.console a");
+    if (!a) continue;
+    const title = a.textContent.trim(), conName = con?.textContent.trim() ?? "", t = pcTokens(title), ct = pcTokens(conName);
+    const rowNum = pcNum(title.match(/#\s*([a-z0-9-]+)/i)?.[1] ?? "");
+    const bracket = pcTokens(title.match(/\[([^\]]+)\]/)?.[1] ?? "");
+    let s = subj.filter((w) => t.includes(w)).length / Math.max(1, subj.length) * 4;
+    if (s < 2) continue;
+    if (num) { if (rowNum !== num) continue; s += 3; }
+    s += set.filter((w) => ct.includes(w)).length / Math.max(1, set.length) * 3;
+    if (bracket.length) s += variant.some((w) => bracket.includes(w)) ? 1.5 : -2.5;
+    if (c.category === "pokemon" && !ct.includes("pokemon")) s -= 3;
+    if ({ nba: "basketball", nfl: "football" }[c.category] && !ct.includes({ nba: "basketball", nfl: "football" }[c.category])) s -= 3;
+    if (ct.some((w) => ["japanese", "chinese", "korean"].includes(w)) && !set.some((w) => ["japanese", "chinese", "korean"].includes(w))) s -= 2;
+    if (!best || s > best.s) best = { s, url: new URL(a.getAttribute("href"), site).href };
+  }
+  return best?.url ?? null;
+}
+function fetchPriceCharting(l, factor = 1) {
+  const c = l.card, site = c.category === "pokemon" ? "https://www.pricecharting.com" : "https://www.sportscardspro.com";
+  const key = `holo-pc:${JSON.stringify(quoteCard(l)).toLowerCase()}`;
+  try {
+    const kept = JSON.parse(localStorage.getItem(key) ?? "null");
+    if (kept?.market_price > 0 && Date.now() - Date.parse(kept.fetched_at) < 12 * 3600000) return Promise.resolve(kept);
+  } catch { /* storage unavailable */ }
+  if (!pcPromises.has(key)) {
+    const p = (async () => {
+      const num = String(c.number ?? "").split("/")[0].trim();
+      const queries = [...new Set([
+        [c.year && c.category !== "pokemon" ? c.year : "", c.subject, c.setName, num].filter(Boolean).join(" "),
+        [c.subject, num].filter(Boolean).join(" "),
+      ])];
+      let page = null, url = null;
+      for (const q of queries) {
+        const res = await pcPage(`${site}/search-products?type=prices&q=${encodeURIComponent(q)}`);
+        if (res.chart) { page = res; url = res.doc.querySelector("link[rel=canonical]")?.getAttribute("href") ?? null; break; } // single hit: the site jumps to the card
+        url = pcPick(res.doc, l, site);
+        if (url) break;
+      }
+      if (!url && !page) throw new Error("pricecharting: card not found");
+      page ??= await pcPage(url);
+      const g = pcGrade(l), doc = page.doc;
+      const guide = new Map([...doc.querySelectorAll("#full-prices tr")].map((tr) => [tr.cells[0]?.textContent.trim(), pcMoney(tr.cells[1]?.textContent)]));
+      const chart = page.chart ? JSON.parse(page.chart) : {};
+      const history = (chart[g.chart] ?? []).filter(([, cents]) => cents > 0).map(([t, cents]) => ({ t, v: round2((cents / 100) * factor) }));
+      const cut = Date.now() - 400 * DAY_MS;
+      const sales = [...doc.querySelectorAll(`.completed-auctions-${g.sales} tbody tr[id]`)].map((tr) => {
+        const a = tr.querySelector("td.title a"), date = tr.querySelector("td.date")?.textContent.trim();
+        const price = pcMoney(tr.querySelector("td.numeric .js-price, td.numeric")?.textContent);
+        const id = tr.id.split("-")[0], source = { ebay: "eBay", tcgplayer: "TCGplayer" }[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
+        return { date, price, source, url: a ? new URL(a.getAttribute("href"), site).href : "", title: a?.textContent.trim() ?? "" };
+      }).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.date ?? "") && s.price && Date.parse(s.date) > cut).slice(0, 40);
+      const recent = sales.filter((s) => Date.parse(s.date) > Date.now() - 120 * DAY_MS).map((s) => s.price * factor).sort((a, b) => a - b);
+      let market = guide.get(g.label) ?? (history.length ? history.at(-1).v / factor : null);
+      let basis = `${g.name}${c.variant ? ` · ${c.variant}` : ""}: valor de ${site.includes("pricecharting") ? "PriceCharting" : "SportsCardsPro"} según ventas vendidas en eBay y TCGplayer`;
+      if (!market && g.fallback && guide.get(g.fallback)) { market = guide.get(g.fallback); basis += ` (sin ventas de ${g.name}; se usa ${g.fallback})`; }
+      if (!market && recent.length) market = median(recent) / factor;
+      if (!(market > 0)) throw new Error("pricecharting: no price for this grade");
+      market = round2(market * factor);
+      const q = (a, f) => a[Math.min(a.length - 1, Math.max(0, Math.round((a.length - 1) * f)))];
+      const lastMonths = history.slice(-6).map((p) => p.v);
+      let low = recent.length >= 3 ? q(recent, 0.1) : lastMonths.length ? Math.min(...lastMonths) : market * 0.85;
+      let high = recent.length >= 3 ? q(recent, 0.9) : lastMonths.length ? Math.max(...lastMonths) : market * 1.15;
+      low = round2(Math.min(low, market)); high = round2(Math.max(high, market));
+      if (recent.length) basis += ` (${recent.length} ${recent.length === 1 ? "venta" : "ventas"} en los últimos 4 meses)`;
+      const name = site.includes("pricecharting") ? "PriceCharting" : "SportsCardsPro";
+      const quote = {
+        market_price: market, low, high, basis, via: "pricecharting", grade: g.name,
+        sales: sales.map((s) => ({ ...s, price: round2(s.price * factor) })), history,
+        sources: [{ name, url: page.doc.querySelector("link[rel=canonical]")?.getAttribute("href") || url }],
+        fetched_at: new Date().toISOString(),
+      };
+      try { localStorage.setItem(key, JSON.stringify(quote)); } catch { /* storage unavailable */ }
+      return quote;
+    })();
+    pcPromises.set(key, p);
+    p.catch(() => pcPromises.delete(key));
+  }
+  return pcPromises.get(key);
 }
 
 function niceTicks(lo, hi, n = 4) {
@@ -1845,8 +1968,8 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
     const d = ((price ?? current.v) - current.v) / current.v, pct = Math.round(Math.abs(d) * 100);
     const rel = pct < 3 ? "en línea con el valor de mercado" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} del valor de mercado`;
     const when = isoDay(new Date(current.t)) === isoDay(new Date()) ? "hoy" : `al ${fmtDay(current.t)}`;
-    head = `<div class="headline"><p><span class="val">${fmtEstimate(current.v)}</span><span class="lbl">${h.market.length || h.cardmarket.length ? `valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})` : "valor aproximado hoy, según ventas recientes"}</span></p>
-      <p>${price != null ? `${esc(l.priceLabel ?? "Este anuncio")} (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.` : ""}${h.quote && !h.market.length && !h.cardmarket.length ? ` Rango habitual: ${fmtEstimate(h.quote.low)} – ${fmtEstimate(h.quote.high)}.` : ""}${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}${webSales.length >= 2 ? ` En ventas recientes, ${since(webSales)} el precio ${move(webSales)}.` : ""}</p></div>`;
+    head = `<div class="headline"><p><span class="val">${fmtEstimate(current.v)}</span><span class="lbl">${h.market.length || h.cardmarket.length ? `valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})` : h.quote?.via === "pricecharting" ? `valor de mercado hoy · ${esc(h.quote.grade)} (${esc(h.quote.sources[0].name)})` : "valor aproximado hoy, según ventas recientes"}</span></p>
+      <p>${price != null ? `${esc(l.priceLabel ?? "Este anuncio")} (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.` : ""}${h.quote && !h.market.length && !h.cardmarket.length ? ` Rango habitual: ${fmtEstimate(h.quote.low)} – ${fmtEstimate(h.quote.high)}.` : ""}${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}${webSales.length >= 2 ? ` ${h.quote?.via === "pricecharting" ? `En ${esc(h.quote.sources[0].name)}` : "En ventas recientes"}, ${since(webSales)} el precio ${move(webSales)}.` : ""}</p></div>`;
   } else {
     const recent = h.sales.filter((p) => p.t >= now - 180 * DAY_MS).map((p) => p.v);
     const med = median(recent.length ? recent : h.sales.map((p) => p.v));
@@ -1862,19 +1985,21 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   if (h.market.some((p) => p.carried) || h.cardmarket.some((p) => p.carried)) notes.push("Las semanas sin dato nuevo repiten el último valor conocido (tramo plano).");
   if (h.factor !== 1) notes.push(`Precios ajustados a condición ${l.condition} (×${h.factor}).`);
   if (h.sales.length) notes.push("Ventas en Panamá: ventas registradas en la plataforma.");
-  if (h.quote) notes.push(`${h.quote.basis ? `${h.quote.basis}. ` : ""}Ventas públicas encontradas en internet (eBay, PriceCharting y otras) el ${fmtDay(Date.parse(h.quote.fetched_at), true)}; revisa los enlaces.`.replace(/\.\. /g, ". "));
+  if (h.quote?.via === "pricecharting") notes.push(`${h.quote.basis}. La línea es el valor de cada mes y la tabla trae cada venta con su enlace al anuncio vendido; consultado el ${fmtDay(Date.parse(h.quote.fetched_at), true)}.`);
+  else if (h.quote) notes.push(`${h.quote.basis ? `${h.quote.basis}. ` : ""}Ventas públicas encontradas en internet (eBay, PriceCharting y otras) el ${fmtDay(Date.parse(h.quote.fetched_at), true)}; revisa los enlaces.`.replace(/\.\. /g, ". "));
   const updated = h.updated && (h.market.length || h.cardmarket.length) ? `<p class="xs muted" style="margin-top:4px">Actualizado automáticamente cada semana · última actualización ${fmtDay(Date.parse(h.updated), true)}</p>` : "";
   const typeLabel = (p, base) => `${base}${p.carried ? " (sin dato nuevo: se repite el anterior)" : ""}`;
 
   box.innerHTML = `${header}${head}
     ${market.length || cmk.length || sales.length || web.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin-top:14px">No hay datos en este periodo. Prueba con uno más largo.</p>`}
-    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}${h.web?.length ? `<span><i class="k" style="background:${CHART_COLORS.web}"></i>Ventas recientes (internet)</span>` : ""}${price != null ? `<span><i class="k" style="height:0;border-top:2px dashed var(--fg)"></i>${esc(l.priceLabel ?? "Este anuncio")}</span>` : ""}</div>
+    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}${h.web?.length ? `<span><i class="k" style="background:${CHART_COLORS.web}"></i>${h.quote?.via === "pricecharting" ? `${esc(h.quote.sources[0].name)} · ${esc(h.quote.grade)}` : "Ventas recientes (internet)"}</span>` : ""}${price != null ? `<span><i class="k" style="height:0;border-top:2px dashed var(--fg)"></i>${esc(l.priceLabel ?? "Este anuncio")}</span>` : ""}</div>
     <p class="pnotes">${notes.map(esc).join(" ")} Es una referencia, no una garantía.</p>
     ${updated}
     ${priceSources(l, h)}
     <details class="pdata"><summary>Ver datos en tabla${ic("chevronDown")}</summary><div class="tbl"><table class="fees"><thead><tr><th>Fecha</th><th>Tipo</th><th>Precio</th></tr></thead><tbody>${
-      [...market.map((p) => ({ ...p, k: typeLabel(p, "TCGplayer · precio de mercado") })), ...cmk.map((p) => ({ ...p, k: typeLabel(p, `Cardmarket · ${p.k}`) })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" })), ...web.map((p) => ({ ...p, k: p.today ? "Valor aproximado hoy" : `Venta · ${p.src}` }))].sort((a, b) => b.t - a.t)
-        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${esc(p.k)}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
+      [...market.map((p) => ({ ...p, k: typeLabel(p, "TCGplayer · precio de mercado") })), ...cmk.map((p) => ({ ...p, k: typeLabel(p, `Cardmarket · ${p.k}`) })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" })), ...web.map((p) => ({ ...p, k: p.today ? "Valor aproximado hoy" : p.k ?? `Venta · ${p.src}` })),
+        ...(h.quote?.history?.length ? h.quote.sales.map((x) => ({ t: noonUtc(x.date), v: x.price, k: `Venta en ${x.source}`, url: x.url })).filter((p) => p.t >= from) : [])].sort((a, b) => b.t - a.t)
+        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${p.url && !p.k.includes("valor del mes") ? `<a class="link" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.k)}</a>` : esc(p.k)}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
   box.querySelectorAll(".ranges button").forEach((b) => b.addEventListener("click", () => { if (Number(b.dataset.d) !== rangeDays) setRange(Number(b.dataset.d)); }));
   const wrap = box.querySelector(".pchart");
   if (!wrap) return;
@@ -1952,7 +2077,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
     if (s.market != null) tip.append(row(CHART_COLORS.market, formatUsd(toCents(s.market)), `TCGplayer${s.marketCarried ? again : ""}`));
     if (s.cm) tip.append(row(CHART_COLORS.cardmarket, formatUsd(toCents(s.cm.v)), `Cardmarket · ${s.cm.k}${s.cm.carried ? again : ""}`));
     for (const v of s.sales) tip.append(row(CHART_COLORS.sales, formatUsd(toCents(v)), "venta en Panamá", true));
-    for (const p of s.web) tip.append(row(CHART_COLORS.web, formatUsd(toCents(p.v)), p.today ? "valor aproximado hoy" : `venta · ${p.src}`, true));
+    for (const p of s.web) tip.append(row(CHART_COLORS.web, formatUsd(toCents(p.v)), p.today ? "valor aproximado hoy" : p.k ?? `venta · ${p.src}`, true));
     const ref = s.market ?? s.cm?.v ?? s.sales[0] ?? s.web[0]?.v, diff = Math.round(((price - ref) / ref) * 100);
     if (price != null) tip.append(row("var(--fg)", formatUsd(toCents(price)), `${(l.priceLabel ?? "Este anuncio").toLowerCase()} (${diff > 0 ? "+" : ""}${diff}%)`));
     const first = tip.style.display !== "block";
