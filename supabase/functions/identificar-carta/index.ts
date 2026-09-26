@@ -10,6 +10,7 @@
 //   supabase functions deploy identificar-carta --no-verify-jwt --project-ref vqcpqoedsyatxswdzqcy
 // (--no-verify-jwt because the project uses the new publishable keys; the function checks the
 // user's session itself below.) Migration 0008_market_quotes.sql adds the 24 h price cache;
+// migration 0009_grading_from_photo.sql stores the grades read here (deploy this function first);
 // without it prices still work, just without the shared cache.
 //
 // Keep RecognitionSchema in sync with src/lib/ai/recognize.ts (the Next.js version).
@@ -46,6 +47,7 @@ const SYSTEM = `Identificas cartas coleccionables (Pokémon TCG, NBA, NFL) a par
 Lee solo lo que se ve impreso en la carta o en la etiqueta del slab. Si un dato no se puede leer, devuélvelo como null en vez de adivinar, y baja la confianza.
 El número impreso (p. ej. 199/165) y el símbolo o código del set distinguen versiones de la misma carta: léelos con cuidado.
 Las notas de condición son una revisión visual preliminar, no una calificación oficial: describe lo que ves y nunca asignes una nota estilo PSA a una carta sin graduar.
+is_graded es true solo si la carta está sellada dentro de un slab con la etiqueta de PSA, BGS, CGC, SGC o TAG visible en la foto. grading_company, grade y cert_number salen únicamente de lo que se lee en esa etiqueta; si la etiqueta no se lee con claridad, déjalos en null. Una carta suelta, en funda o en toploader no está graduada.
 En authenticity_flags señala cosas como: tipografía o colores extraños, falta de textura holo esperada, foto que parece imagen de catálogo o de internet, o un slab con etiqueta sospechosa.`;
 
 const PRICE_SYSTEM = `Eres analista de precios de cartas coleccionables (Pokémon TCG, NBA, NFL) para un marketplace en Panamá.
@@ -176,7 +178,7 @@ Deno.serve(async (req) => {
     // Identification: only signed-in sellers.
     if (!user) return json({ error: "Entra a tu cuenta para identificar cartas." }, 401);
     if (!allow(`id:${user.id}`, 30)) return json({ error: "Llegaste al límite de identificaciones por hora. Intenta más tarde." }, 429);
-    return await identify(body.images ?? []);
+    return await identify(body.images ?? [], user.id);
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) return json({ error: "Mucha demanda ahora mismo. Intenta en un minuto." }, 429);
     if (err instanceof Anthropic.APIError) {
@@ -188,7 +190,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function identify(raw: NonNullable<Body["images"]>) {
+async function identify(raw: NonNullable<Body["images"]>, userId: string) {
   const images = raw.slice(0, MAX_IMAGES);
   if (!images.length) return json({ error: "Sube al menos una foto." }, 400);
   for (const img of images) {
@@ -218,7 +220,20 @@ async function identify(raw: NonNullable<Body["images"]>) {
   });
   if (response.stop_reason === "refusal") return json({ error: "La IA no pudo procesar esta imagen." }, 422);
   if (!response.parsed_output) return json({ error: "No se pudo leer la respuesta de la IA." }, 422);
-  return json({ card: response.parsed_output });
+  const card = response.parsed_output;
+  // The grade is only what the slab label in the photo says. Record it so the database accepts a
+  // graded listing only with a grade read here (migration 0009); sellers cannot type one in.
+  const grade = card.grade != null ? Math.round(card.grade * 2) / 2 : null;
+  if (card.is_graded && card.grading_company && grade != null && grade >= 1 && grade <= 10) {
+    card.grade = grade;
+    const { error } = await admin()?.from("grading_detections").insert({
+      user_id: userId, grading_company: card.grading_company, grade, cert_number: card.cert_number?.trim().slice(0, 30) || null,
+    }) ?? { error: null };
+    if (error) console.error("grading_detections", error.message);
+  } else if (card.is_graded) {
+    card.grading_company = null; card.grade = null; // slab seen but label unreadable: the page asks for a clearer photo
+  }
+  return json({ card });
 }
 
 const str = (v: unknown, max = 80) => (typeof v === "string" ? v.trim().slice(0, max) : "");

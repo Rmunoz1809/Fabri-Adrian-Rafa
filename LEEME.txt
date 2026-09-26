@@ -43,6 +43,14 @@ PSA…) y la página muestra valor aproximado, rango, ventas con fecha, gráfica
 y enlaces a cada fuente. Se guarda 24 horas en la tabla market_quotes: correr
 supabase/migrations/0008_market_quotes.sql en el SQL Editor de Supabase.
 
+GRADUACIÓN SOLO DESDE LA FOTO
+El vendedor no elige si la carta está graduada ni escribe la nota: la IA lee
+la etiqueta del slab en la foto (empresa, nota y certificado) y el formulario
+lo muestra sin poder editarlo. Además la base de datos rechaza un anuncio
+graduado si esa nota no se leyó de una foto del mismo vendedor en las últimas
+24 horas. Orden: 1) desplegar identificar-carta, 2) correr
+supabase/migrations/0009_grading_from_photo.sql en el SQL Editor.
+
 QUÉ NO INCLUYE ESTE ARCHIVO
 - Contacto por WhatsApp: se activa al poner el número en CONFIG.WHATSAPP
   (al inicio del <script> dentro de holo.html).

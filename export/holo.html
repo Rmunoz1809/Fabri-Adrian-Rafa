@@ -3043,7 +3043,7 @@ function viewSell(app) {
       <a class="btn primary block" href="#/entrar?next=/vender">Entrar o crear cuenta</a></div></div>`;
     return;
   }
-  const st = { files: [], previews: [], catalog: [], picked: null, graded: false, idRun: 0, ident: null, autoDesc: "", autoTitle: "", hist: null, range: 90, pickRun: 0, chartRun: 0 };
+  const st = { files: [], previews: [], catalog: [], picked: null, graded: false, grading: null, slabUnread: false, idRun: 0, ident: null, autoDesc: "", autoTitle: "", hist: null, range: 90, pickRun: 0, chartRun: 0 };
   const locOptions = FLAT_LOCATIONS.map((l, i) => `<option value="${i}">${esc(l.neighborhood)}, ${esc(l.district)}</option>`).join("");
   app.innerHTML = `<div class="wrap page"><h1>Vende tu carta</h1>
     <p class="lead">Publicar es gratis. Toma una foto y reconocemos la carta, su versión y su precio de hoy.</p>
@@ -3079,8 +3079,7 @@ function viewSell(app) {
           <label class="f" style="grid-column:1/-1">Variante / paralelo<input class="input" name="variant" maxlength="60" placeholder="Holo, Silver Prizm…"></label>
         </div>
         <fieldset class="plain">
-          <legend>¿Está graduada?</legend>
-          <div class="seg" id="gradedSeg"><label class="on"><input type="radio" name="graded" value="false" checked>No (raw)</label><label><input type="radio" name="graded" value="true">Sí, en slab</label></div>
+          <legend>Graduación</legend>
           <div id="gradeBox"></div>
         </fieldset>
         <h2 class="step" style="margin-top:8px"><span class="num-badge">3</span>Precio y ubicación</h2>
@@ -3104,15 +3103,19 @@ function viewSell(app) {
   const set = (n, v) => { if (form.elements[n]) form.elements[n].value = v ?? ""; };
 
   function renderGrade() {
-    $("#gradeBox").innerHTML = st.graded
-      ? `<div class="grid2"><label class="f">Empresa<select class="select" name="company">${GRADERS.map((g) => `<option>${g}</option>`).join("")}</select></label><label class="f">Nota<input class="input" name="grade" type="number" min="1" max="10" step="0.5" required></label><label class="f" style="grid-column:1/-1">N.º de certificado (opcional)<input class="input" name="cert" maxlength="30" inputmode="numeric" placeholder="Lo verifica el comprador en la web de la empresa"></label></div>`
-      : `<label class="f">Condición<select class="select" name="condition">${CONDITIONS.map((c) => `<option value="${c.code}">${c.label} (${c.code}): ${c.hint}</option>`).join("")}</select></label>`;
+    // The grade comes only from the slab label in the photo (read by the AI); sellers cannot type or change it.
+    // The database enforces the same rule (migration 0009), so it cannot be faked through the API either.
+    st.graded = !!st.grading;
+    const g = st.grading;
+    $("#gradeBox").innerHTML = g
+      ? `<div class="panel accent small"><p class="ptitle" style="font-size:15px">${ic("shield")}Graduada ${esc(g.company)} ${esc(g.grade)}${g.cert ? ` · Certificado ${esc(g.cert)}` : ""}</p><p class="xs muted" style="margin-top:6px">Lo leímos de la etiqueta del slab en tu foto y no se puede cambiar a mano. Si está mal, sube una foto más clara de la etiqueta.</p></div>`
+      : `${st.slabUnread ? `<p class="notice warn small" style="margin:0 0 10px">Vimos un slab pero no pudimos leer la empresa o la nota. Sube una foto de frente donde se lea la etiqueta.</p>` : `<p class="xs muted" style="margin:0 0 10px">${st.files.length ? "Sin graduar." : "Se detecta sola con la foto."} Si tu carta está en un slab (PSA, BGS, CGC, SGC, TAG), sube una foto donde se lea la etiqueta: la empresa y la nota salen de ahí.</p>`}<label class="f">Condición<select class="select" name="condition">${CONDITIONS.map((c) => `<option value="${c.code}">${c.label} (${c.code}): ${c.hint}</option>`).join("")}</select></label>`;
     form.elements.condition?.addEventListener("change", () => { renderEstimate(); loadSellChart(); });
     renderEstimate();
   }
   function currentEstimate() {
     const fromCatalog = st.picked && val("category") === "pokemon"
-      ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), condition: st.graded ? null : val("condition") || "NM", grading: st.graded ? { company: val("company"), grade: Number(val("grade")) } : null })
+      ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), condition: st.graded ? null : val("condition") || "NM", grading: st.graded ? { company: st.grading.company, grade: st.grading.grade } : null })
       : null;
     return fromCatalog ?? estimateFromQuote(st.hist?.quote); // graded, NBA/NFL: price researched on the web
   }
@@ -3154,12 +3157,6 @@ function viewSell(app) {
     renderEstimate();
     loadSellChart();
   });
-  $("#gradedSeg").addEventListener("change", (e) => {
-    st.graded = e.target.value === "true";
-    $("#gradedSeg").querySelectorAll("label").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
-    renderGrade();
-    loadSellChart();
-  });
   form.elements.variant.addEventListener("input", renderEstimate);
   // Cards typed by hand (NBA/NFL, or a Pokémon not picked from the catalog): price them once the details settle.
   let detailsTimer = null;
@@ -3168,7 +3165,6 @@ function viewSell(app) {
     clearTimeout(detailsTimer); detailsTimer = setTimeout(loadSellChart, 1500);
   });
   form.elements.price.addEventListener("input", () => { renderEstimate(); drawSellChart(); });
-  form.addEventListener("change", (e) => { if (e.target.name === "company" || e.target.name === "grade") { renderEstimate(); loadSellChart(); } });
 
   // ----- identification from the photo
   async function identify() {
@@ -3179,6 +3175,11 @@ function viewSell(app) {
     try { res = await identifyCard(st.files, status); } catch (e) { console.error("identification failed", e); }
     if (run !== st.idRun) return;
     st.ident = res;
+    const ai = res?.ai;
+    const grading = ai?.is_graded && GRADERS.includes(ai.grading_company) && ai.grade >= 1 && ai.grade <= 10
+      ? { company: ai.grading_company, grade: Math.round(ai.grade * 2) / 2, cert: ai.cert_number ?? null } : null;
+    st.grading = grading; st.slabUnread = !!ai?.is_graded && !grading;
+    renderGrade();
     if (!res) {
       box.innerHTML = `<p class="notice soft" style="margin:0">No pudimos reconocer la carta en la foto. Prueba con una foto de frente, con buena luz y sin reflejos, o búscala en el catálogo más abajo.</p>`;
       return;
@@ -3187,7 +3188,6 @@ function viewSell(app) {
       box.innerHTML = `<p class="notice warn" style="margin:0">La foto no parece una carta coleccionable. Sube una foto del frente de tu carta.</p>`;
       return;
     }
-    const ai = res.ai;
     if (res.kind === "pokemon") {
       setCategory("pokemon");
       await pickCard(res.card, { fromIdent: true });
@@ -3198,12 +3198,7 @@ function viewSell(app) {
       fillDescription(describeCard(null, ai));
       renderEstimate();
     }
-    const graded = !!(ai?.is_graded && ai.grading_company && ai.grade);
-    if (graded) {
-      const r = form.querySelector('#gradedSeg input[value="true"]'); r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true }));
-      set("company", ai.grading_company); set("grade", ai.grade); set("cert", ai.cert_number ?? "");
-      renderEstimate(); loadSellChart();
-    } else if (res.kind !== "pokemon") loadSellChart();
+    if (res.kind !== "pokemon") loadSellChart(); // pickCard already loaded it
     box.innerHTML = ""; // the filled-in form is the result
   }
   function setCategory(cat) {
@@ -3243,7 +3238,7 @@ function viewSell(app) {
         ? { category: "pokemon", subject: c.name, setName: c.set.name, year: c.set.releaseDate?.slice(0, 4), number: val("number"), variant: val("variant"), catalogId: c.id, dexId: c.dexId }
         : { category: val("category"), subject: val("subject"), setName: val("setName"), year: val("year"), number: val("number"), variant: val("variant"), catalogId: null },
       condition: st.graded ? null : val("condition") || "NM",
-      grading: st.graded && val("company") && Number(val("grade")) ? { company: val("company"), grade: Number(val("grade")) } : null,
+      grading: st.graded ? { company: st.grading.company, grade: st.grading.grade } : null,
       priceUsd: price > 0 ? price : null, priceLabel: "Tu precio", isDemo: false,
     };
   };
@@ -3299,12 +3294,12 @@ function viewSell(app) {
     e.preventDefault();
     const msg = $("#sellMsg"), btn = $("#publishBtn");
     const fail = (t) => { msg.innerHTML = `<p class="notice bad">${esc(t)}</p>`; btn.disabled = false; btn.textContent = "Publicar gratis"; };
-    const price = Number(val("price")), year = val("year") ? Number(val("year")) : null, grade = st.graded ? Number(val("grade")) : null;
+    const price = Number(val("price")), year = val("year") ? Number(val("year")) : null, grade = st.graded ? st.grading.grade : null;
     if (!st.files.length) return fail("Agrega al menos una foto real de la carta.");
     if (val("subject").length < 2) return fail("Falta el nombre del Pokémon o jugador.");
     if (!val("setName")) return fail("Falta el set o producto.");
     if (year != null && !(Number.isInteger(year) && year >= 1990 && year <= 2030)) return fail("Año no válido.");
-    if (st.graded && !(grade >= 1 && grade <= 10)) return fail("La nota de graduación debe estar entre 1 y 10.");
+    if (st.slabUnread) return fail("Vimos un slab pero no pudimos leer la nota. Sube una foto donde se lea la etiqueta.");
     if (!(price >= 1 && price <= 100000)) return fail("Escribe un precio entre $1 y $100,000.");
     if (val("title").length < 5) return fail("El título es muy corto.");
     for (const f of st.files) if (f.size > 3 * 1024 * 1024) return fail("Una de las fotos es muy pesada (máx. 3 MB).");
@@ -3317,13 +3312,13 @@ function viewSell(app) {
     if (!fresh) return fail("Tu sesión expiró. Vuelve a entrar para publicar.");
     const uid = fresh.user.id, id = crypto.randomUUID();
     const catalogId = val("category") === "pokemon" && st.picked ? st.picked.id : null;
-    const gradingKey = st.graded ? `${val("company")}${grade}` : "raw";
+    const gradingKey = st.graded ? `${st.grading.company}${grade}` : "raw";
     let comps = [];
     if (catalogId) {
       const { data } = await sb.from("sales").select("price_cents, sold_at").eq("catalog_id", catalogId).eq("grading_key", gradingKey).order("sold_at", { ascending: false }).limit(50);
       comps = (data ?? []).map((s) => ({ priceUsd: s.price_cents / 100, soldAt: s.sold_at }));
     }
-    const estimate = (catalogId ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), localComps: comps, condition: st.graded ? null : val("condition"), grading: st.graded ? { company: val("company"), grade } : null }) : null)
+    const estimate = (catalogId ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), localComps: comps, condition: st.graded ? null : val("condition"), grading: st.graded ? { company: st.grading.company, grade } : null }) : null)
       ?? estimateFromQuote(st.hist?.quote); // graded, NBA/NFL: the price researched on the web
 
     // El anuncio nace como borrador (invisible al público) y sólo pasa a "active" cuando
@@ -3339,6 +3334,7 @@ function viewSell(app) {
     const dbMessage = (err, t) =>
       err?.code === "42501" ? "Tu sesión no tiene permiso para publicar. Sal y vuelve a entrar." :
       err?.code === "23503" ? "Tu cuenta no tiene perfil de vendedor. Sal y vuelve a entrar, o escríbenos." :
+      /grading_from_photo/.test(err?.message ?? "") ? "La graduación tiene que verse en la foto del slab. Sube una foto donde se lea la etiqueta y vuelve a intentar." :
       err?.code === "23514" ? "Algún dato no es válido (revisa precio, título, nota o condición)." : t;
     const dup = (e) => /exists|duplicate/i.test(e?.message ?? "");
 
@@ -3346,8 +3342,8 @@ function viewSell(app) {
     const ins = await sb.from("listings").insert({
       id, seller_id: uid, status: "draft", category: val("category"), title: val("title"), description: val("description") || null,
       subject: val("subject"), set_name: val("setName"), year, number: val("number") || null, variant: val("variant") || null,
-      condition: st.graded ? null : val("condition"), grading_company: st.graded ? val("company") : null, grade,
-      cert_number: st.graded ? val("cert") || null : null,
+      condition: st.graded ? null : val("condition"), grading_company: st.graded ? st.grading.company : null, grade,
+      cert_number: st.graded ? st.grading.cert : null,
       price_cents: Math.round(price * 100), province: loc.province, district: loc.district, neighborhood: loc.neighborhood,
       catalog_id: catalogId, estimate,
     });
