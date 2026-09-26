@@ -3947,7 +3947,9 @@ async function mountCaptcha(box) {
   try {
     const ts = await loadTurnstile();
     if (!box.isConnected) return null;
-    const id = ts.render(box, { sitekey: CONFIG.TURNSTILE_SITE_KEY, language: "es", theme: "auto", appearance: "interaction-only" });
+    // The normal widget is at least 300 px wide; on narrow phones use the compact one so the form doesn't overflow.
+    const size = box.clientWidth < 300 ? "compact" : "flexible";
+    const id = ts.render(box, { sitekey: CONFIG.TURNSTILE_SITE_KEY, language: "es", theme: "auto", appearance: "interaction-only", size });
     return { token: () => ts.getResponse(id) || "", reset: () => ts.reset(id) };
   } catch (e) {
     console.error(e);
