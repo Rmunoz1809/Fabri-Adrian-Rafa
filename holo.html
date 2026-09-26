@@ -2237,9 +2237,14 @@ function viewProtected(app) {
 }
 
 // Animated card wall behind the sign-in screen: only real card scans.
-// Pokémon come from pokemontcg.io; NBA/NFL are public-domain vintage cards from
+// Pokémon come from TCGdex; NBA/NFL are public-domain vintage cards from
 // Wikimedia Commons, stored in img/gate/ (sources in img/gate/CREDITS.md).
-const GATE_POKEMON = ["base1/4", "sv3pt5/199", "swsh7/215", "sv8/238", "base1/2", "swsh7/218", "sv4pt5/234", "base1/58", "sv3pt5/200", "swsh11/186", "base1/15", "sv6/211", "sv2/203", "swsh12pt5/160", "sv3pt5/202", "sv2/254"];
+// Newest Mega Evolution-era sets (Sep 2025 – Sep 2026), Special Illustration Rares only, via TCGdex.
+const GATE_POKEMON = [
+  "30th/149", "me05/116", "me02/125", "me01/178", "30th/151", "me04/116", "me02.5/276", "me03/120",
+  "30th/152", "me05/114", "me02.5/284", "me01/179", "30th/154", "me04/117", "me02/128", "me03/119",
+  "30th/148", "me05/115", "me02.5/290", "me01/181", "30th/153", "me03/118", "me02.5/281",
+];
 const GATE_SPORTS = [
   "nba-george-mikan-1948-bowman", "nfl-jim-brown-1960-topps", "nba-wilt-chamberlain-1961-fleer", "nfl-otto-graham-1951-bowman",
   "nba-bill-russell-1961-fleer", "nfl-ya-tittle-1959-topps", "nba-bud-palmer-1948-bowman", "nfl-mike-ditka-topps",
@@ -2247,7 +2252,7 @@ const GATE_SPORTS = [
 ];
 function gateBackground() {
   if ($("#gateBg")) return;
-  const pokemon = (id) => `<div class="gc"><img src="https://images.pokemontcg.io/${id}.png" alt="" loading="eager" decoding="async"></div>`;
+  const pokemon = (id) => `<div class="gc"><img src="https://assets.tcgdex.net/en/me/${id}/low.webp" alt="" loading="eager" decoding="async"></div>`;
   const sports = (name) => `<div class="gc"><img src="${CARD_SCANS}${name}.jpg" alt="" loading="eager" decoding="async"></div>`;
   const cols = [];
   for (let c = 0; c < 9; c++) {
