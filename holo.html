@@ -2687,7 +2687,6 @@ function viewSell(app) {
       <section class="right">
         <h2 class="step"><span class="num-badge">2</span>Detalles de la carta</h2>
         <div id="idBox" aria-live="polite"></div>
-        <section class="panel" id="sellChart" hidden></section>
         <label class="f">Categoría<select class="select" name="category" id="category">${CATEGORIES.map((c) => `<option value="${c.slug}">${c.name}</option>`).join("")}</select></label>
         <div id="catalogBox" class="panel accent">
           <p class="ptitle" style="font-size:15px">${ic("search")}¿No la reconocimos? Búscala en el catálogo de Pokémon</p>
@@ -2713,6 +2712,7 @@ function viewSell(app) {
           <label class="f">Precio (USD)<input class="input" name="price" type="number" min="1" step="0.01" inputmode="decimal" required></label>
           <label class="f">Barrio / zona<select class="select" name="location">${locOptions}</select></label>
         </div>
+        <section class="panel" id="sellChart" hidden></section>
         <p id="verdict" class="small" aria-live="polite"></p>
         <p class="xs muted">Solo mostramos el barrio, nunca tu dirección.</p>
         <label class="f">Título<input class="input" name="title" required maxlength="80"></label>
@@ -2786,7 +2786,6 @@ function viewSell(app) {
   form.addEventListener("change", (e) => { if (e.target.name === "company" || e.target.name === "grade") { renderEstimate(); loadSellChart(); } });
 
   // ----- identification from the photo
-  const confidenceText = { alta: "confianza alta", media: "confianza media: revisa que sea tu versión", baja: "confianza baja: confirma o elige la correcta" };
   async function identify() {
     if (!st.files.length) return;
     const run = ++st.idRun, box = $("#idBox");
@@ -2819,7 +2818,7 @@ function viewSell(app) {
       set("company", ai.grading_company); set("grade", ai.grade); set("cert", ai.cert_number ?? "");
       renderEstimate(); loadSellChart();
     }
-    renderIdent();
+    box.innerHTML = ""; // the filled-in form is the result
   }
   function setCategory(cat) {
     if (!CATEGORIES.some((c) => c.slug === cat) || val("category") === cat) return;
@@ -2829,56 +2828,11 @@ function viewSell(app) {
     // Only replace text we wrote ourselves; never overwrite what the seller typed.
     if (!val("description") || val("description") === st.autoDesc) { set("description", text); st.autoDesc = text; }
   }
-  function renderIdent() {
-    const res = st.ident, box = $("#idBox");
-    if (!res || res.kind === "not-card") return;
-    const ai = res.ai, c = res.kind === "pokemon" ? st.picked : null;
-    const how = res.source === "ia" ? "Reconocida con IA" : "Reconocida leyendo el texto de la foto";
-    const title = c ? `${c.name} · ${c.number}${c.set.printedTotal ? `/${c.set.printedTotal}` : ""}` : `${ai.subject}${ai.card_number ? ` · ${ai.card_number}` : ""}`;
-    const sub = c ? [c.set.name, c.set.releaseDate?.slice(0, 4), c.rarity].filter(Boolean).join(" · ") : [ai.set_name, ai.year, ai.variant].filter(Boolean).join(" · ");
-    const flags = ai?.authenticity_flags?.length ? `<p class="notice warn xs" style="margin:10px 0 0">Revisa: ${esc(ai.authenticity_flags.join("; "))}</p>` : "";
-    const alts = res.kind === "pokemon" && res.alternatives.length
-      ? `<p class="xs muted" style="margin:12px 0 0">¿No es esta versión? Toca la tuya:</p><div class="results alts">${res.alternatives.map((a, i) => `<button type="button" data-alt="${i}">${a.image ? `<img src="${esc(a.image)}/low.webp" alt="${esc(a.name)}" loading="lazy">` : ""}<span>${esc(a.name)} · ${esc(a.setName || setOfDexId(a.id))} · ${esc(a.localId)}</span></button>`).join("")}</div>`
-      : "";
-    box.innerHTML = `<div class="panel holo-border">
-      <div style="display:flex;gap:14px;align-items:flex-start">
-        ${c?.images.small ? `<img src="${esc(c.images.small)}" alt="${esc(c.name)}" style="width:92px;border-radius:8px;flex-shrink:0">` : ""}
-        <div style="min-width:0">
-          <p class="xs" style="margin:0;color:var(--good);font-weight:600">✓ ${how} · ${esc(confidenceText[res.confidence] ?? "")}</p>
-          <p style="margin:4px 0 0;font-weight:700;font-size:17px">${esc(title)}</p>
-          <p class="small muted" style="margin:2px 0 0">${esc(sub)}</p>
-          ${c?.illustrator ? `<p class="xs muted" style="margin:2px 0 0">Ilustración: ${esc(c.illustrator)}</p>` : ""}
-          <div id="idPrice"></div>
-        </div>
-      </div>
-      <p class="small" style="margin:12px 0 0;white-space:pre-line">${esc(describeCard(c, ai))}</p>
-      ${flags}${alts}
-      <p class="xs muted" style="margin:10px 0 0">Llenamos el formulario por ti: revisa los datos antes de publicar.</p></div>`;
-    box.querySelectorAll("[data-alt]").forEach((b) => b.addEventListener("click", async () => {
-      const a = res.alternatives[Number(b.dataset.alt)];
-      b.disabled = true;
-      const full = await catalogFromDex(a.id);
-      if (!full) { b.disabled = false; return; }
-      res.alternatives[Number(b.dataset.alt)] = { id: res.card.dexId, localId: res.card.number, name: res.card.name, image: res.card.images.small.replace(/\/low\.webp$/, ""), setName: res.card.set.name };
-      res.card = full; res.confidence = "alta";
-      await pickCard(full, { fromIdent: true, replace: true });
-      renderIdent();
-    }));
-    renderIdPrice();
-  }
-  /** Today's price, in one line, under the identified card. */
-  async function renderIdPrice() {
-    const el = $("#idPrice"), c = st.picked;
-    if (!el || !c || val("category") !== "pokemon") return;
-    const ref = pickReferencePrice(c, val("variant"));
-    const tpv = ref ? ref.market ?? ref.mid : null;
-    const cm = c.cardmarket, eur = cm ? (cm.avg7 > 0 ? cm.avg7 : cm.trend > 0 ? cm.trend : null) : null;
-    const fx = eur ? await eurUsd() : null;
-    if (!el.isConnected || st.picked !== c) return;
-    const parts = [tpv > 0 && `<strong>${fmtEstimate(tpv)}</strong> <span class="muted">TCGplayer (EE.UU.)</span>`, eur && fx && `<strong>${fmtEstimate(eur * fx.rate)}</strong> <span class="muted">Cardmarket (Europa, ${eur === cm.avg7 ? "promedio 7 días" : "tendencia"})</span>`].filter(Boolean);
-    el.innerHTML = parts.length
-      ? `<p class="small" style="margin:8px 0 0">Precio actual (Near Mint): ${parts.join(" · ")}</p>`
-      : `<p class="xs muted" style="margin:8px 0 0">Todavía no hay precio de mercado para esta carta.</p>`;
+  /** Approximate market value of the selected card, shown inside the price field. */
+  function renderPriceHint() {
+    const h = st.hist, cur = h ? h.market.at(-1) ?? h.cardmarket.at(-1) : null, est = currentEstimate();
+    const v = cur?.v ?? est?.mid;
+    form.elements.price.placeholder = v > 0 ? `Aprox. ${fmtEstimate(v)}` : "";
   }
 
   /** Select a catalog card: fill the form, the estimate and the price chart. */
@@ -2908,7 +2862,7 @@ function viewSell(app) {
   let chartRo = null;
   async function loadSellChart() {
     const box = $("#sellChart");
-    if (!st.picked || val("category") !== "pokemon") { box.hidden = true; st.hist = null; return; }
+    if (!st.picked || val("category") !== "pokemon") { box.hidden = true; st.hist = null; renderPriceHint(); return; }
     const run = ++st.chartRun, c = st.picked;
     box.hidden = false;
     box.innerHTML = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:20px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p>`;
@@ -2916,7 +2870,7 @@ function viewSell(app) {
     if (run !== st.chartRun || st.picked !== c || !box.isConnected) return;
     st.hist = h; st.range = h.weekly ? 365 : 90;
     drawSellChart(true);
-    renderIdPrice();
+    renderPriceHint();
     if (!chartRo) {
       let width = box.clientWidth;
       chartRo = new ResizeObserver(() => { if (!box.isConnected) return chartRo.disconnect(); if (box.clientWidth !== width) { width = box.clientWidth; drawSellChart(); } });

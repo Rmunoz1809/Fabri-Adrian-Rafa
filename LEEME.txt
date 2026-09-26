@@ -29,9 +29,10 @@ Funciona en dos niveles, sin poner ninguna clave secreta en este archivo:
    nombre y el número de la carta (OCR con Tesseract.js), los busca en el
    catálogo de TCGdex y desempata comparando la foto con la imagen de cada
    versión. Sólo Pokémon; funciona mejor con foto de frente, buena luz y sin
-   reflejos. Si duda, muestra las otras versiones posibles para tocar la buena.
-Al reconocerla muestra el precio de hoy (TCGplayer y Cardmarket) y la gráfica
-de valor. Las cartas que aún no tienen historial semanal muestran los días de
+   reflejos.
+Al reconocerla sólo llena el formulario (sin cuadro de resultado). Junto al
+precio (USD) aparece el valor aproximado de la carta y la gráfica de valor
+(TCGplayer y Cardmarket). Las cartas que aún no tienen historial semanal muestran los días de
 Cardmarket desde el 16/09/2026; el historial largo de TCGplayer se agrega el
 lunes siguiente a su publicación.
 
