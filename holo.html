@@ -404,9 +404,6 @@ table.fees tbody tr:hover { background: rgb(38 38 38 / .35); }
 .tbadges { display: flex; flex-wrap: wrap; gap: 4px; }
 .tseller .b { height: 20px; padding: 0 7px; font-size: 11px; }
 .tseller .b .i { width: 12px; height: 12px; }
-.tshop { display: flex; flex-direction: column; gap: 6px; }
-.tshop img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: var(--muted); }
-.tshop p { color: var(--fg-2); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 img.avatar { display: block; padding: 0; background: var(--muted); }
 .b.shop { background: var(--good-bg); color: var(--up); }
 .seller-seg { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; margin-top: 16px; padding: 4px; border-radius: var(--radius-lg); background: var(--muted); }
@@ -1439,10 +1436,9 @@ function sellerBadge(s) {
   if (s.isShop) return `<span class="b neutral">Tienda</span>`;
   return `<span class="b neutral">Particular</span>${s.verified ? `<span class="b prot">${ic("check")}Verificado</span>` : ""}`;
 }
+// Cards stay short: name and badge only. The store photo and description live on the detail page.
 function tileSeller(s) {
-  const shop = s.isShop && (s.shopPhotoUrl || s.shopDescription);
-  return `<div class="tseller"><div class="who">${sellerAvatar(s, 20)}<span class="nm">${esc(s.displayName)}</span></div><div class="tbadges">${sellerBadge(s)}</div>
-    ${shop ? `<div class="tshop">${s.shopPhotoUrl ? `<img src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}" loading="lazy">` : ""}${s.shopDescription ? `<p>${esc(s.shopDescription)}</p>` : ""}</div>` : ""}</div>`;
+  return `<div class="tseller"><div class="who">${sellerAvatar(s, 20)}<span class="nm">${esc(s.displayName)}</span></div><div class="tbadges">${sellerBadge(s)}</div></div>`;
 }
 function conditionBadge(l) {
   if (l.grading) return `<span class="graded">${esc(l.grading.company)} ${esc(l.grading.grade)}</span>`;
