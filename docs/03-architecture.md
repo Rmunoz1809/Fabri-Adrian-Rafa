@@ -39,7 +39,7 @@ Está en [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.
 - **Triggers** que impiden que un usuario se marque como staff o verificado, o que habilite Compra Protegida en su propio anuncio. `REVOKE` por columna no sirve con los grants por defecto de Supabase.
 - El **WhatsApp del vendedor** es privado: la vista `public_profiles` no lo expone.
 - **Fotos:** máximo 5 MB, JPG/PNG/WebP, cada usuario sube solo a su carpeta.
-- **IA:** máximo 2 fotos por llamada. **Pendiente:** limitar llamadas por usuario (p. ej. 20 al día) cuando exista auth.
+- **IA:** máximo 2 fotos por llamada. En `holo.html` la IA corre en la Edge Function `supabase/functions/identificar-carta` (exige sesión; límite de 30 llamadas por hora por usuario, en memoria de cada instancia). Sin la función, el navegador usa OCR + TCGdex.
 
 ## Costo mensual estimado [E]
 

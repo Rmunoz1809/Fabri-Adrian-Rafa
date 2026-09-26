@@ -167,6 +167,9 @@ dl.rows div.total { border-top: 1px solid var(--line); margin-top: 6px; padding-
 .results button { border: 2px solid var(--line); background: var(--surface); border-radius: 10px; padding: 4px; cursor: pointer; text-align: left; font-size: 11px; }
 .results button.on { border-color: var(--accent); }
 .results img { width: 100%; border-radius: 6px; display: block; }
+.results.alts { grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.results.alts button { font-size: 10px; line-height: 1.25; }
+@media (max-width: 560px) { .results.alts { grid-template-columns: repeat(4, 1fr); } }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .seg label { display: flex; height: 44px; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
@@ -292,6 +295,10 @@ const CONFIG = {
   // Opcional: poner true sólo si se corrió supabase/price_snapshots.sql (suma un precio diario
   // guardado por la base de datos). El historial semanal incrustado no lo necesita.
   PRICE_SNAPSHOTS: false,
+  // Photo identification. The AI step runs in the Supabase Edge Function below (the Anthropic key
+  // lives there as a secret, never in this file). If it is not deployed or fails, the page falls
+  // back to reading the card's text in the browser (OCR) and matching it against the catalog.
+  IDENTIFY_FUNCTION: "identificar-carta",
 };
 
 // ============================================================= catalog
@@ -682,15 +689,59 @@ function storedPrices() {
 }
 
 const TCGDEX_API = "https://api.tcgdex.net/v2/en";
-/** pokemontcg.io ids (sv3pt5-199) → TCGdex ids (sv03.5-199). */
+/** pokemontcg.io ids (sv3pt5-199, swsh12pt5-1) → TCGdex ids (sv03.5-199, swsh12.5-1). */
 function tcgdexId(id) {
-  const i = id.lastIndexOf("-"), set = id.slice(0, i), m = set.match(/^sv(\d+)(pt5)?$/);
-  return `${m ? `sv${m[1].padStart(2, "0")}${m[2] ? ".5" : ""}` : set}-${id.slice(i + 1)}`;
+  const i = id.lastIndexOf("-"), set = id.slice(0, i), m = set.match(/^([a-z]+)(\d+)(pt5)?$/);
+  return `${m ? `${m[1]}${m[1] === "sv" ? m[2].padStart(2, "0") : m[2]}${m[3] ? ".5" : ""}` : set}-${id.slice(i + 1)}`;
+}
+/** TCGdex ids (sv03.5-006) → pokemontcg.io ids (sv3pt5-6), the format stored in listings.catalog_id. */
+function ptcgId(dexId) {
+  const i = dexId.lastIndexOf("-"), set = dexId.slice(0, i), num = dexId.slice(i + 1);
+  return `${set.replace(/^([a-z]+)0+(?=\d)/, "$1").replace(/\.5$/, "pt5")}-${/^\d+$/.test(num) ? String(Number(num)) : num}`;
+}
+const dexCache = new Map();
+/** GET on the TCGdex API, cached per page load (failures are not cached). */
+function dexGet(path) {
+  if (!dexCache.has(path)) {
+    dexCache.set(path, withTimeout(fetch(`${TCGDEX_API}${path}`), 10000).then((r) => (r.ok ? r.json() : null))
+      .catch(() => { dexCache.delete(path); return null; }));
+  }
+  return dexCache.get(path);
+}
+/** TCGdex card for a listing. TCGdex pads numbers (sv03.5-006) and pokemontcg.io does not (sv3pt5-6). */
+async function fetchDexCard(card) {
+  const ids = [card.dexId, card.catalogId && tcgdexId(card.catalogId)].filter(Boolean);
+  const m = ids.at(-1)?.match(/^(.*-)(\d{1,2})$/);
+  if (m) ids.push(`${m[1]}${m[2].padStart(3, "0")}`);
+  for (const id of new Set(ids)) { const d = await dexGet(`/cards/${encodeURIComponent(id)}`); if (d) return d; }
+  return null;
 }
 let eurUsdPromise = null;
 /** EUR→USD from the European Central Bank reference rate (Frankfurter). */
 const eurUsd = () => (eurUsdPromise ??= withTimeout(fetch("https://api.frankfurter.dev/v1/latest?from=EUR&to=USD"), 8000)
   .then((r) => r.json()).then((j) => ({ rate: j.rates.USD, date: j.date })).catch(() => null));
+
+// Daily copy of Cardmarket's official price guide (github.com/ZyzyThePizi/pokemon-price-data, since
+// 2026-09-16). The weekly job already stores it for tracked cards; this gives the same days to cards
+// that are not tracked yet (e.g. one just identified from a photo).
+const CM_MIRROR = "https://raw.githubusercontent.com/ZyzyThePizi/pokemon-price-data/main";
+const cmShards = new Map();
+let cmFieldsPromise = null, eurUsdDaysPromise = null;
+async function cardmarketMirror(idProduct) {
+  cmFieldsPromise ??= withTimeout(fetch(`${CM_MIRROR}/prices/manifest.json`), 8000).then((r) => r.json()).then((j) => j.historyFields).catch(() => { cmFieldsPromise = null; return null; });
+  const shard = idProduct % 1000;
+  if (!cmShards.has(shard)) cmShards.set(shard, withTimeout(fetch(`${CM_MIRROR}/history/${shard}.json`), 10000).then((r) => (r.ok ? r.json() : null)).catch(() => { cmShards.delete(shard); return null; }));
+  const [fields, data] = await Promise.all([cmFieldsPromise, cmShards.get(shard)]);
+  if (!fields || !data) return [];
+  return (data[String(idProduct)] ?? []).map((row) => Object.fromEntries(fields.map((k, i) => [k, row[i]])));
+}
+/** ECB EUR→USD rate per day since the mirror started, so each point uses the rate of its own date. */
+async function eurUsdDays() {
+  eurUsdDaysPromise ??= withTimeout(fetch("https://api.frankfurter.dev/v1/2026-09-01..?base=EUR&symbols=USD"), 8000)
+    .then((r) => r.json()).then((j) => Object.entries(j.rates).map(([d, r]) => [d, r.USD]).sort()).catch(() => { eurUsdDaysPromise = null; return []; });
+  return eurUsdDaysPromise;
+}
+const rateOn = (days, d) => { let r = null; for (const [day, v] of days) { if (day > d) break; r = v; } return r ?? days[0]?.[1] ?? null; };
 
 /** Agrega un punto al final de la serie si es de un día posterior al último (o lo reemplaza si es el mismo día). */
 function appendLatest(series, p) {
@@ -713,7 +764,7 @@ async function fetchPriceHistory(l) {
         const { data } = await sb.from("price_snapshots").select("variant, market_cents, captured_on").eq("catalog_id", catalogId).order("captured_on").limit(1500);
         return data ?? [];
       })().catch(() => []),
-      withTimeout(fetch(`${TCGDEX_API}/cards/${encodeURIComponent(tcgdexId(catalogId))}`), 8000).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetchDexCard(l.card),
       eurUsd(),
     ]);
     // TCGplayer (EE.UU.): un precio de mercado por semana + el de hoy.
@@ -736,6 +787,13 @@ async function fetchPriceHistory(l) {
     h.cardmarket = (stored?.series?.cardmarket ?? []).filter((p) => p.eurUsd && cmValue(p)[0])
       .map((p) => { const [eur, k] = cmValue(p); return { t: noonUtc(p.d), v: round2(eur * p.eurUsd * factor), k, carried: !!p.carried, src: p.fuente, rate: p.eurUsd }; });
     const cm = dex?.pricing?.cardmarket;
+    if (!h.cardmarket.length && cm?.idProduct) {
+      const [rows, days] = await Promise.all([cardmarketMirror(cm.idProduct).catch(() => []), eurUsdDays()]);
+      for (const o of rows) {
+        const [eur, k] = cmValue(o), rate = rateOn(days, o.date);
+        if (eur && rate) h.cardmarket.push({ t: noonUtc(o.date), v: round2(eur * rate * factor), k, src: "cardmarket-espejo", rate });
+      }
+    }
     if (cm && fx && cmValue(cm)[0]) {
       const [eur, k] = cmValue(cm);
       h.fx = fx; h.cmUpdated = Date.parse(cm.updated);
@@ -791,22 +849,22 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
   const current = h.market.at(-1) ?? h.cardmarket.at(-1);
   let head = "";
   if (current) {
-    const d = (price - current.v) / current.v, pct = Math.round(Math.abs(d) * 100);
+    const d = ((price ?? current.v) - current.v) / current.v, pct = Math.round(Math.abs(d) * 100);
     const rel = pct < 3 ? "en línea con el valor de mercado" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} del valor de mercado`;
     const when = isoDay(new Date(current.t)) === isoDay(new Date()) ? "hoy" : `al ${fmtDay(current.t)}`;
     head = `<p style="margin:8px 0 0"><span class="display" style="font-size:24px;font-weight:700">${fmtEstimate(current.v)}</span> <span class="small muted">valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})</span></p>
-      <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}</p>`;
+      <p class="small" style="margin:4px 0 0">${price != null ? `${esc(l.priceLabel ?? "Este anuncio")} (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.` : ""}${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}</p>`;
   } else {
     const recent = h.sales.filter((p) => p.t >= now - 180 * DAY_MS).map((p) => p.v);
     const med = median(recent.length ? recent : h.sales.map((p) => p.v));
-    const d = (price - med) / med, pct = Math.round(Math.abs(d) * 100);
+    const d = ((price ?? med) - med) / med, pct = Math.round(Math.abs(d) * 100);
     head = `<p style="margin:8px 0 0"><span class="display" style="font-size:24px;font-weight:700">${fmtEstimate(med)}</span> <span class="small muted">mediana de ventas en Panamá</span></p>
-      <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${pct < 3 ? "en línea con las ventas recientes" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} de las ventas recientes`}</strong>.</p>`;
+      ${price == null ? "" : `<p class="small" style="margin:4px 0 0">${esc(l.priceLabel ?? "Este anuncio")} (${formatUsd(toCents(price))}) está <strong>${pct < 3 ? "en línea con las ventas recientes" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} de las ventas recientes`}</strong>.</p>`}`;
   }
   const notes = [];
   const weeklyTp = h.market.filter((p) => p.src !== "tcgdex" && p.src !== "supabase");
   if (weeklyTp.length) notes.push(`TCGplayer (EE.UU.): precio de mercado, un registro por semana desde el ${fmtDay(weeklyTp[0].t, true)}, de tcgcsv.com (copia pública de los precios de TCGplayer)${h.liveMarket ? "; el último punto es el precio de hoy según TCGdex" : ""}.`);
-  else if (h.market.length) notes.push("TCGplayer (EE.UU.): precio de mercado de hoy según TCGdex. El historial semanal de esta carta empieza con la próxima actualización automática.");
+  else if (h.market.length) notes.push("TCGplayer (EE.UU.): precio de mercado de hoy según TCGdex. El historial semanal de TCGplayer se guarda automáticamente cada lunes mientras la carta tenga un anuncio activo.");
   if (h.cardmarket.length) notes.push(`Cardmarket (Europa): promedio de ventas reales de los últimos 7 días, de la guía de precios oficial de Cardmarket${h.liveCm ? " (el último punto, vía TCGdex)" : ""}, convertido de EUR a USD con la tasa del Banco Central Europeo de cada fecha${h.fx ? ` (hoy 1 € = $${h.fx.rate})` : ""}.`);
   if (h.market.some((p) => p.carried) || h.cardmarket.some((p) => p.carried)) notes.push("Las semanas sin dato nuevo repiten el último valor conocido (tramo plano).");
   if (h.factor !== 1) notes.push(`Precios ajustados a condición ${l.condition} (×${h.factor}).`);
@@ -816,7 +874,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
 
   box.innerHTML = `${header}${head}
     ${market.length || cmk.length || sales.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin:12px 0 0">No hay datos en este periodo. Prueba con uno más largo.</p>`}
-    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}<span><i class="k" style="height:0;border-top:2px dashed var(--ink)"></i>Este anuncio</span></div>
+    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}${price != null ? `<span><i class="k" style="height:0;border-top:2px dashed var(--ink)"></i>${esc(l.priceLabel ?? "Este anuncio")}</span>` : ""}</div>
     <p class="xs muted" style="margin:8px 0 0">${notes.map(esc).join(" ")} Es una referencia, no una garantía.</p>
     ${updated}
     ${priceSources(l, h)}
@@ -833,7 +891,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
   let xMin = Math.min(...pts.map((p) => p.t));
   if (now - xMin < 7 * DAY_MS) xMin = now - 7 * DAY_MS;
   const xMax = now;
-  const vals = [...pts.map((p) => p.v), price];
+  const vals = [...pts.map((p) => p.v), ...(price != null ? [price] : [])];
   const ticks = niceTicks(Math.min(...vals) * 0.94, Math.max(...vals) * 1.04);
   const yMin = ticks[0], yMax = ticks.at(-1);
   const X = (t) => m.l + ((t - xMin) / (xMax - xMin)) * (W - m.l - m.r);
@@ -846,8 +904,8 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
   wrap.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="Gráfica del valor de mercado en TCGplayer y Cardmarket en el tiempo. Usa las flechas para recorrer los puntos.">
     ${ticks.map((v) => `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text class="axis" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmtAxis(v)}</text>`).join("")}
     ${xTicks.map((t, i) => `<text class="axis" x="${X(t)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === 3 ? "end" : "middle"}">${i === 3 ? "Hoy" : fmtDay(t, spansYear)}</text>`).join("")}
-    <line x1="${m.l}" x2="${W - m.r}" y1="${Y(price)}" y2="${Y(price)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".75"/>
-    <text class="axis" x="${W - m.r}" y="${Y(price) - 6}" text-anchor="end" style="fill:var(--ink)">Este anuncio ${formatUsd(toCents(price))}</text>
+    ${price != null ? `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(price)}" y2="${Y(price)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".75"/>
+    <text class="axis" x="${W - m.r}" y="${Y(price) - 6}" text-anchor="end" style="fill:var(--ink)">${esc(l.priceLabel ?? "Este anuncio")} ${formatUsd(toCents(price))}</text>` : ""}
     ${market.length > 1 ? `<path d="${line}" fill="none" stroke="${CHART_COLORS.market}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
     ${last ? `<circle cx="${X(last.t)}" cy="${Y(last.v)}" r="4.5" fill="${CHART_COLORS.market}" stroke="var(--surface)" stroke-width="2"/>` : ""}
     ${cmk.length > 1 ? `<path d="${cmk.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join("")}" fill="none" stroke="${CHART_COLORS.cardmarket}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
@@ -883,7 +941,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
     if (s.cm) tip.append(row(CHART_COLORS.cardmarket, formatUsd(toCents(s.cm.v)), `Cardmarket · ${s.cm.k}${s.cm.carried ? again : ""}`));
     for (const v of s.sales) tip.append(row(CHART_COLORS.sales, formatUsd(toCents(v)), "venta en Panamá", true));
     const ref = s.market ?? s.cm?.v ?? s.sales[0], diff = Math.round(((price - ref) / ref) * 100);
-    tip.append(row("var(--ink)", formatUsd(toCents(price)), `este anuncio (${diff > 0 ? "+" : ""}${diff}%)`));
+    if (price != null) tip.append(row("var(--ink)", formatUsd(toCents(price)), `${(l.priceLabel ?? "Este anuncio").toLowerCase()} (${diff > 0 ? "+" : ""}${diff}%)`));
     tip.style.display = "block";
     const tw = tip.offsetWidth;
     tip.style.left = `${x > W / 2 ? Math.max(0, x - tw - 12) : Math.min(W - tw, x + 12)}px`;
@@ -1191,7 +1249,321 @@ async function catalogSearch(name, number) {
       } catch { /* network hiccup, retry */ }
     }
   }
-  return [];
+  // pokemontcg.io fails often (and sunsets 2027-03-01): fall back to the TCGdex catalog.
+  const [found, sets] = await Promise.all([dexCandidates({ name, number: number?.split("/")[0], total: number?.split("/")[1] }), dexSets()]);
+  return found.slice(0, 9).map((c) => catalogFromDexBrief(c, sets.get(setOfDexId(c.id))));
+}
+
+// ============================================================= card identification
+// A photo is enough: the page works out which card (and which printing) it is, fills the
+// form, writes a description, and shows today's price with its history.
+//   1. AI (Supabase Edge Function "identificar-carta", Claude vision). Works for Pokémon, NBA and NFL.
+//   2. Fallback without any key: OCR in the browser (Tesseract.js) reads the name and the
+//      collector number (199/165).
+// For Pokémon both paths end in the TCGdex catalog. The candidates are ranked by number, set
+// size and name, and ties are broken by comparing the photo with each catalog image.
+const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+// TCG Pocket is a digital game: its "cards" share names and numbers with physical ones.
+const isPocketSet = (setId) => /^(A\d|B\d|P-A)/.test(setId);
+const setOfDexId = (id) => id.slice(0, id.lastIndexOf("-"));
+const sameNumber = (a, b) => (/^\d+$/.test(a) && /^\d+$/.test(b) ? Number(a) === Number(b) : String(a).toUpperCase() === String(b).toUpperCase());
+const tokens = (s) => normalize(s).replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter((w) => w.length > 1);
+
+let dexSetsPromise = null;
+const dexSets = () => (dexSetsPromise ??= dexGet("/sets").then((list) => {
+  if (!list) { dexSetsPromise = null; return new Map(); }
+  return new Map(list.map((s) => [s.id, s]));
+}));
+
+/** Physical cards in TCGdex that match a name and/or collector number (number/total). */
+async function dexCandidates({ name, number, total }) {
+  const num = number?.replace(/^#/, "").trim(), tot = total?.replace(/\D/g, "");
+  const q = new URLSearchParams();
+  if (num) q.set("localId", /^\d+$/.test(num) ? String(Number(num)) : num); // TCGdex matches "contains": exact check below
+  if (name) q.set("name", name);
+  if (![...q.keys()].length) return [];
+  let list = (await dexGet(`/cards?${q}`)) ?? [];
+  if (!list.length && num && name) list = (await dexGet(`/cards?localId=${encodeURIComponent(q.get("localId"))}`)) ?? [];
+  list = list.filter((c) => !isPocketSet(setOfDexId(c.id)) && (!num || sameNumber(c.localId, num)));
+  if (tot && list.length > 1) {
+    const sets = await dexSets();
+    const bySize = list.filter((c) => String(sets.get(setOfDexId(c.id))?.cardCount?.official) === String(Number(tot)));
+    if (bySize.length) list = bySize;
+  }
+  return list;
+}
+
+/** Minimal catalog object (same shape as pokemontcg.io) from a TCGdex search row. */
+function catalogFromDexBrief(c, set) {
+  return { id: ptcgId(c.id), dexId: c.id, name: c.name, number: c.localId, rarity: "", set: { name: set?.name ?? setOfDexId(c.id), printedTotal: set?.cardCount?.official ?? "" }, images: { small: c.image ? `${c.image}/low.webp` : "" }, brief: true };
+}
+
+/** Full catalog object from TCGdex: set, rarity, artist, prices. Shape compatible with pokemontcg.io. */
+async function catalogFromDex(dexId) {
+  const d = await dexGet(`/cards/${encodeURIComponent(dexId)}`);
+  if (!d) return null;
+  const set = await dexGet(`/sets/${encodeURIComponent(d.set.id)}`);
+  const tp = d.pricing?.tcgplayer ?? {}, prices = {};
+  for (const [k, v] of Object.entries(tp)) {
+    if (v && typeof v === "object") prices[k.replace(/-(\w)/g, (_, ch) => ch.toUpperCase())] = { market: v.marketPrice ?? null, mid: v.midPrice ?? null, low: v.lowPrice ?? null, productId: v.productId ?? null };
+  }
+  return {
+    id: ptcgId(d.id), dexId: d.id, name: d.name, number: d.localId, rarity: d.rarity ?? "",
+    set: { id: d.set.id, name: d.set.name, printedTotal: d.set.cardCount?.official ?? set?.cardCount?.official ?? "", releaseDate: set?.releaseDate ?? "", serie: set?.serie?.name ?? "" },
+    images: { small: d.image ? `${d.image}/low.webp` : "", large: d.image ? `${d.image}/high.webp` : "" },
+    tcgplayer: Object.keys(prices).length ? { prices, updatedAt: tp.updated ?? new Date().toISOString() } : null,
+    cardmarket: d.pricing?.cardmarket ?? null,
+    illustrator: d.illustrator ?? "", hp: d.hp ?? null, types: d.types ?? [], stage: d.stage ?? "", kind: d.category ?? "",
+  };
+}
+
+const loadImage = (src, cors) => new Promise((resolve, reject) => {
+  const im = new Image();
+  if (cors) im.crossOrigin = "anonymous";
+  im.onload = () => resolve(im); im.onerror = reject; im.src = src;
+});
+/** The card's area in a photo: a centered card-shaped (63×88 mm) box. Scans fill the frame. */
+function cardRect(w, h, fill) {
+  const ratio = 63 / 88;
+  let ch = Math.min(h, w / ratio) * fill, cw = ch * ratio;
+  return { x: (w - cw) / 2, y: (h - ch) / 2, w: cw, h: ch };
+}
+/**
+ * Where the card is in a photo: the bounding box of what differs from the background
+ * (the color along the photo's edges). Falls back to a centered card-shaped box.
+ */
+function findCard(im) {
+  const W = im.naturalWidth || im.width, H = im.naturalHeight || im.height, k = 200 / Math.max(W, H);
+  const w = Math.max(8, Math.round(W * k)), h = Math.max(8, Math.round(H * k));
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0, w, h);
+  const px = g.getImageData(0, 0, w, h).data, at = (x, y) => (y * w + x) * 4;
+  const edge = [];
+  for (let x = 0; x < w; x++) edge.push(at(x, 0), at(x, 1), at(x, h - 1), at(x, h - 2));
+  for (let y = 0; y < h; y++) edge.push(at(0, y), at(1, y), at(w - 1, y), at(w - 2, y));
+  const bg = [0, 1, 2].map((ch) => median(edge.map((i) => px[i + ch])));
+  const rows = new Array(h).fill(0), cols = new Array(w).fill(0);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = at(x, y);
+    if (Math.hypot(px[i] - bg[0], px[i + 1] - bg[1], px[i + 2] - bg[2]) > 48) { rows[y]++; cols[x]++; }
+  }
+  const span = (arr, min) => { const a = arr.findIndex((v) => v >= min), b = arr.findLastIndex((v) => v >= min); return a < 0 ? null : [a, b + 1]; };
+  const ys = span(rows, w * 0.25), xs = span(cols, h * 0.25);
+  if (ys && xs) {
+    const bw = (xs[1] - xs[0]) / k, bh = (ys[1] - ys[0]) / k, ratio = bw / bh;
+    // Accept only card-like boxes (63×88 mm ≈ 0.72, some room for tilt) that are not the whole photo.
+    if (ratio > 0.55 && ratio < 0.9 && bw * bh > W * H * 0.2 && bw * bh < W * H * 0.97) return { x: xs[0] / k, y: ys[0] / k, w: bw, h: bh };
+  }
+  return cardRect(W, H, 0.94);
+}
+/** Visual fingerprint: 64-bit gradient hash (shape) + 4×4 color grid (palette). */
+function signature(im, fill) {
+  const r = fill ? cardRect(im.naturalWidth || im.width, im.naturalHeight || im.height, fill) : findCard(im);
+  const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+  c.width = 9; c.height = 8; g.drawImage(im, r.x, r.y, r.w, r.h, 0, 0, 9, 8);
+  const px = g.getImageData(0, 0, 9, 8).data, lum = (i) => px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114;
+  const bits = [];
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits.push(lum((y * 9 + x) * 4) > lum((y * 9 + x + 1) * 4) ? 1 : 0);
+  c.width = 4; c.height = 4; g.drawImage(im, r.x, r.y, r.w, r.h, 0, 0, 4, 4);
+  return { bits, color: [...g.getImageData(0, 0, 4, 4).data].filter((_, i) => i % 4 !== 3) };
+}
+/** 0 = identical, 1 = unrelated. */
+function visualDistance(a, b) {
+  let ham = 0, col = 0;
+  a.bits.forEach((v, i) => { if (v !== b.bits[i]) ham++; });
+  for (let i = 0; i < a.color.length; i += 3) col += Math.hypot(a.color[i] - b.color[i], a.color[i + 1] - b.color[i + 1], a.color[i + 2] - b.color[i + 2]);
+  return 0.5 * (ham / 64) + 0.5 * (col / (a.color.length / 3) / 441.7);
+}
+
+/** Score candidates by what was read (number, set size, name) and by how much the photo looks like each one. */
+async function rankCandidates(hints, photo) {
+  let list = [];
+  if (hints.number) list = await dexCandidates({ name: hints.name, number: hints.number, total: hints.total });
+  if (!list.length && hints.number && hints.name) list = await dexCandidates({ number: hints.number, total: hints.total });
+  if (!list.length && hints.name) list = await dexCandidates({ name: hints.name });
+  if (!list.length) return [];
+  const sets = await dexSets();
+  const read = new Set(tokens(`${hints.name ?? ""} ${hints.text ?? ""}`));
+  const setWords = new Set(tokens(hints.setName ?? ""));
+  const scored = list.map((c) => {
+    const nameTok = tokens(c.name), set = sets.get(setOfDexId(c.id));
+    let text = nameTok.length ? (2 * nameTok.filter((w) => read.has(w)).length) / nameTok.length : 0;
+    if (hints.number && sameNumber(c.localId, hints.number)) text += 2;
+    if (hints.total && String(set?.cardCount?.official) === String(Number(hints.total.replace(/\D/g, "")))) text += 2;
+    if (setWords.size && set) { const st = tokens(set.name); text += st.length ? st.filter((w) => setWords.has(w)).length / st.length : 0; }
+    return { ...c, text, setName: set?.name ?? "", dist: null };
+  }).sort((a, b) => b.text - a.text).slice(0, 16);
+  return visualRank(scored, photo);
+}
+/** Visual tie-breaker among the best text matches: compare the photo with each catalog image. */
+async function visualRank(scored, photo) {
+  if (photo && scored.length > 1) {
+    try {
+      const url = URL.createObjectURL(photo), mine = signature(await loadImage(url));
+      URL.revokeObjectURL(url);
+      await Promise.all(scored.filter((c) => c.image).map(async (c) => {
+        try { c.dist = visualDistance(mine, signature(await withTimeout(loadImage(`${c.image}/low.webp`, true), 8000), 1)); } catch { /* image missing */ }
+      }));
+    } catch (e) { console.warn("visual match skipped", e); }
+  }
+  const score = (c) => c.text - 10 * (c.dist ?? 0.45);
+  return scored.sort((a, b) => score(b) - score(a)).map((c) => ({ ...c, score: score(c) }));
+}
+
+let ocrWorker = null;
+async function ocr(canvas) {
+  if (!window.Tesseract) {
+    await new Promise((resolve, reject) => { const s = document.createElement("script"); s.src = TESSERACT_URL; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
+  }
+  ocrWorker ??= window.Tesseract.createWorker("eng").catch((e) => { ocrWorker = null; throw e; });
+  const { data } = await (await ocrWorker).recognize(canvas);
+  return data.text ?? "";
+}
+/** Draw part of the card (fractions of the card box) upscaled and in grayscale, for OCR. */
+function cropForOcr(im, [fx, fy, fw, fh], width, r = findCard(im)) {
+  const sx = r.x + r.w * fx, sy = r.y + r.h * fy, sw = r.w * fw, sh = r.h * fh;
+  const c = document.createElement("canvas"); c.width = width; c.height = Math.round((width * sh) / sw);
+  const g = c.getContext("2d"); g.filter = "grayscale(1) contrast(1.4)"; g.drawImage(im, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+// OCR mixes up I/l/1 and O/0: compare names in a folded alphabet.
+const fold = (s) => normalize(s).replace(/[^a-z0-9]/g, "").replace(/[l1|]/g, "i").replace(/0/g, "o").replace(/5/g, "s");
+const trigrams = (s) => { const out = new Set(); for (let i = 0; i + 3 <= s.length; i++) out.add(s.slice(i, i + 3)); return out; };
+let allCardsPromise = null;
+/** Every physical card in TCGdex (~2.4 MB, loaded once and only for the OCR fallback). */
+const allDexCards = () => (allCardsPromise ??= dexGet("/cards").then((list) => {
+  if (!list) { allCardsPromise = null; return []; }
+  return list.filter((c) => !isPocketSet(setOfDexId(c.id)));
+}));
+
+/** Collector numbers read from the text: "199/165", and repairs like "21157203" → 215/203. */
+function numberCandidates(text, sets) {
+  const totals = new Set([...sets.values()].map((s) => s.cardCount?.official).filter((n) => n > 0));
+  const pairs = new Map(), singles = new Set();
+  const add = (a, b, weight) => {
+    const na = Number(a), nb = Number(b);
+    if (!(na >= 1 && totals.has(nb) && na <= nb * 1.6 + 30)) return;
+    const k = `${na}/${nb}`; pairs.set(k, Math.max(pairs.get(k) ?? 0, weight));
+  };
+  // The rarity symbol after the number is often read as one more digit ("238/1918"): try both lengths.
+  for (const m of text.matchAll(/(\d{1,3})\s?[/|\\]\s?(\d{2,4})/g)) { add(m[1], m[2].slice(0, 3), 3); add(m[1], m[2].slice(0, 2), 2.5); }
+  for (const [run] of text.matchAll(/\d{4,9}/g)) {
+    for (let i = 1; i <= 3; i++) {
+      const a = run.slice(0, i);
+      for (const skip of run[i] === "1" || run[i] === "7" ? [1, 0] : [0]) { // "/" read as 1 or 7, or dropped
+        const rest = run.slice(i + skip);
+        for (const n of [3, 2]) if (rest.length >= n) add(a, rest.slice(0, n), (skip ? 2 : 1.5) - (rest.length > n ? 0.5 : 0));
+      }
+    }
+  }
+  for (const [n] of text.matchAll(/(?<![\d©])\d{1,3}(?!\d)/g)) singles.add(String(Number(n)));
+  return { pairs: [...pairs].map(([k, w]) => { const [num, total] = k.split("/"); return { num, total, w }; }), singles };
+}
+
+/** Candidates for an OCR reading: names that appear in the top text × numbers from the bottom. */
+async function ocrCandidates(o) {
+  const [cards, sets] = await Promise.all([allDexCards(), dexSets()]);
+  if (!cards.length) return [];
+  // Card-frame words ("Trainer", "Supporter"…) would match names like "Gym Trainer" on every card.
+  const topText = o.top.replace(/\bev[oe]l[vy]es from\s+\S+/gi, " ") // the previous stage's name, not this card's
+    .replace(/\b(trainer|supporter|item|stadium|pok[eé]mon|tool|basic|stage ?\d?|energy|ability|tera)\b/gi, " ");
+  const topGrams = new Set(topText.split("\n").flatMap((line) => line.split(/\s{2,}|[^\p{L}\s'’.-]+/u).flatMap((part) => [...trigrams(fold(part))])));
+  const nameScore = new Map();
+  for (const name of new Set(cards.map((c) => c.name))) {
+    const g = trigrams(fold(name));
+    if (!g.size) continue;
+    let hit = 0; for (const t of g) if (topGrams.has(t)) hit++;
+    const cover = hit / g.size;
+    // Partial reads ("UmbreonViay" for "Umbreon VMAX") still count almost fully: the picture breaks ties.
+    if (cover >= 0.6) nameScore.set(name, (0.5 + 0.5 * cover) * Math.min(1, (g.size + 2) / 6)); // short names count less
+  }
+  const { pairs, singles } = numberCandidates(`${o.bottom}\n${o.top}`, sets);
+  const scored = [];
+  for (const c of cards) {
+    const nm = nameScore.get(c.name) ?? 0, total = sets.get(setOfDexId(c.id))?.cardCount?.official;
+    const pair = pairs.find((p) => sameNumber(c.localId, p.num) && Number(p.total) === total);
+    const single = /^\d+$/.test(c.localId) && singles.has(String(Number(c.localId)));
+    if (!nm && !pair) continue;
+    const text = 3 * nm + (pair ? 2 + pair.w : single ? 0.5 : 0); // lone numbers are weak: HP, damage, prizes…
+    scored.push({ ...c, text, setName: sets.get(setOfDexId(c.id))?.name ?? "", dist: null });
+  }
+  // Keep every close text match (e.g. all 36 printings of "Charizard"): the picture decides between them.
+  scored.sort((a, b) => b.text - a.text);
+  return scored.filter((c) => c.text >= scored[0].text - 2).slice(0, 150);
+}
+
+/** Read the card's name (top) and collector number (bottom) from the photo. */
+async function ocrRead(photo, status) {
+  const url = URL.createObjectURL(photo);
+  allDexCards(); // start the catalog download while OCR runs
+  try {
+    const im = await loadImage(url);
+    status("Leyendo el nombre de la carta…");
+    const top = await ocr(cropForOcr(im, [0, 0, 1, 0.3], 1400));
+    status("Leyendo el número de la carta…");
+    const bottom = `${await ocr(cropForOcr(im, [0, 0.8, 1, 0.2], 1800))}\n${await ocr(cropForOcr(im, [0, 0.84, 0.5, 0.16], 1600))}`;
+    return { top, bottom };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+const toBase64 = (file) => new Promise((resolve, reject) => {
+  const fr = new FileReader(); fr.onload = () => resolve(String(fr.result).split(",")[1]); fr.onerror = reject; fr.readAsDataURL(file);
+});
+/** Claude vision via the Edge Function. Returns null when the function is not available. */
+async function identifyWithAI(files) {
+  if (!CONFIG.IDENTIFY_FUNCTION || !sb) return null;
+  const s = (await sb.auth.getSession()).data.session;
+  if (!s) return null;
+  const images = await Promise.all(files.slice(0, 2).map(async (f) => ({ data: await toBase64(f), media_type: f.type || "image/jpeg" })));
+  const res = await withTimeout(fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${CONFIG.IDENTIFY_FUNCTION}`, {
+    method: "POST", headers: { "Content-Type": "application/json", apikey: CONFIG.SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` },
+    body: JSON.stringify({ images }),
+  }), 60000);
+  if (!res.ok) { console.warn("identificar-carta", res.status, await res.text().catch(() => "")); return null; }
+  return (await res.json()).card ?? null;
+}
+
+/** Photo(s) → { kind, card?, alternatives, ai?, source, confidence } or null. */
+async function identifyCard(files, status) {
+  status("Analizando la foto…");
+  const ai = await identifyWithAI(files).catch((e) => { console.warn("AI identification unavailable", e); return null; });
+  if (ai && !ai.is_trading_card) return { kind: "not-card", ai };
+  if (ai && ai.category !== "pokemon") return { kind: "other", ai, source: "ia", confidence: ai.confidence };
+  let hints = null, ranked;
+  if (ai) {
+    const [number, total] = (ai.card_number ?? "").replace(/^#/, "").split("/");
+    hints = { name: ai.subject, number: number?.trim() || null, total: total?.trim() || null, setName: ai.set_name, text: `${ai.subject} ${ai.variant ?? ""}` };
+    status("Buscando tu carta en el catálogo…");
+    ranked = await rankCandidates(hints, files[0]);
+  } else {
+    const read = await ocrRead(files[0], status);
+    status("Buscando tu carta en el catálogo…");
+    ranked = await visualRank(await ocrCandidates(read), files[0]);
+  }
+  if (!ranked.length) return ai ? { kind: "other", ai, source: "ia", confidence: "baja" } : null;
+  const card = await catalogFromDex(ranked[0].id);
+  if (!card) return null;
+  const [best, next] = ranked;
+  const exact = hints ? hints.number && sameNumber(best.localId, hints.number) && best.text >= 4 : best.text >= 6;
+  const clear = !next || best.score - next.score > 0.6;
+  const confidence = ai ? (ai.confidence === "alta" && exact ? "alta" : "media") : exact && clear ? "alta" : exact || clear ? "media" : "baja";
+  return { kind: "pokemon", card, alternatives: ranked.slice(1, 7), ai, source: ai ? "ia" : "ocr", confidence };
+}
+
+/** Short listing description written from the identified card (never invents condition). */
+function describeCard(c, ai) {
+  const parts = [];
+  if (c) {
+    const year = c.set.releaseDate?.slice(0, 4);
+    parts.push(`${c.name} · ${c.number}${c.set.printedTotal ? `/${c.set.printedTotal}` : ""} del set ${c.set.name}${c.set.serie ? ` (${c.set.serie}${year ? `, ${year}` : ""})` : year ? ` (${year})` : ""}.`);
+    const facts = [c.rarity && `Rareza: ${c.rarity}`, c.types?.length && `Tipo: ${c.types.join("/")}`, c.hp && `${c.hp} HP`, c.illustrator && `Ilustración de ${c.illustrator}`].filter(Boolean);
+    if (facts.length) parts.push(`${facts.join(" · ")}.`);
+  } else if (ai) {
+    parts.push(`${ai.subject} · ${[ai.set_name, ai.year, ai.card_number, ai.variant].filter(Boolean).join(" · ")}.`);
+  }
+  if (ai?.is_graded && ai.grading_company && ai.grade) parts.push(`Graduada ${ai.grading_company} ${ai.grade}${ai.cert_number ? `, certificado ${ai.cert_number}` : ""}.`);
+  if (ai?.condition_notes?.length) parts.push(`Revisión visual preliminar: ${ai.condition_notes.join("; ")}.`);
+  return parts.join("\n");
 }
 
 function viewSell(app) {
@@ -1203,10 +1575,10 @@ function viewSell(app) {
       <a class="btn primary block" href="#/entrar?next=/vender">Entrar o crear cuenta</a></div></div>`;
     return;
   }
-  const st = { files: [], previews: [], catalog: [], picked: null, graded: false };
+  const st = { files: [], previews: [], catalog: [], picked: null, graded: false, idRun: 0, ident: null, autoDesc: "", autoTitle: "", hist: null, range: 90, pickRun: 0, chartRun: 0 };
   const locOptions = FLAT_LOCATIONS.map((l, i) => `<option value="${i}">${esc(l.neighborhood)}, ${esc(l.district)}</option>`).join("");
   app.innerHTML = `<div style="padding-top:24px"><h1 class="display" style="font-size:30px">Vende tu carta</h1>
-    <p class="muted" style="margin:4px 0 0">Publicar es gratis. Para Pokémon, busca la carta en el catálogo y te sugerimos un rango de precio.</p>
+    <p class="muted" style="margin:4px 0 0">Publicar es gratis. Toma una foto y reconocemos la carta, su versión y su precio de hoy.</p>
     <form id="sellForm" class="sell" style="margin-top:24px" novalidate>
       <section class="left" style="display:flex;flex-direction:column;gap:12px">
         <h2 class="display" style="font-size:18px;margin:0">1. Fotos reales</h2>
@@ -1217,9 +1589,11 @@ function viewSell(app) {
       </section>
       <section style="display:flex;flex-direction:column;gap:16px">
         <h2 class="display" style="font-size:18px;margin:0">2. Detalles de la carta</h2>
+        <div id="idBox" aria-live="polite"></div>
+        <section class="panel" id="sellChart" hidden></section>
         <label class="f">Categoría<select class="select" name="category" id="category">${CATEGORIES.map((c) => `<option value="${c.slug}">${c.name}</option>`).join("")}</select></label>
         <div id="catalogBox" class="panel holo-border">
-          <p style="margin:0;font-weight:600;font-size:14px">Buscar en el catálogo de Pokémon</p>
+          <p style="margin:0;font-weight:600;font-size:14px">¿No la reconocimos? Búscala en el catálogo de Pokémon</p>
           <div class="grid2" style="margin-top:10px"><input class="input" id="catName" placeholder="Nombre (ej. Charizard ex)"><input class="input" id="catNum" placeholder="Número (ej. 199/165)"></div>
           <button type="button" class="btn" id="catBtn" style="margin-top:10px;border-radius:12px">Buscar</button>
           <div id="catResults"></div>
@@ -1259,7 +1633,7 @@ function viewSell(app) {
     $("#gradeBox").innerHTML = st.graded
       ? `<div class="grid2"><label class="f">Empresa<select class="select" name="company">${GRADERS.map((g) => `<option>${g}</option>`).join("")}</select></label><label class="f">Nota<input class="input" name="grade" type="number" min="1" max="10" step="0.5" required></label><label class="f" style="grid-column:1/-1">N.º de certificado (opcional)<input class="input" name="cert" maxlength="30" inputmode="numeric" placeholder="Lo verifica el comprador en la web de la empresa"></label></div>`
       : `<label class="f">Condición<select class="select" name="condition">${CONDITIONS.map((c) => `<option value="${c.code}">${c.label} (${c.code}): ${c.hint}</option>`).join("")}</select></label>`;
-    form.elements.condition?.addEventListener("change", renderEstimate);
+    form.elements.condition?.addEventListener("change", () => { renderEstimate(); loadSellChart(); });
     renderEstimate();
   }
   function currentEstimate() {
@@ -1286,6 +1660,7 @@ function viewSell(app) {
     drop.querySelector("img")?.remove();
     const im = document.createElement("img"); im.src = st.previews[0]; im.alt = "Vista previa"; drop.appendChild(im);
     $("#thumbs").innerHTML = st.previews.length > 1 ? st.previews.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}">`).join("") : "";
+    identify();
   });
   $("#category").addEventListener("change", () => {
     const pk = val("category") === "pokemon";
@@ -1294,14 +1669,161 @@ function viewSell(app) {
     form.elements.setName.placeholder = pk ? "151" : "Panini Prizm";
     if (!pk) st.picked = null;
     renderEstimate();
+    loadSellChart();
   });
   $("#gradedSeg").addEventListener("change", (e) => {
     st.graded = e.target.value === "true";
     $("#gradedSeg").querySelectorAll("label").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
     renderGrade();
+    loadSellChart();
   });
-  ["price", "variant"].forEach((n) => form.elements[n].addEventListener("input", renderEstimate));
-  form.addEventListener("change", (e) => { if (e.target.name === "company" || e.target.name === "grade") renderEstimate(); });
+  form.elements.variant.addEventListener("input", renderEstimate);
+  form.elements.price.addEventListener("input", () => { renderEstimate(); drawSellChart(); });
+  form.addEventListener("change", (e) => { if (e.target.name === "company" || e.target.name === "grade") { renderEstimate(); loadSellChart(); } });
+
+  // ----- identification from the photo
+  const confidenceText = { alta: "confianza alta", media: "confianza media: revisa que sea tu versión", baja: "confianza baja: confirma o elige la correcta" };
+  async function identify() {
+    if (!st.files.length) return;
+    const run = ++st.idRun, box = $("#idBox");
+    const status = (t) => { if (run === st.idRun) box.innerHTML = `<div class="panel holo-border small"><span class="spinner"></span> ${esc(t)}</div>`; };
+    let res = null;
+    try { res = await identifyCard(st.files, status); } catch (e) { console.error("identification failed", e); }
+    if (run !== st.idRun) return;
+    st.ident = res;
+    if (!res) {
+      box.innerHTML = `<p class="notice soft" style="margin:0">No pudimos reconocer la carta en la foto. Prueba con una foto de frente, con buena luz y sin reflejos, o búscala en el catálogo más abajo.</p>`;
+      return;
+    }
+    if (res.kind === "not-card") {
+      box.innerHTML = `<p class="notice warn" style="margin:0">La foto no parece una carta coleccionable. Sube una foto del frente de tu carta.</p>`;
+      return;
+    }
+    const ai = res.ai;
+    if (res.kind === "pokemon") {
+      setCategory("pokemon");
+      await pickCard(res.card, { fromIdent: true });
+    } else {
+      setCategory(ai.category === "otra" ? val("category") : ai.category);
+      set("subject", ai.subject); set("setName", ai.set_name); set("year", ai.year ?? ""); set("number", ai.card_number ?? ""); set("variant", ai.variant ?? "");
+      if (!val("title")) set("title", ai.title_es.slice(0, 80));
+      fillDescription(describeCard(null, ai));
+      renderEstimate();
+    }
+    if (ai?.is_graded && ai.grading_company && ai.grade) {
+      const r = form.querySelector('#gradedSeg input[value="true"]'); r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true }));
+      set("company", ai.grading_company); set("grade", ai.grade); set("cert", ai.cert_number ?? "");
+      renderEstimate(); loadSellChart();
+    }
+    renderIdent();
+  }
+  function setCategory(cat) {
+    if (!CATEGORIES.some((c) => c.slug === cat) || val("category") === cat) return;
+    set("category", cat); $("#category").dispatchEvent(new Event("change"));
+  }
+  function fillDescription(text) {
+    // Only replace text we wrote ourselves; never overwrite what the seller typed.
+    if (!val("description") || val("description") === st.autoDesc) { set("description", text); st.autoDesc = text; }
+  }
+  function renderIdent() {
+    const res = st.ident, box = $("#idBox");
+    if (!res || res.kind === "not-card") return;
+    const ai = res.ai, c = res.kind === "pokemon" ? st.picked : null;
+    const how = res.source === "ia" ? "Reconocida con IA" : "Reconocida leyendo el texto de la foto";
+    const title = c ? `${c.name} · ${c.number}${c.set.printedTotal ? `/${c.set.printedTotal}` : ""}` : `${ai.subject}${ai.card_number ? ` · ${ai.card_number}` : ""}`;
+    const sub = c ? [c.set.name, c.set.releaseDate?.slice(0, 4), c.rarity].filter(Boolean).join(" · ") : [ai.set_name, ai.year, ai.variant].filter(Boolean).join(" · ");
+    const flags = ai?.authenticity_flags?.length ? `<p class="notice warn xs" style="margin:10px 0 0">Revisa: ${esc(ai.authenticity_flags.join("; "))}</p>` : "";
+    const alts = res.kind === "pokemon" && res.alternatives.length
+      ? `<p class="xs muted" style="margin:12px 0 0">¿No es esta versión? Toca la tuya:</p><div class="results alts">${res.alternatives.map((a, i) => `<button type="button" data-alt="${i}">${a.image ? `<img src="${esc(a.image)}/low.webp" alt="${esc(a.name)}" loading="lazy">` : ""}<span>${esc(a.name)} · ${esc(a.setName || setOfDexId(a.id))} · ${esc(a.localId)}</span></button>`).join("")}</div>`
+      : "";
+    box.innerHTML = `<div class="panel holo-border">
+      <div style="display:flex;gap:14px;align-items:flex-start">
+        ${c?.images.small ? `<img src="${esc(c.images.small)}" alt="${esc(c.name)}" style="width:92px;border-radius:8px;flex-shrink:0">` : ""}
+        <div style="min-width:0">
+          <p class="xs" style="margin:0;color:var(--good);font-weight:600">✓ ${how} · ${esc(confidenceText[res.confidence] ?? "")}</p>
+          <p style="margin:4px 0 0;font-weight:700;font-size:17px">${esc(title)}</p>
+          <p class="small muted" style="margin:2px 0 0">${esc(sub)}</p>
+          ${c?.illustrator ? `<p class="xs muted" style="margin:2px 0 0">Ilustración: ${esc(c.illustrator)}</p>` : ""}
+          <div id="idPrice"></div>
+        </div>
+      </div>
+      <p class="small" style="margin:12px 0 0;white-space:pre-line">${esc(describeCard(c, ai))}</p>
+      ${flags}${alts}
+      <p class="xs muted" style="margin:10px 0 0">Llenamos el formulario por ti: revisa los datos antes de publicar.</p></div>`;
+    box.querySelectorAll("[data-alt]").forEach((b) => b.addEventListener("click", async () => {
+      const a = res.alternatives[Number(b.dataset.alt)];
+      b.disabled = true;
+      const full = await catalogFromDex(a.id);
+      if (!full) { b.disabled = false; return; }
+      res.alternatives[Number(b.dataset.alt)] = { id: res.card.dexId, localId: res.card.number, name: res.card.name, image: res.card.images.small.replace(/\/low\.webp$/, ""), setName: res.card.set.name };
+      res.card = full; res.confidence = "alta";
+      await pickCard(full, { fromIdent: true, replace: true });
+      renderIdent();
+    }));
+    renderIdPrice();
+  }
+  /** Today's price, in one line, under the identified card. */
+  async function renderIdPrice() {
+    const el = $("#idPrice"), c = st.picked;
+    if (!el || !c || val("category") !== "pokemon") return;
+    const ref = pickReferencePrice(c, val("variant"));
+    const tpv = ref ? ref.market ?? ref.mid : null;
+    const cm = c.cardmarket, eur = cm ? (cm.avg7 > 0 ? cm.avg7 : cm.trend > 0 ? cm.trend : null) : null;
+    const fx = eur ? await eurUsd() : null;
+    if (!el.isConnected || st.picked !== c) return;
+    const parts = [tpv > 0 && `<strong>${fmtEstimate(tpv)}</strong> <span class="muted">TCGplayer (EE.UU.)</span>`, eur && fx && `<strong>${fmtEstimate(eur * fx.rate)}</strong> <span class="muted">Cardmarket (Europa, ${eur === cm.avg7 ? "promedio 7 días" : "tendencia"})</span>`].filter(Boolean);
+    el.innerHTML = parts.length
+      ? `<p class="small" style="margin:8px 0 0">Precio actual (Near Mint): ${parts.join(" · ")}</p>`
+      : `<p class="xs muted" style="margin:8px 0 0">Todavía no hay precio de mercado para esta carta.</p>`;
+  }
+
+  /** Select a catalog card: fill the form, the estimate and the price chart. */
+  async function pickCard(c, { fromIdent = false, replace = false } = {}) {
+    const run = ++st.pickRun;
+    if (c.brief || (!c.set?.releaseDate && c.dexId)) c = (await catalogFromDex(c.dexId)) ?? c;
+    if (run !== st.pickRun) return;
+    st.picked = c;
+    set("subject", c.name); set("setName", c.set.name); set("year", c.set.releaseDate?.slice(0, 4)); set("number", c.set.printedTotal ? `${c.number}/${c.set.printedTotal}` : c.number); set("variant", c.rarity ?? "");
+    const autoTitle = `${c.name} ${c.number}${c.set.printedTotal ? `/${c.set.printedTotal}` : ""} · ${c.set.name}`.slice(0, 80);
+    if (!val("title") || (replace && val("title") === st.autoTitle)) { set("title", autoTitle); st.autoTitle = autoTitle; }
+    fillDescription(describeCard(c, fromIdent ? st.ident?.ai : null));
+    renderEstimate();
+    loadSellChart();
+  }
+
+  // ----- market value chart for the selected card
+  const sellListing = () => {
+    const c = st.picked, price = Number(val("price"));
+    return {
+      card: { category: "pokemon", subject: c.name, setName: c.set.name, year: c.set.releaseDate?.slice(0, 4), number: val("number"), variant: val("variant"), catalogId: c.id, dexId: c.dexId },
+      condition: st.graded ? null : val("condition") || "NM",
+      grading: st.graded && val("company") && Number(val("grade")) ? { company: val("company"), grade: Number(val("grade")) } : null,
+      priceUsd: price > 0 ? price : null, priceLabel: "Tu precio", isDemo: false,
+    };
+  };
+  let chartRo = null;
+  async function loadSellChart() {
+    const box = $("#sellChart");
+    if (!st.picked || val("category") !== "pokemon") { box.hidden = true; st.hist = null; return; }
+    const run = ++st.chartRun, c = st.picked;
+    box.hidden = false;
+    box.innerHTML = `<h2>Valor en el mercado</h2><p class="muted small" style="margin:8px 0 0"><span class="spinner"></span> Buscando el precio de hoy y su historial…</p>`;
+    const h = await fetchPriceHistory(sellListing()).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], factor: 1 }; });
+    if (run !== st.chartRun || st.picked !== c || !box.isConnected) return;
+    st.hist = h; st.range = h.weekly ? 365 : 90;
+    drawSellChart();
+    renderIdPrice();
+    if (!chartRo) {
+      let width = box.clientWidth;
+      chartRo = new ResizeObserver(() => { if (!box.isConnected) return chartRo.disconnect(); if (box.clientWidth !== width) { width = box.clientWidth; drawSellChart(); } });
+      chartRo.observe(box);
+    }
+  }
+  function drawSellChart() {
+    const box = $("#sellChart");
+    if (!st.hist || !st.picked || box.hidden) return;
+    renderPriceChart(box, sellListing(), st.hist, st.range, (r) => { st.range = r; drawSellChart(); });
+  }
 
   async function doCatalogSearch() {
     const name = $("#catName").value.trim();
@@ -1312,12 +1834,8 @@ function viewSell(app) {
       ? `<p class="xs muted" style="margin:10px 0 0">Toca tu carta:</p><div class="results">${st.catalog.map((c, i) => `<button type="button" data-i="${i}"><img src="${esc(c.images.small)}" alt="${esc(c.name)}" loading="lazy"><span>${esc(c.set.name)} · ${esc(c.number)}</span></button>`).join("")}</div>`
       : `<p class="xs muted">No la encontramos (el catálogo a veces falla; intenta de nuevo) o llena los datos a mano.</p>`;
     $("#catResults").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
-      const c = st.catalog[Number(b.dataset.i)];
-      st.picked = c;
       $("#catResults").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
-      set("subject", c.name); set("setName", c.set.name); set("year", c.set.releaseDate?.slice(0, 4)); set("number", `${c.number}/${c.set.printedTotal}`); set("variant", c.rarity ?? "");
-      if (!val("title")) set("title", `${c.name} ${c.number}/${c.set.printedTotal} · ${c.set.name}`.slice(0, 80));
-      renderEstimate();
+      pickCard(st.catalog[Number(b.dataset.i)], { replace: true });
     }));
   }
   $("#catBtn").addEventListener("click", doCatalogSearch);

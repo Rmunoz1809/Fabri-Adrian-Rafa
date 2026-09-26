@@ -10,14 +10,32 @@ QUÉ FUNCIONA
 - Ver cartas, buscar y filtrar (Pokémon, NBA, NFL, graduadas, provincia, precio).
 - Detalle de cada carta con precio estimado y costo de Compra Protegida.
 - Crear cuenta y entrar.
-- Publicar cartas con fotos reales. Para Pokémon, buscar la carta en el
-  catálogo te llena los datos y te sugiere un precio.
+- Publicar cartas con fotos reales. Al subir la foto, Holo reconoce la carta
+  sola (cuál es y qué versión: set, número, rareza), llena el formulario,
+  escribe una descripción y muestra el precio de hoy con su gráfica. Si no la
+  reconoce, se puede buscar a mano en el catálogo.
 - Eliminar tus propios anuncios.
 - Las cartas marcadas "EJEMPLO" son de muestra y no están a la venta.
 
+RECONOCIMIENTO DE CARTAS POR FOTO
+Funciona en dos niveles, sin poner ninguna clave secreta en este archivo:
+1. Con IA (Pokémon, NBA y NFL, y detecta si está graduada): la Supabase Edge
+   Function "identificar-carta" (supabase/functions/identificar-carta) llama a
+   Claude. La clave de Anthropic vive como secreto en Supabase. Para activarla:
+     supabase secrets set ANTHROPIC_API_KEY=sk-ant-... --project-ref vqcpqoedsyatxswdzqcy
+     supabase functions deploy identificar-carta --no-verify-jwt --project-ref vqcpqoedsyatxswdzqcy
+   Sólo la pueden usar usuarios con sesión (máx. 30 fotos por hora cada uno).
+2. Sin IA (si la función no está desplegada o falla): el navegador lee el
+   nombre y el número de la carta (OCR con Tesseract.js), los busca en el
+   catálogo de TCGdex y desempata comparando la foto con la imagen de cada
+   versión. Sólo Pokémon; funciona mejor con foto de frente, buena luz y sin
+   reflejos. Si duda, muestra las otras versiones posibles para tocar la buena.
+Al reconocerla muestra el precio de hoy (TCGplayer y Cardmarket) y la gráfica
+de valor. Las cartas que aún no tienen historial semanal muestran los días de
+Cardmarket desde el 16/09/2026; el historial largo de TCGplayer se agrega el
+lunes siguiente a su publicación.
+
 QUÉ NO INCLUYE ESTE ARCHIVO
-- Identificación de cartas con IA por foto. Necesita una clave secreta que no
-  puede ir dentro de un archivo compartido; funciona en la versión con servidor.
 - Contacto por WhatsApp: se activa al poner el número en CONFIG.WHATSAPP
   (al inicio del <script> dentro de holo.html).
 
