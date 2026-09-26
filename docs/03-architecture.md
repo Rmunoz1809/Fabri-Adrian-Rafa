@@ -7,8 +7,8 @@
 | Web | Next.js 16 (App Router) + TypeScript + Tailwind 4 | SSR para SEO de los anuncios; un solo repo |
 | Backend | Server Components, Server Actions y Route Handlers | Sin servidor aparte |
 | DB, auth y fotos | Supabase (Postgres + RLS + Storage) | Plan gratis, seguridad por filas, auth con email/Google |
-| IA | Claude API (`claude-opus-5`, vision + structured outputs) | Una llamada devuelve JSON validado con zod |
-| Precios | pokemontcg.io (TCGplayer) + tabla propia `sales` | Gratis; los datos locales se vuelven el activo propio |
+| IA | Claude API (`claude-sonnet-5`, vision + structured outputs), en la Edge Function `identificar-carta` | Una llamada devuelve JSON validado con zod; la clave vive como secreto de Supabase |
+| Precios | TCGplayer (tcgcsv, TCGdex), Cardmarket, PriceCharting / SportsCardsPro + tabla propia `sales` | Gratis; los datos locales se vuelven el activo propio |
 | Mapa | Solo barrio (lista fija) | Privacidad del vendedor; no hace falta un mapa |
 | Pagos | Manual: Yappy Comercial a la cuenta de la empresa | Stripe no opera en Panamá; la pasarela queda para v2 |
 | Móvil | Web móvil primero; Expo en v2 (puede compartir `src/lib`) | No construir dos apps antes de validar |
@@ -35,7 +35,9 @@ Está en [`supabase/migrations/0001_init.sql`](../supabase/migrations/0001_init.
 
 ## Seguridad
 
-- **RLS** en todas las tablas. Solo staff escribe `protected_orders`, `sales` y `cards`.
+- **RLS** en todas las tablas. Solo staff escribe `protected_orders`, `sales` y `cards`, y solo staff (y el comprador) lee las órdenes protegidas, que tienen el contacto del comprador.
+- **Vistas públicas de solo lectura** (`public_profiles`, `verified_shops`, migración 0010): corren con los permisos del dueño para mostrar a todos los vendedores, así que no deben tener permisos de escritura.
+- **Flujo de estados del anuncio** (trigger, migración 0010): el vendedor publica, retira o marca vendido; lo reservado por una Compra Protegida y lo quitado por staff solo lo cambia el staff.
 - **Triggers** que impiden que un usuario se marque como staff o verificado, o que habilite Compra Protegida en su propio anuncio. `REVOKE` por columna no sirve con los grants por defecto de Supabase.
 - El **WhatsApp del vendedor** es privado: la vista `public_profiles` no lo expone.
 - **Fotos:** máximo 5 MB, JPG/PNG/WebP, cada usuario sube solo a su carpeta.
