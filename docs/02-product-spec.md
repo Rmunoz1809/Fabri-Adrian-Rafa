@@ -39,10 +39,10 @@ La paga el **comprador**; publicar es gratis para el vendedor. Se configura en [
 
 | Concepto | Valor |
 |---|---|
-| Tasa | 5% del precio + $1.00 |
-| Mínimo / máximo | $2.00 / $50.00 |
+| Tasa | 4% del precio |
+| Mínimo / máximo | $1.00 / $40.00 |
 | ITBMS | 7% sobre la tarifa |
-| Ejemplo con una carta de $100 | $6.00 + $0.42 de ITBMS = $106.42 de total |
+| Ejemplo con una carta de $100 | $4.00 + $0.28 de ITBMS = $104.28 de total |
 
 ## Funciones de IA (prioridad y costo)
 

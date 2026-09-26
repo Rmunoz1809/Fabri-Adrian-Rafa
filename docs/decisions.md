@@ -15,3 +15,4 @@
 | 2026-09-25 | Nombre provisional "Holo" (constante APP_NAME) | Fácil de cambiar; falta decidir marca y dominio |
 | 2026-09-25 | Node 22 LTS instalado en ~/.local/node (sin Homebrew) | No había Node; instalación sin sudo |
 | 2026-09-25 | pokemontcg.io sigue sin API key (ya no acepta registros; la API queda obsoleta el 2027-03-01). Hay reintentos con backoff y caché de 12 h. Migrar a Scrydex (desde $29/mes, incluye precios de graduadas) cuando el MVP valide | Evita un costo fijo antes de tener señales; la fecha límite da margen |
+| 2026-09-25 | La comisión baja a **4%, mínimo $1 y máximo $40** (sin cargo fijo). Reemplaza el esquema de 5% + $1 | A Fabrizio le pareció alta; en Panamá la alternativa es WhatsApp al 0%, y el mínimo anterior de $2 era 20% en una carta de $10 |

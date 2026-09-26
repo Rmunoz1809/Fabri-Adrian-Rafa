@@ -16,10 +16,10 @@ export interface FeeConfig {
 }
 
 export const DEFAULT_FEES: FeeConfig = {
-  rateBps: 500,
-  fixedCents: 100,
-  minCents: 200,
-  maxCents: 5000,
+  rateBps: 400,
+  fixedCents: 0,
+  minCents: 100,
+  maxCents: 4000,
   itbmsBps: 700,
 };
 

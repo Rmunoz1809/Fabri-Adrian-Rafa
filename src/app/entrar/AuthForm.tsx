@@ -15,13 +15,13 @@ export function AuthForm({ next }: { next: string }) {
 
   return (
     <div className="rounded-3xl border border-line bg-surface p-6">
-      <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1 text-sm font-medium">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-line bg-surface-2 p-1 text-sm">
         {(["entrar", "registro"] as const).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => setMode(m)}
-            className={`h-9 rounded-lg ${mode === m ? "bg-surface shadow-sm" : "text-ink-2"}`}
+            className={`h-10 rounded-lg font-semibold ${mode === m ? "bg-accent text-accent-ink shadow-sm" : "text-ink hover:bg-surface"}`}
           >
             {m === "entrar" ? "Entrar" : "Crear cuenta"}
           </button>

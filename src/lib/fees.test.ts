@@ -2,32 +2,37 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FEES, quoteProtected, toCents } from "./fees";
 
 describe("quoteProtected", () => {
-  it("charges 5% + $1 plus 7% ITBMS on the fee", () => {
+  it("charges 4% plus 7% ITBMS on the fee", () => {
     const q = quoteProtected(toCents(100));
-    expect(q.feeCents).toBe(600); // 5.00 + 1.00
-    expect(q.itbmsCents).toBe(42);
-    expect(q.buyerTotalCents).toBe(10_642);
+    expect(q.feeCents).toBe(400);
+    expect(q.itbmsCents).toBe(28);
+    expect(q.buyerTotalCents).toBe(10_428);
     expect(q.sellerPayoutCents).toBe(10_000);
-    expect(q.platformRevenueCents).toBe(600);
+    expect(q.platformRevenueCents).toBe(400);
+  });
+
+  it("matches the published fee table", () => {
+    const fee = (usd: number) => quoteProtected(toCents(usd)).feeCents;
+    expect([10, 50, 150, 500, 1500].map(fee)).toEqual([100, 200, 600, 2000, 4000]);
   });
 
   it("applies the minimum fee on cheap cards", () => {
     const q = quoteProtected(toCents(5));
     expect(q.feeCents).toBe(DEFAULT_FEES.minCents);
-    expect(q.itbmsCents).toBe(14);
+    expect(q.itbmsCents).toBe(7);
   });
 
   it("caps the fee on expensive cards", () => {
     const q = quoteProtected(toCents(5000));
     expect(q.feeCents).toBe(DEFAULT_FEES.maxCents);
-    expect(q.buyerTotalCents).toBe(500_000 + 5000 + 350);
+    expect(q.buyerTotalCents).toBe(500_000 + 4000 + 280);
   });
 
   it("rounds half cents up", () => {
-    // 5% of 1234.5¢… price 24.69 → 123.45¢ → 123 + 100 = 223
-    const q = quoteProtected(2469);
-    expect(q.feeCents).toBe(223);
-    expect(q.itbmsCents).toBe(16); // 15.61 → 16
+    // 4% of $38.63 = 154.52¢ → 155; ITBMS 7% of 155 = 10.85 → 11
+    const q = quoteProtected(3863);
+    expect(q.feeCents).toBe(155);
+    expect(q.itbmsCents).toBe(11);
   });
 
   it("never pays the seller less than the asking price", () => {

@@ -34,7 +34,7 @@ export default function ProtectedPage() {
 
       <h2 className="mt-10 font-display text-2xl font-bold">Cuánto cuesta</h2>
       <p className="mt-1 text-sm text-ink-2">
-        {DEFAULT_FEES.rateBps / 100}% + {formatUsd(DEFAULT_FEES.fixedCents)}, mínimo {formatUsd(DEFAULT_FEES.minCents)} y
+        {DEFAULT_FEES.rateBps / 100}%{DEFAULT_FEES.fixedCents > 0 && ` + ${formatUsd(DEFAULT_FEES.fixedCents)}`}, mínimo {formatUsd(DEFAULT_FEES.minCents)} y
         máximo {formatUsd(DEFAULT_FEES.maxCents)}. Lo paga el comprador, más 7% de ITBMS sobre la tarifa.
       </p>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-surface">
