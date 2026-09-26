@@ -117,19 +117,8 @@ create table public.listing_photos (
 );
 
 -- ------------------------------------------------- prices (our own history)
--- External reference snapshots (TCGplayer via pokemontcg.io), cached daily.
-create table public.price_snapshots (
-  id bigint generated always as identity primary key,
-  card_id uuid not null references public.cards on delete cascade,
-  source text not null,
-  variant text not null,
-  market_cents int,
-  low_cents int,
-  mid_cents int,
-  high_cents int,
-  captured_at timestamptz not null default now()
-);
-create index price_snapshots_card_idx on public.price_snapshots (card_id, captured_at desc);
+-- External reference snapshots live in supabase/price_snapshots.sql (keyed by
+-- catalog_id, filled daily by pg_cron). Run that file after this one.
 
 -- Completed sales in Panama: the local price data nobody else has.
 create table public.sales (
@@ -190,7 +179,6 @@ alter table public.categories enable row level security;
 alter table public.cards enable row level security;
 alter table public.listings enable row level security;
 alter table public.listing_photos enable row level security;
-alter table public.price_snapshots enable row level security;
 alter table public.sales enable row level security;
 alter table public.protected_orders enable row level security;
 alter table public.reviews enable row level security;
@@ -205,7 +193,6 @@ create policy "update own profile" on public.profiles for update using (id = aut
 
 create policy "categories readable" on public.categories for select using (true);
 create policy "cards readable" on public.cards for select using (true);
-create policy "snapshots readable" on public.price_snapshots for select using (true);
 create policy "sales readable" on public.sales for select using (true);
 
 create policy "active listings readable" on public.listings for select

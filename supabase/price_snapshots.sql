@@ -5,6 +5,19 @@
 create extension if not exists http with schema extensions;
 create extension if not exists pg_cron;
 
+-- 0001_init.sql used to create an older, unused price_snapshots (card_id/captured_at).
+-- If that version is present, drop it so this schema is created. Refuses if it has rows.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'price_snapshots' and column_name = 'card_id') then
+    if exists (select 1 from public.price_snapshots) then
+      raise exception 'old price_snapshots has data; migrate it by hand before running this file';
+    end if;
+    drop table public.price_snapshots;
+  end if;
+end $$;
+
 create table if not exists public.price_snapshots (
   catalog_id   text    not null,
   variant      text    not null,
