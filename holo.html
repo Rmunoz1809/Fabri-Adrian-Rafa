@@ -1492,11 +1492,11 @@ function renderNav() {
   $("#nav").innerHTML = session
     ? `<button type="button" class="acct lg-only" id="acctBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${ic("chevronDown")}</button>
        <a class="btn primary sm lg-only" href="#/vender">${ic("plus")}Vender</a>`
-    : sb ? `<a class="btn primary sm lg-only" href="#/entrar">Entrar</a>` : "";
+    : sb ? `<a class="btn primary sm lg-only" href="#/entrar">Iniciar sesión</a>` : "";
   $("#mobileMenu").innerHTML = `<nav aria-label="Menú">${links(true, session ? [["cuenta", "#/cuenta", "Mi cuenta"]] : [])}</nav>
     <div class="mm-foot">${session
       ? `<p class="mm-user"><span class="avatar">${initial}</span><span>${esc(name)}</span></p><button type="button" class="btn outline block" id="mmSignOut">${ic("logout")}Salir</button>`
-      : sb ? `<a class="btn primary block" href="#/entrar">Entrar</a>` : `<a class="btn primary block" href="#/vender">Publica tu carta gratis</a>`}</div>`;
+      : sb ? `<a class="btn primary block" href="#/entrar">Iniciar sesión</a>` : `<a class="btn primary block" href="#/vender">Publica tu carta gratis</a>`}</div>`;
   const signOut = async () => {
     const { error } = await sb.auth.signOut();
     if (error) return toast("No pudimos cerrar la sesión. Intenta de nuevo.", { type: "error" });
