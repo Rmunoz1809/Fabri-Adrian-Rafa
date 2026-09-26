@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
 <title>Holo · Cartas coleccionables en Panamá</title>
 <meta name="description" content="Compra y vende cartas Pokémon, NBA y NFL en Panamá, con precio estimado y Compra Protegida.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -11,19 +12,13 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root {
-  --bg: #f5f3ee; --surface: #fff; --surface-2: #edeae3; --ink: #15130f; --ink-2: #5e5a52; --line: #e2ded5;
-  --accent: #1f4bff; --accent-ink: #fff; --good: #0f8a5f; --good-bg: #e3f4ec; --warn: #9a6200; --warn-bg: #fbf0d9;
-  --bad: #b93c0c; --bad-bg: #fbe6dc;
+  color-scheme: dark;
+  --bg: #000; --surface: #111113; --surface-2: #1c1c20; --ink: #f2f0eb; --ink-2: #a19d95; --line: #2a2a30;
+  --accent: #7390ff; --accent-ink: #0b0b0d; --good: #4fd19c; --good-bg: #13291f; --warn: #f0b54a; --warn-bg: #2e2412;
+  --bad: #ff8a5c; --bad-bg: #321a10;
   --holo: linear-gradient(115deg, #7cf3d5 0%, #8ab6ff 35%, #d59bff 65%, #ffc98a 100%);
   --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
   --sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e0e10; --surface: #17171a; --surface-2: #212126; --ink: #f2f0eb; --ink-2: #a19d95; --line: #2c2c32;
-    --accent: #7390ff; --accent-ink: #0e0e10; --good: #4fd19c; --good-bg: #13291f; --warn: #f0b54a; --warn-bg: #2e2412;
-    --bad: #ff8a5c; --bad-bg: #321a10;
-  }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -163,6 +158,18 @@ h1 { margin: 0; }
 .hero h1 { font-size: clamp(34px, 6vw, 48px); line-height: 1.05; max-width: 640px; }
 .hero p { max-width: 560px; }
 .spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+/* pantalla de entrada (sin sesión) */
+body.gate header.top, body.gate footer.bottom { display: none; }
+.gate-wrap { min-height: 100vh; display: grid; align-items: center; gap: 40px; padding: 48px 0; }
+@media (min-width: 900px) { .gate-wrap { grid-template-columns: 1.1fr 1fr; gap: 64px; } }
+.gate-hero .logo { font-size: 24px; margin-bottom: 28px; }
+.gate-hero h1 { font-size: clamp(36px, 6vw, 56px); line-height: 1.02; }
+.gate-hero p { max-width: 460px; }
+.gate-cards { display: flex; margin-top: 32px; }
+.gate-cards span { width: 72px; aspect-ratio: 63 / 88; border-radius: 10px; background: var(--holo); border: 3px solid #000; margin-right: -18px; box-shadow: 0 10px 30px rgb(0 0 0 / .6); }
+.gate-cards span:nth-child(1) { transform: rotate(-10deg); } .gate-cards span:nth-child(2) { transform: rotate(-2deg) translateY(-8px); opacity: .85; } .gate-cards span:nth-child(3) { transform: rotate(7deg); opacity: .7; }
+.gate-form { width: 100%; max-width: 448px; }
+@media (min-width: 900px) { .gate-form { justify-self: end; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tile { transition: none; } .spinner { animation-duration: 3s; } }
 </style>
@@ -434,7 +441,10 @@ async function route() {
   window.scrollTo(0, 0);
   renderNav();
   const app = $("#app");
+  const gated = !!sb && !session;
+  document.body.classList.toggle("gate", gated);
   try {
+    if (gated) return viewAuth(app, path === "/entrar" ? params.get("next") || "/" : location.hash.replace(/^#/, "") || "/");
     if (path === "/" || path === "") return await viewHome(app, params);
     if (path.startsWith("/carta/")) return await viewDetail(app, decodeURIComponent(path.slice(7)));
     if (path === "/protegida") return viewProtected(app);
@@ -632,11 +642,18 @@ function viewAuth(app, next) {
   setTitle("Entrar");
   if (session) return go(next);
   if (!sb) { app.innerHTML = `<p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p>`; return; }
-  let mode = "registro";
+  let mode = "entrar";
   const render = () => {
     const up = mode === "registro";
-    app.innerHTML = `<div style="max-width:448px;margin:0 auto;padding-top:40px">
-      <h1 class="display" style="font-size:30px">Tu cuenta</h1><p class="muted" style="margin:4px 0 0">Necesitas una cuenta para publicar cartas.</p>
+    app.innerHTML = `<div class="gate-wrap">
+      <section class="gate-hero">
+        <div class="logo"><i aria-hidden="true"></i><span>${esc(CONFIG.APP_NAME)}</span></div>
+        <h1 class="display">Cartas coleccionables en <span class="holo-text">Panamá</span>.</h1>
+        <p class="muted" style="font-size:17px;margin:16px 0 0">Compra y vende Pokémon, NBA y NFL con precio estimado y Compra Protegida.</p>
+        <div class="gate-cards" aria-hidden="true"><span></span><span></span><span></span></div>
+      </section>
+      <div class="gate-form">
+      <h2 class="display" style="font-size:28px;margin:0">${up ? "Crea tu cuenta" : "Bienvenido"}</h2><p class="muted" style="margin:4px 0 0">${up ? "Es gratis y toma un minuto." : "Entra para ver y publicar cartas."}</p>
       <div class="panel" style="margin-top:24px;padding:24px;border-radius:24px">
         <div class="tabs"><button type="button" data-m="entrar" class="${!up ? "on" : ""}">Entrar</button><button type="button" data-m="registro" class="${up ? "on" : ""}">Crear cuenta</button></div>
         <form id="authForm" style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
@@ -646,7 +663,7 @@ function viewAuth(app, next) {
           <div id="authMsg"></div>
           <button class="btn primary block" id="authBtn">${up ? "Crear cuenta" : "Entrar"}</button>
           ${up ? `<p class="xs muted" style="margin:0">Al crear tu cuenta aceptas que tratemos tus datos para operar el marketplace (Ley 81 de 2019). Nunca mostramos tu correo ni tu dirección.</p>` : ""}
-        </form></div></div>`;
+        </form></div></div></div>`;
     app.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { mode = b.dataset.m; render(); }));
     $("#authForm").addEventListener("submit", async (e) => {
       e.preventDefault();
