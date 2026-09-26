@@ -90,10 +90,14 @@ export async function publishListing(_prev: PublishState, form: FormData): Promi
     grading: v.graded ? { company: v.company!, grade: v.grade! } : null,
   });
 
+  // The listing starts as a draft (hidden from the public) and only becomes
+  // active once its photos are uploaded and registered, so a half-finished
+  // publish is never visible.
   const listingId = crypto.randomUUID();
   const { error: insertError } = await supabase.from("listings").insert({
     id: listingId,
     seller_id: user.id,
+    status: "draft",
     category: v.category,
     title: v.title,
     description: v.description ?? null,
@@ -118,21 +122,31 @@ export async function publishListing(_prev: PublishState, form: FormData): Promi
   }
 
   const paths: string[] = [];
+  const abort = async (err: unknown, message: string) => {
+    console.error(message, err);
+    if (paths.length) {
+      const { error } = await supabase.storage.from("listing-photos").remove(paths);
+      if (error) console.error("photo cleanup failed", error);
+    }
+    await supabase.from("listings").delete().eq("id", listingId); // cascades to listing_photos
+    return { error: message };
+  };
   for (const [i, photo] of photos.entries()) {
     const path = `${user.id}/${listingId}/${i}.${PHOTO_TYPES[photo.type]}`;
     const { error } = await supabase.storage.from("listing-photos").upload(path, photo, { contentType: photo.type });
-    if (error) {
-      console.error("photo upload failed", error);
-      await supabase.storage.from("listing-photos").remove(paths);
-      await supabase.from("listings").delete().eq("id", listingId);
-      return { error: "No pudimos subir las fotos. Intenta de nuevo." };
-    }
+    if (error) return abort(error, "No pudimos subir las fotos. Intenta de nuevo.");
     paths.push(path);
   }
   const { error: photoRowsError } = await supabase
     .from("listing_photos")
     .insert(paths.map((storage_path, position) => ({ listing_id: listingId, storage_path, position })));
-  if (photoRowsError) console.error("listing_photos insert failed", photoRowsError);
+  if (photoRowsError) return abort(photoRowsError, "No pudimos guardar las fotos del anuncio. Intenta de nuevo.");
+  const { data: activated, error: activateError } = await supabase
+    .from("listings")
+    .update({ status: "active" })
+    .eq("id", listingId)
+    .select("id");
+  if (activateError || !activated?.length) return abort(activateError, "No pudimos publicar el anuncio. Intenta de nuevo.");
 
   redirect(`/carta/${listingId}`);
 }

@@ -398,14 +398,14 @@ function setTitle(t) { document.title = t ? `${t} · ${CONFIG.APP_NAME}` : `${CO
 const sb = window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
 let session = null;
 let profileName = null;
-const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
+const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
 const photoUrl = (path) => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
 
 function rowToListing(r, prof) {
   return {
     id: r.id, title: r.title, description: r.description ?? "",
     card: { category: r.category, subject: r.subject, setName: r.set_name, year: r.year, number: r.number, variant: r.variant, catalogId: r.catalog_id },
-    condition: r.condition, grading: r.grading_company && r.grade != null ? { company: r.grading_company, grade: Number(r.grade) } : null,
+    condition: r.condition, grading: r.grading_company && r.grade != null ? { company: r.grading_company, grade: Number(r.grade), cert: r.cert_number ?? null } : null,
     priceUsd: r.price_cents / 100,
     photos: [...(r.listing_photos ?? [])].sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
     location: { province: r.province, district: r.district, neighborhood: r.neighborhood },
@@ -914,6 +914,7 @@ async function viewDetail(app, id) {
         <section class="panel"><h2>Descripción</h2><p class="small" style="white-space:pre-line;margin:6px 0 0">${esc(l.description) || "Sin descripción."}</p>
           <dl class="facts"><div><dt>Categoría</dt><dd>${esc(categoryName(l.card.category))}</dd></div>
           <div><dt>${l.grading ? "Graduación" : "Condición"}</dt><dd>${l.grading ? `${esc(l.grading.company)} ${esc(l.grading.grade)}` : cond ? `${cond.label} (${cond.code})` : "—"}</dd></div>
+          ${l.grading?.cert ? `<div><dt>Certificado</dt><dd>${esc(l.grading.cert)}</dd></div>` : ""}
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
         <section class="panel" style="display:flex;align-items:center;gap:12px">
           <div class="display" style="width:44px;height:44px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700">${esc(l.seller.displayName.slice(0, 1))}</div>
@@ -935,10 +936,15 @@ async function viewDetail(app, id) {
   $("#deleteListing")?.addEventListener("click", async (e) => {
     if (!confirm("¿Eliminar este anuncio? No se puede deshacer.")) return;
     e.target.disabled = true;
+    // Primero el anuncio (sus filas de fotos caen en cascada) y después los archivos:
+    // si falla el borrado de archivos quedan huérfanos en Storage, pero nunca un anuncio sin fotos.
     const { data: photos } = await sb.from("listing_photos").select("storage_path").eq("listing_id", l.id);
-    if (photos?.length) await sb.storage.from("listing-photos").remove(photos.map((p) => p.storage_path));
-    const { error } = await sb.from("listings").delete().eq("id", l.id);
-    if (error) { alert("No se pudo eliminar. Intenta de nuevo."); e.target.disabled = false; return; }
+    const { data: gone, error } = await sb.from("listings").delete().eq("id", l.id).select("id");
+    if (error || !gone?.length) { console.error(error); alert("No se pudo eliminar. Intenta de nuevo."); e.target.disabled = false; return; }
+    if (photos?.length) {
+      const rm = await sb.storage.from("listing-photos").remove(photos.map((p) => p.storage_path));
+      if (rm.error) console.error(rm.error);
+    }
     go("/");
   });
 }
@@ -1133,7 +1139,7 @@ function viewSell(app) {
 
   function renderGrade() {
     $("#gradeBox").innerHTML = st.graded
-      ? `<div class="grid2"><label class="f">Empresa<select class="select" name="company">${GRADERS.map((g) => `<option>${g}</option>`).join("")}</select></label><label class="f">Nota<input class="input" name="grade" type="number" min="1" max="10" step="0.5" required></label></div>`
+      ? `<div class="grid2"><label class="f">Empresa<select class="select" name="company">${GRADERS.map((g) => `<option>${g}</option>`).join("")}</select></label><label class="f">Nota<input class="input" name="grade" type="number" min="1" max="10" step="0.5" required></label><label class="f" style="grid-column:1/-1">N.º de certificado (opcional)<input class="input" name="cert" maxlength="30" inputmode="numeric" placeholder="Lo verifica el comprador en la web de la empresa"></label></div>`
       : `<label class="f">Condición<select class="select" name="condition">${CONDITIONS.map((c) => `<option value="${c.code}">${c.label} (${c.code}): ${c.hint}</option>`).join("")}</select></label>`;
     form.elements.condition?.addEventListener("change", renderEstimate);
     renderEstimate();
@@ -1210,12 +1216,17 @@ function viewSell(app) {
     if (!val("setName")) return fail("Falta el set o producto.");
     if (year != null && !(Number.isInteger(year) && year >= 1990 && year <= 2030)) return fail("Año no válido.");
     if (st.graded && !(grade >= 1 && grade <= 10)) return fail("La nota de graduación debe estar entre 1 y 10.");
-    if (!(price > 0 && price <= 100000)) return fail("Escribe un precio válido.");
+    if (!(price >= 1 && price <= 100000)) return fail("Escribe un precio entre $1 y $100,000.");
     if (val("title").length < 5) return fail("El título es muy corto.");
     for (const f of st.files) if (f.size > 3 * 1024 * 1024) return fail("Una de las fotos es muy pesada (máx. 3 MB).");
+    const loc = FLAT_LOCATIONS[Number(val("location"))];
+    if (!loc) return fail("Elige tu barrio o zona.");
 
     btn.disabled = true; btn.textContent = "Publicando…"; msg.innerHTML = "";
-    const uid = session.user.id, id = crypto.randomUUID(), loc = FLAT_LOCATIONS[Number(val("location"))];
+    // Sesión fresca: getSession renueva el token si expiró mientras llenaban el formulario.
+    const fresh = (await sb.auth.getSession()).data.session;
+    if (!fresh) return fail("Tu sesión expiró. Vuelve a entrar para publicar.");
+    const uid = fresh.user.id, id = crypto.randomUUID();
     const catalogId = val("category") === "pokemon" && st.picked ? st.picked.id : null;
     const gradingKey = st.graded ? `${val("company")}${grade}` : "raw";
     let comps = [];
@@ -1225,29 +1236,52 @@ function viewSell(app) {
     }
     const estimate = catalogId ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), localComps: comps, condition: st.graded ? null : val("condition"), grading: st.graded ? { company: val("company"), grade } : null }) : null;
 
-    const { error } = await sb.from("listings").insert({
-      id, seller_id: uid, category: val("category"), title: val("title"), description: val("description") || null,
+    // El anuncio nace como borrador (invisible al público) y sólo pasa a "active" cuando
+    // las fotos ya están en Storage y registradas. Así nunca se publica un anuncio a medias.
+    const paths = [];
+    const step = (t) => { btn.textContent = t; };
+    const abort = async (err, t) => {
+      console.error(err);
+      if (paths.length) { const rm = await sb.storage.from("listing-photos").remove(paths); if (rm.error) console.error(rm.error); }
+      await sb.from("listings").delete().eq("id", id); // borra en cascada listing_photos
+      return fail(t);
+    };
+    const dbMessage = (err, t) =>
+      err?.code === "42501" ? "Tu sesión no tiene permiso para publicar. Sal y vuelve a entrar." :
+      err?.code === "23503" ? "Tu cuenta no tiene perfil de vendedor. Sal y vuelve a entrar, o escríbenos." :
+      err?.code === "23514" ? "Algún dato no es válido (revisa precio, título, nota o condición)." : t;
+    const dup = (e) => /exists|duplicate/i.test(e?.message ?? "");
+
+    step("Guardando datos…");
+    const ins = await sb.from("listings").insert({
+      id, seller_id: uid, status: "draft", category: val("category"), title: val("title"), description: val("description") || null,
       subject: val("subject"), set_name: val("setName"), year, number: val("number") || null, variant: val("variant") || null,
       condition: st.graded ? null : val("condition"), grading_company: st.graded ? val("company") : null, grade,
+      cert_number: st.graded ? val("cert") || null : null,
       price_cents: Math.round(price * 100), province: loc.province, district: loc.district, neighborhood: loc.neighborhood,
       catalog_id: catalogId, estimate,
     });
-    if (error) { console.error(error); return fail("No pudimos guardar el anuncio. Intenta de nuevo."); }
-    const paths = [];
+    if (ins.error) { console.error(ins.error); return fail(dbMessage(ins.error, "No pudimos guardar el anuncio. Intenta de nuevo.")); }
+
     for (const [i, f] of st.files.entries()) {
+      step(`Subiendo foto ${i + 1} de ${st.files.length}…`);
       const ext = { "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg";
       const path = `${uid}/${id}/${i}.${ext}`;
-      const up = await sb.storage.from("listing-photos").upload(path, f, { contentType: f.type || "image/jpeg" });
-      if (up.error) {
-        console.error(up.error);
-        if (paths.length) await sb.storage.from("listing-photos").remove(paths);
-        await sb.from("listings").delete().eq("id", id);
-        return fail("No pudimos subir las fotos. Intenta de nuevo.");
+      let up;
+      for (let attempt = 0; attempt < 3; attempt++) { // la red del teléfono a veces corta; reintenta
+        if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt));
+        up = await sb.storage.from("listing-photos").upload(path, f, { contentType: f.type || "image/jpeg", cacheControl: "31536000", upsert: false });
+        if (!up.error || dup(up.error)) break; // "ya existe" = el intento anterior sí llegó
       }
+      if (up.error && !dup(up.error)) return abort(up.error, "No pudimos subir las fotos. Revisa tu conexión e intenta de nuevo.");
       paths.push(path);
     }
+
+    step("Publicando…");
     const pr = await sb.from("listing_photos").insert(paths.map((storage_path, position) => ({ listing_id: id, storage_path, position })));
-    if (pr.error) console.error(pr.error);
+    if (pr.error) return abort(pr.error, dbMessage(pr.error, "No pudimos guardar las fotos del anuncio. Intenta de nuevo."));
+    const act = await sb.from("listings").update({ status: "active" }).eq("id", id).select("id");
+    if (act.error || !act.data?.length) return abort(act.error ?? "activate: 0 rows", dbMessage(act.error, "No pudimos publicar el anuncio. Intenta de nuevo."));
     go(`/carta/${id}`);
   });
 }
