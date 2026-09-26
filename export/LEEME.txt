@@ -1,0 +1,33 @@
+HOLO · Marketplace de cartas coleccionables (Panamá)
+====================================================
+
+CÓMO ABRIRLO
+1. Descomprime el ZIP.
+2. Haz doble clic en "holo.html". Se abre en tu navegador (recomendado: Chrome).
+3. Necesitas internet: las cartas, las fotos y las cuentas vienen de la nube.
+
+QUÉ FUNCIONA
+- Ver cartas, buscar y filtrar (Pokémon, NBA, NFL, graduadas, provincia, precio).
+- Detalle de cada carta con precio estimado y costo de Compra Protegida.
+- Crear cuenta y entrar.
+- Publicar cartas con fotos reales. Para Pokémon, buscar la carta en el
+  catálogo te llena los datos y te sugiere un precio.
+- Eliminar tus propios anuncios.
+- Las cartas marcadas "EJEMPLO" son de muestra y no están a la venta.
+
+QUÉ NO INCLUYE ESTE ARCHIVO
+- Identificación de cartas con IA por foto. Necesita una clave secreta que no
+  puede ir dentro de un archivo compartido; funciona en la versión con servidor.
+- Contacto por WhatsApp: se activa al poner el número en CONFIG.WHATSAPP
+  (al inicio del <script> dentro de holo.html).
+
+COMISIÓN (Compra Protegida, opcional para el comprador)
+4% del precio, mínimo $1 y máximo $40, más 7% de ITBMS sobre la comisión.
+Publicar es gratis para el vendedor.
+
+PARA DESARROLLADORES
+Todo el código (HTML, CSS y JavaScript) está dentro de holo.html. La
+configuración (nombre, Supabase, WhatsApp) está en el objeto CONFIG al
+principio del <script>. La clave de Supabase que aparece ahí es la
+"publishable": es pública por diseño y la seguridad la ponen las reglas de la
+base de datos (RLS). No agregues claves secretas a este archivo.
