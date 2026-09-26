@@ -22,7 +22,7 @@
 //   node scripts/actualizar-precios.mjs --solo sv3pt5-199,sv2-254
 //   node scripts/actualizar-precios.mjs --raiz /otra/carpeta
 
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { gunzipSync } from "node:zlib";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -73,23 +73,33 @@ const sumarDias = (d, n) => dia(Date.parse(`${d}T00:00:00Z`) + n * 86400000);
 /** Lunes (UTC) de la semana ISO de una fecha YYYY-MM-DD: la clave semanal. */
 const lunes = (d) => { const t = new Date(`${d}T00:00:00Z`); return sumarDias(d, -((t.getUTCDay() + 6) % 7)); };
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
-/** "Reverse Holofoil" → "reverseHolofoil" (mismas claves que pokemontcg.io y TCGdex). */
+/** "Reverse Holofoil" → "reverseHolofoil" (mismas claves que pokemontcg.io). */
 const claveVariante = (s) => s.trim().split(/\s+/).map((w, i) => (i ? w[0].toUpperCase() + w.slice(1) : w[0].toLowerCase() + w.slice(1))).join("");
+/** TCGdex escribe las variantes en kebab-case ("reverse-holofoil"): se guardan como las de tcgcsv. */
+const claveTcgdex = (k) => k.replace(/-(\w)/g, (_, ch) => ch.toUpperCase());
+
+// Fuentes caídas: después de 3 fallos seguidos no se le pide nada más a ese servidor en esta
+// ejecución, para que una fuente colgada no haga pasar el trabajo de su límite de 30 minutos.
+const fallosSeguidos = new Map();
+const MAX_FALLOS = 3;
 
 /**
- * GET con reintentos. Devuelve null en 404 o si la fuente falla del todo
- * (nunca inventa datos: quien llama decide qué hacer sin respuesta).
+ * GET con reintentos. Devuelve `si404` (null por defecto) en 404, y null si la fuente falla del
+ * todo (nunca inventa datos: quien llama decide qué hacer sin respuesta).
  */
-async function pedir(url, { tipo = "json", headers = {}, intentos = 3, timeout = 60000 } = {}) {
+async function pedir(url, { tipo = "json", headers = {}, intentos = 3, timeout = 30000, si404 = null } = {}) {
+  const host = new URL(url).host;
   for (let i = 1; i <= intentos; i++) {
+    if ((fallosSeguidos.get(host) ?? 0) >= MAX_FALLOS) { if (i === 1) aviso(`${host} no responde; se omite ${url}`); return null; }
     try {
       const r = await fetch(url, { headers: { "User-Agent": UA, ...headers }, signal: AbortSignal.timeout(timeout) });
-      if (r.status === 404) return null;
+      if (r.status === 404) { fallosSeguidos.set(host, 0); return si404; }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      if (tipo === "buffer") return Buffer.from(await r.arrayBuffer());
-      if (tipo === "text") return await r.text();
-      return await r.json();
+      const cuerpo = tipo === "buffer" ? Buffer.from(await r.arrayBuffer()) : tipo === "text" ? await r.text() : await r.json();
+      fallosSeguidos.set(host, 0);
+      return cuerpo;
     } catch (e) {
+      fallosSeguidos.set(host, (fallosSeguidos.get(host) ?? 0) + 1);
       if (i === intentos) { aviso(`${url} → ${e.message}`); return null; }
       await dormir(1500 * i);
     }
@@ -146,15 +156,26 @@ function tcgdexId(id) {
   return `${m[1]}${m[1] === "sv" ? m[2].padStart(2, "0") : m[2]}${m[3] ? ".5" : ""}-${id.slice(i + 1)}`;
 }
 
-async function cartasSeguidas(datos) {
+const idValido = (id) => /^[a-z0-9.]+-[a-z0-9]+$/i.test(id ?? "");
+
+/** Cartas con anuncio activo en Supabase (paginado: PostgREST devuelve como mucho 1000 filas). null si no respondió. */
+async function cartasActivas() {
+  const ids = new Set();
+  for (let desde = 0; ; desde += 1000) {
+    const filas = await pedir(`${SUPABASE_URL}/rest/v1/listings?select=catalog_id&status=eq.active&catalog_id=not.is.null&order=id&limit=1000&offset=${desde}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    });
+    if (!filas) return null;
+    for (const f of filas) if (idValido(f.catalog_id)) ids.add(f.catalog_id);
+    if (filas.length < 1000) return ids;
+  }
+}
+
+async function cartasSeguidas(datos, activas) {
   const ids = new Set(IDS_EJEMPLO);
-  const filas = await pedir(`${SUPABASE_URL}/rest/v1/listings?select=catalog_id&status=eq.active&catalog_id=not.is.null`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
-  if (filas) log(`Supabase: ${filas.length} anuncios activos con carta del catálogo.`);
-  else aviso("Supabase no respondió; se siguen las cartas de ejemplo y las ya registradas.");
-  for (const f of filas ?? []) if (/^[a-z0-9.]+-[a-z0-9]+$/i.test(f.catalog_id ?? "")) ids.add(f.catalog_id);
-  // Las cartas que ya tienen historial se siguen actualizando aunque el anuncio se haya cerrado.
+  for (const id of activas ?? []) ids.add(id);
+  // Las cartas que ya tienen historial se siguen actualizando aunque el anuncio se haya cerrado
+  // (si vuelve a publicarse, su historial no tiene huecos).
   for (const id of Object.keys(datos.cartas)) ids.add(id);
   return [...ids].filter((id) => !SOLO || SOLO.includes(id)).sort();
 }
@@ -164,7 +185,10 @@ const setTcgdex = (id) => { if (!setsTcgdex.has(id)) setsTcgdex.set(id, pedir(`$
 
 /** Lee TCGdex (y pokemontcg.io si hace falta) para saber nombre, set y productIds. */
 async function identificar(id, carta) {
-  const dex = await pedir(`${TCGDEX}/cards/${encodeURIComponent(tcgdexId(id))}`);
+  // TCGdex rellena los números con ceros (sv03.5-006) y pokemontcg.io no (sv3pt5-6): se prueban los dos.
+  const dexId = tcgdexId(id), m = dexId.match(/^(.*-)(\d{1,2})$/);
+  let dex = await pedir(`${TCGDEX}/cards/${encodeURIComponent(dexId)}`);
+  if (!dex && m) dex = await pedir(`${TCGDEX}/cards/${encodeURIComponent(`${m[1]}${m[2].padStart(3, "0")}`)}`);
   let ptcg = null;
   if (dex) {
     carta.nombre = dex.name;
@@ -172,7 +196,8 @@ async function identificar(id, carta) {
     const tp = dex.pricing?.tcgplayer ?? {};
     const pid = Object.values(tp).find((v) => v && typeof v === "object" && v.productId)?.productId
       ?? dex.variants_detailed?.find((v) => v.thirdParty?.tcgplayer)?.thirdParty.tcgplayer;
-    if (pid) carta.tcgplayer = { ...carta.tcgplayer, productId: pid };
+    // El productId ya guardado no se cambia: el historial y el grupo de tcgcsv dependen de él.
+    if (pid && !carta.tcgplayer?.productId) carta.tcgplayer = { ...carta.tcgplayer, productId: pid };
     const cm = dex.pricing?.cardmarket?.idProduct ?? dex.variants_detailed?.find((v) => v.thirdParty?.cardmarket)?.thirdParty.cardmarket;
     if (cm) carta.cardmarket = { ...carta.cardmarket, idProduct: cm };
   }
@@ -213,14 +238,18 @@ const puntoTcgplayer = (d, fila, fuente) => {
   return p.market ?? p.low ?? p.mid ? p : null;
 };
 
-/** Días disponibles en el archivo de pokefolio-data (lista de carpetas vía API de GitHub). */
+/**
+ * Días disponibles en el archivo de pokefolio-data (lista de carpetas vía API de GitHub).
+ * null si algún año no se pudo listar: así el histórico no se da por completo con un año faltante.
+ */
 async function diasArchivo() {
   const headers = process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {};
   const dias = [];
   const hoy = new Date().getUTCFullYear();
   for (let anio = 2024; anio <= hoy; anio++) {
-    const lista = await pedir(`https://api.github.com/repos/${POKEFOLIO}/contents/data/${anio}`, { headers });
-    for (const f of lista ?? []) { const m = f.name.match(/^prices-(\d{4}-\d{2}-\d{2})\.tar\.gz$/); if (m) dias.push(m[1]); }
+    const lista = await pedir(`https://api.github.com/repos/${POKEFOLIO}/contents/data/${anio}`, { headers, si404: [] });
+    if (lista == null) return null;
+    for (const f of lista) { const m = f.name.match(/^prices-(\d{4}-\d{2}-\d{2})\.tar\.gz$/); if (m) dias.push(m[1]); }
   }
   return dias.sort();
 }
@@ -230,7 +259,7 @@ async function historicoTcgplayer(cartas) {
   const pendientes = cartas.filter(([, c]) => c.tcgplayer?.groupId && !c.tcgplayer.historico);
   if (!pendientes.length) return;
   const dias = await diasArchivo();
-  if (!dias.length) { aviso("No pude listar el archivo histórico de TCGplayer; se reintenta la próxima semana."); return; }
+  if (!dias?.length) { aviso("No pude listar el archivo histórico de TCGplayer; se reintenta la próxima semana."); return; }
   const porSemana = new Map();
   for (const d of dias) if (d >= INICIO_HISTORICO && !porSemana.has(lunes(d))) porSemana.set(lunes(d), d);
   const elegidos = [...porSemana.values()].slice(-MAX_SEMANAS);
@@ -241,9 +270,14 @@ async function historicoTcgplayer(cartas) {
     const tgz = await pedir(`https://raw.githubusercontent.com/${POKEFOLIO}/main/data/${d.slice(0, 4)}/prices-${d}.tar.gz`, { tipo: "buffer" });
     if (!tgz) return;
     const filasPorGrupo = new Map();
-    for (const { nombre, datos } of entradasTar(gunzipSync(tgz))) {
-      const m = nombre.match(/^[\d-]+\/3\/(\d+)\/prices$/);
-      if (m && grupos.has(Number(m[1]))) filasPorGrupo.set(Number(m[1]), JSON.parse(datos.toString("utf8")).results ?? []);
+    try {
+      for (const { nombre, datos } of entradasTar(gunzipSync(tgz))) {
+        const m = nombre.match(/^[\d-]+\/3\/(\d+)\/prices$/);
+        if (m && grupos.has(Number(m[1]))) filasPorGrupo.set(Number(m[1]), JSON.parse(datos.toString("utf8")).results ?? []);
+      }
+    } catch (e) {
+      aviso(`Archivo de TCGplayer del ${d} dañado (${e.message}); se omite ese día.`);
+      return;
     }
     for (const [, c] of pendientes) {
       for (const fila of filasPorGrupo.get(c.tcgplayer.groupId) ?? []) {
@@ -262,9 +296,15 @@ async function historicoTcgplayer(cartas) {
 /** Precio de esta semana: tcgcsv → TCGdex → pokemontcg.io → repetir el último. */
 async function semanaTcgplayer(cartas, contexto, hoy) {
   const actualizado = (await pedir(`${TCGCSV}/last-updated.txt`, { tipo: "text" }))?.trim();
-  const dTcgcsv = actualizado && !Number.isNaN(aFecha(actualizado).getTime()) ? dia(actualizado) : hoy;
+  // Los precios de tcgcsv son del día anterior (el lunes trae los del domingo): los puntos repetidos
+  // se fechan igual, para caer en la misma semana que los reales.
+  const dTcgcsv = actualizado && !Number.isNaN(aFecha(actualizado).getTime()) ? dia(actualizado) : sumarDias(hoy, -1);
+  // Si tcgcsv dejó de actualizarse (más de una semana atrás), cuenta como caído y entra el respaldo.
+  const fresco = lunes(dTcgcsv) >= sumarDias(lunes(hoy), -7);
+  if (!fresco) aviso(`tcgcsv no se actualiza desde el ${dTcgcsv}; se usa el respaldo.`);
+  const dSemana = fresco ? dTcgcsv : sumarDias(hoy, -1);
   const precios = new Map();
-  for (const g of new Set(cartas.map(([, c]) => c.tcgplayer?.groupId).filter(Boolean))) {
+  for (const g of fresco ? new Set(cartas.map(([, c]) => c.tcgplayer?.groupId).filter(Boolean)) : []) {
     // tcgcsv pide no bajar el mismo archivo de precios más de una vez al día: una vez por semana está bien.
     precios.set(g, (await pedir(`${TCGCSV}/tcgplayer/3/${g}/prices`))?.results ?? null);
   }
@@ -278,7 +318,7 @@ async function semanaTcgplayer(cartas, contexto, hoy) {
       const tp = contexto.get(id)?.dex?.pricing?.tcgplayer;
       if (tp) {
         const d = tp.updated ? dia(tp.updated) : hoy;
-        puntos = Object.entries(tp).filter(([, v]) => v && typeof v === "object").map(([k, v]) => [k, puntoTcgplayer(d, v, "tcgdex")]).filter(([, p]) => p);
+        puntos = Object.entries(tp).filter(([, v]) => v && typeof v === "object").map(([k, v]) => [claveTcgdex(k), puntoTcgplayer(d, v, "tcgdex")]).filter(([, p]) => p);
         fuente = "tcgdex";
       }
     }
@@ -293,7 +333,7 @@ async function semanaTcgplayer(cartas, contexto, hoy) {
     }
     if (puntos.length) { for (const [k, p] of puntos) agregar((s[k] ??= []), p); resumen[fuente]++; }
     let repetidos = 0;
-    for (const k of Object.keys(s)) if (!puntos.some(([kk]) => kk === k) && arrastrar(s[k], hoy)) repetidos++;
+    for (const k of Object.keys(s)) if (!puntos.some(([kk]) => kk === k) && arrastrar(s[k], dSemana)) repetidos++;
     if (repetidos) resumen.repetido++;
   }
   log(`TCGplayer esta semana (cartas por fuente):`, resumen);
@@ -335,7 +375,8 @@ async function historicoCardmarket(cartas) {
 /** Precio de esta semana: guía oficial → TCGdex → pokemontcg.io → repetir el último. */
 async function semanaCardmarket(cartas, contexto, hoy) {
   const guia = await pedir(GUIA_CM, { timeout: 120000 });
-  const dGuia = guia?.createdAt ? dia(guia.createdAt) : hoy;
+  // Fecha tal como la escribe Cardmarket (su día local), no convertida a UTC.
+  const dGuia = /^\d{4}-\d{2}-\d{2}/.test(guia?.createdAt ?? "") ? guia.createdAt.slice(0, 10) : hoy;
   const porProducto = new Map((guia?.priceGuides ?? []).map((g) => [g.idProduct, g]));
   const resumen = { cardmarket: 0, tcgdex: 0, pokemontcg: 0, repetido: 0 };
   for (const [id, c] of cartas) {
@@ -383,23 +424,77 @@ function formatear(datos) {
   return JSON.stringify(datos, null, 2).replace(/\{\n\s+"d": [^{}]*?\}/g, (m) => m.replace(/\n\s*/g, " ").replace(/\{ /, "{").replace(/ \}$/, "}")) + "\n";
 }
 
+const INICIO = "<!-- PRECIOS:INICIO -->", FIN = "<!-- PRECIOS:FIN -->";
+
+/** Escribe en un archivo temporal y lo renombra: nunca queda un archivo a medio escribir. */
+async function escribirSeguro(archivo, contenido) {
+  await writeFile(`${archivo}.tmp`, contenido);
+  await rename(`${archivo}.tmp`, archivo);
+}
+
+/** Ids de las cartas incrustadas hoy en holo.html (para no perderlas si Supabase no responde). */
+async function idsIncrustados(archivo) {
+  const html = await readFile(archivo, "utf8").catch(() => "");
+  const m = html.match(/<script id="precios-data" type="application\/json">([\s\S]*?)<\/script>/);
+  try { return Object.keys(JSON.parse(m?.[1] ?? "{}").cartas ?? {}); } catch { return []; }
+}
+
+/**
+ * Lo que la página necesita, nada más: cartas con anuncio activo y las de ejemplo, y en cada punto
+ * sólo los campos que dibuja la gráfica. El historial completo queda en data/precios.json.
+ */
+function datosParaPagina(datos, ids) {
+  const cartas = {};
+  for (const id of [...ids].sort()) {
+    const c = datos.cartas[id];
+    if (!c) continue;
+    const tp = {};
+    for (const [k, serie] of Object.entries(c.series.tcgplayer ?? {})) {
+      tp[k] = serie.map(({ d, market, carried, fuente }) => ({ d, market, ...(carried ? { carried } : {}), fuente }));
+    }
+    cartas[id] = {
+      nombre: c.nombre, set: c.set, tcgplayer: c.tcgplayer?.productId ? { productId: c.tcgplayer.productId } : undefined,
+      series: {
+        tcgplayer: tp,
+        cardmarket: (c.series.cardmarket ?? []).map(({ d, avg7, trend, eurUsd, carried, fuente }) => ({ d, avg7, trend, eurUsd, ...(carried ? { carried } : {}), fuente })),
+      },
+    };
+  }
+  return { version: datos.version ?? 1, actualizado: datos.actualizado, cartas };
+}
+
 async function incrustarEnHtml(datos, archivo) {
   const html = await readFile(archivo, "utf8");
-  const inicio = "<!-- PRECIOS:INICIO -->", fin = "<!-- PRECIOS:FIN -->";
-  const a = html.indexOf(inicio), b = html.indexOf(fin);
-  if (a < 0 || b < a) throw new Error(`${path.relative(RAIZ, archivo)} no tiene los marcadores ${inicio} … ${fin}`);
+  const a = html.indexOf(INICIO), b = html.indexOf(FIN);
+  if (a < 0 || b < a) throw new Error(`${path.relative(RAIZ, archivo)} no tiene los marcadores ${INICIO} … ${FIN}`);
   // "<" escapado para que ningún texto pueda cerrar la etiqueta <script>.
   const json = JSON.stringify(datos).replace(/</g, "\\u003c");
-  const bloque = `${inicio}\n<script id="precios-data" type="application/json">${json}</script>\n`;
-  await writeFile(archivo, html.slice(0, a) + bloque + html.slice(b));
+  const bloque = `${INICIO}\n<script id="precios-data" type="application/json">${json}</script>\n`;
+  await escribirSeguro(archivo, html.slice(0, a) + bloque + html.slice(b));
 }
+
+/** Lee data/precios.json. Sólo un archivo inexistente empieza de cero: uno dañado detiene todo. */
+async function leerDatos() {
+  try {
+    return JSON.parse(await readFile(ARCHIVO_JSON, "utf8"));
+  } catch (e) {
+    if (e.code === "ENOENT") return { version: 1, cartas: {} };
+    throw new Error(`${path.relative(RAIZ, ARCHIVO_JSON)} no se puede leer (${e.message}). No se escribe nada para no borrar el historial: arregla el archivo (por ejemplo, un conflicto de git) y vuelve a correr.`);
+  }
+}
+const contarPuntos = (datos) => Object.values(datos.cartas ?? {}).reduce((n, c) =>
+  n + Object.values(c.series?.tcgplayer ?? {}).reduce((m, s) => m + s.length, 0) + (c.series?.cardmarket?.length ?? 0), 0);
 
 // ------------------------------------------------------------------ principal
 async function main() {
   const hoy = dia(Date.now());
-  const datos = await readFile(ARCHIVO_JSON, "utf8").then(JSON.parse).catch(() => ({ version: 1, cartas: {} }));
+  const datos = await leerDatos();
+  const puntosAntes = contarPuntos(datos);
   datos.fuentes = FUENTES;
-  const ids = await cartasSeguidas(datos);
+  const activas = await cartasActivas();
+  if (activas) log(`Supabase: ${activas.size} cartas del catálogo con anuncio activo.`);
+  else aviso("Supabase no respondió; en la página quedan las mismas cartas que ya tenía.");
+  const ids = await cartasSeguidas(datos, activas);
   log(`Cartas a seguir (${ids.length}): ${ids.join(", ")}`);
 
   const contexto = new Map(), cartas = [];
@@ -424,11 +519,18 @@ async function main() {
   datos.estado = estado;
   datos.cartas = Object.fromEntries(Object.entries(datos.cartas).sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([id, { nombre, set, tcgplayer, cardmarket, series, ...resto }]) => [id, { nombre, set, tcgplayer, cardmarket, ...resto, series }]));
+  // Los puntos sólo se agregan: si hay menos que al empezar, algo salió mal y no se guarda nada.
+  if (contarPuntos(datos) < puntosAntes) throw new Error(`El historial bajó de ${puntosAntes} a ${contarPuntos(datos)} puntos; no se guarda nada.`);
+  const existentes = [];
+  for (const f of ARCHIVOS_HTML) if (await readFile(f).then(() => true, () => false)) existentes.push(f);
+  if (!existentes.length) throw new Error("No encontré holo.html");
+  const enPagina = new Set([...IDS_EJEMPLO, ...(activas ?? await idsIncrustados(existentes[0]))].filter((id) => datos.cartas[id]));
+  const pagina = datosParaPagina(datos, enPagina);
   await mkdir(path.dirname(ARCHIVO_JSON), { recursive: true });
-  await writeFile(ARCHIVO_JSON, formatear(datos));
+  await escribirSeguro(ARCHIVO_JSON, formatear(datos));
   const htmls = [];
-  for (const f of ARCHIVOS_HTML) if (await readFile(f).then(() => true, () => false)) { await incrustarEnHtml(datos, f); htmls.push(path.relative(RAIZ, f)); }
-  if (!htmls.length) throw new Error("No encontré holo.html");
+  for (const f of existentes) { await incrustarEnHtml(pagina, f); htmls.push(path.relative(RAIZ, f)); }
+  log(`En la página: ${enPagina.size} cartas (${Math.round(JSON.stringify(pagina).length / 1024)} KB).`);
 
   for (const [id, c] of cartas) {
     const tp = Object.entries(c.series.tcgplayer).map(([k, s]) => `${k} ${s.length}`).join(", ") || "—";
