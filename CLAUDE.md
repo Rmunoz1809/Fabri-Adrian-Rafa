@@ -8,6 +8,7 @@ Contexto de negocio y decisiones: `docs/` (empieza por `docs/decisions.md`).
 ## Equipo y GitHub (obligatorio)
 
 Somos **tres socios** trabajando sobre el mismo repositorio de GitHub. GitHub es la fuente de verdad.
+Repo: https://github.com/Rmunoz1809/Fabri-Adrian-Rafa (remote `origin`, rama `main`).
 
 1. **Antes de empezar cualquier cambio:** `git pull --rebase` para traer lo que subieron los demás.
 2. **Al terminar cada cambio, siempre:**
@@ -27,3 +28,4 @@ Somos **tres socios** trabajando sobre el mismo repositorio de GitHub. GitHub es
 - Tests obligatorios para pagos, comisiones y permisos (`src/lib/fees.ts`, `src/lib/pricing/`, RLS).
 - La comisión de Compra Protegida vive en `src/lib/fees.ts` (4%, mín. $1, máx. $40, más 7% de ITBMS). Si cambia, actualiza también `export/holo.html` y `docs/02-product-spec.md`.
 - `export/holo.html` es la versión de un solo archivo para compartir. Nunca debe contener claves secretas.
+- `holo.html` en la raíz del repo es lo que publica GitHub Pages. Si cambias `export/holo.html`, cópialo también a la raíz (`cp export/holo.html holo.html`) en el mismo commit.
