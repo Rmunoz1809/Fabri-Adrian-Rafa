@@ -605,14 +605,7 @@ body:not(.gate) .gate-bg { display: none; }
 @keyframes gate-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
 .gc { position: relative; flex-shrink: 0; width: 150px; aspect-ratio: 63 / 88; border-radius: 9px; overflow: hidden; box-shadow: 0 14px 30px rgb(0 0 0 / .7); background: var(--surface-2); }
 .gc img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gc.sport { color: #fff; padding: 10px; display: flex; flex-direction: column; border: 5px solid rgb(255 255 255 / .9); }
-.gc.sport::before { content: ""; position: absolute; inset: 0; background: linear-gradient(125deg, transparent 30%, rgb(255 255 255 / .28) 45%, transparent 60%), repeating-linear-gradient(90deg, rgb(255 255 255 / .05) 0 2px, transparent 2px 14px); mix-blend-mode: screen; }
-.gc.sport .lg { align-self: flex-start; position: relative; background: rgb(0 0 0 / .35); border-radius: 4px; padding: 2px 6px; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
-.gc.sport svg { position: relative; flex: 1; width: 100%; min-height: 0; filter: drop-shadow(0 6px 8px rgb(0 0 0 / .45)); }
-.gc.sport .nm { position: relative; font-weight: 800; font-size: 14px; line-height: 1.05; text-transform: uppercase; background: rgb(0 0 0 / .4); margin: 0 -10px -10px; padding: 7px 10px; }
-.gc.sport .nm small { display: block; font-size: 9px; font-weight: 600; letter-spacing: .08em; opacity: .75; margin-top: 2px; }
-@media (max-width: 640px) { .gate-col, .gc { flex-basis: 110px; width: 110px; } .gc.sport .nm { font-size: 11px; } .gate-cols { opacity: .5; } }
-
+@media (max-width: 640px) { .gate-col, .gc { flex-basis: 110px; width: 110px; } .gate-cols { opacity: .5; } }
 /* ---------------------------------------------------------------- motion (Collectr's keyframes) */
 /* tailwindcss-animate: animate-in / animate-out */
 @keyframes enter { from { opacity: var(--tw-enter-opacity, 1); transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1)) rotate(var(--tw-enter-rotate, 0)); } }
@@ -2241,30 +2234,27 @@ function viewProtected(app) {
     <div class="cta" style="margin-top:40px"><a class="btn primary lg" href="#/">Ver cartas</a><a class="btn outline lg" href="#/vender">Vender una carta</a></div></div>`;
 }
 
-// Animated card wall behind the sign-in screen. Pokémon use real card scans;
-// NBA/NFL cards are illustrated (no player photos: we don't hold image rights).
+// Animated card wall behind the sign-in screen: only real card scans.
+// Pokémon come from pokemontcg.io; NBA/NFL are public-domain vintage cards from
+// Wikimedia Commons, stored in img/gate/ (sources in img/gate/CREDITS.md).
 const GATE_POKEMON = ["base1/4", "sv3pt5/199", "swsh7/215", "sv8/238", "base1/2", "swsh7/218", "sv4pt5/234", "base1/58", "sv3pt5/200", "swsh11/186", "base1/15", "sv6/211", "sv2/203", "swsh12pt5/160", "sv3pt5/202", "sv2/254"];
-const GATE_ATHLETES = [
-  ["nba", "Victor Wembanyama", "Prizm RC", "#1d428a", "#c8102e"], ["nfl", "Patrick Mahomes", "Donruss Optic", "#9d1c2c", "#f2b632"],
-  ["nba", "LeBron James", "Select", "#552583", "#fdb927"], ["nfl", "C.J. Stroud", "Prizm RC", "#03202f", "#a71930"],
-  ["nba", "Stephen Curry", "Prizm Silver", "#1d428a", "#ffc72c"], ["nfl", "Josh Allen", "Mosaic", "#00338d", "#c60c30"],
-  ["nba", "Luka Dončić", "Optic Holo", "#00538c", "#8a9bb0"], ["nfl", "Justin Jefferson", "Prizm", "#4f2683", "#ffc62f"],
-  ["nba", "Giannis Antetokounmpo", "Mosaic", "#00471b", "#c9b98a"], ["nfl", "Lamar Jackson", "Select", "#241773", "#9e7c0c"],
+const GATE_SPORTS = [
+  "nba-george-mikan-1948-bowman", "nfl-jim-brown-1960-topps", "nba-wilt-chamberlain-1961-fleer", "nfl-otto-graham-1951-bowman",
+  "nba-bill-russell-1961-fleer", "nfl-ya-tittle-1959-topps", "nba-bud-palmer-1948-bowman", "nfl-mike-ditka-topps",
+  "nba-bill-russell-takes-to-air-1961-fleer", "nfl-george-blanda-1954-bowman", "nba-larry-costello-1961-fleer", "nfl-dan-currie-1959-topps",
 ];
-const ATHLETE_SVG = {
-  nba: `<svg viewBox="0 0 100 110" aria-hidden="true"><path d="M70 4h26v3H70z" fill="#fff" opacity=".7"/><path d="M73 7l4 12h12l4-12" stroke="#fff" stroke-width="1.5" fill="none" opacity=".6"/><circle cx="66" cy="10" r="7" fill="#f58426"/><path d="M59 10h14M66 3v14" stroke="#000" stroke-width="1" opacity=".5"/><g stroke="#fff" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M47 38 57 26 63 16" stroke-width="7"/><path d="M45 40 33 46 28 38" stroke-width="7"/><path d="M47 36 42 64" stroke-width="16"/><path d="M42 64 56 78 50 98" stroke-width="9"/><path d="M42 64 30 80 36 100" stroke-width="9"/></g><circle cx="50" cy="26" r="8" fill="#fff"/></svg>`,
-  nfl: `<svg viewBox="0 0 100 110" aria-hidden="true"><ellipse cx="24" cy="12" rx="9" ry="5.5" transform="rotate(-35 24 12)" fill="#8b4a1f"/><path d="M20 12l8-3" stroke="#fff" stroke-width="1.2"/><g stroke="#fff" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M46 38 34 30 28 18" stroke-width="7"/><path d="M54 40 66 46 72 38" stroke-width="7"/><path d="M50 36 52 64" stroke-width="18"/><path d="M52 64 40 82 34 102" stroke-width="9"/><path d="M52 64 62 84 70 100" stroke-width="9"/></g><circle cx="50" cy="24" r="10" fill="#fff"/><path d="M52 26h9M55 22v8" stroke="#000" stroke-width="1.6" opacity=".55"/></svg>`,
-};
+// holo.html is served from the repo root; export/holo.html sits one level down.
+const GATE_IMG_BASE = location.pathname.includes("/export/") ? "../img/gate/" : "img/gate/";
 function gateBackground() {
   if ($("#gateBg")) return;
   const pokemon = (id) => `<div class="gc"><img src="https://images.pokemontcg.io/${id}.png" alt="" loading="eager" decoding="async"></div>`;
-  const athlete = ([lg, name, set, a, b]) => `<div class="gc sport" style="background:linear-gradient(160deg, ${a}, ${b})"><span class="lg">${lg.toUpperCase()}</span>${ATHLETE_SVG[lg]}<p class="nm">${esc(name)}<small>${esc(set)}</small></p></div>`;
+  const sports = (name) => `<div class="gc"><img src="${GATE_IMG_BASE}${name}.jpg" alt="" loading="eager" decoding="async"></div>`;
   const cols = [];
   for (let c = 0; c < 9; c++) {
     const cards = [];
     for (let r = 0; r < 6; r++) {
       const i = c * 6 + r;
-      cards.push(i % 3 === 1 ? athlete(GATE_ATHLETES[(c * 2 + r) % GATE_ATHLETES.length]) : pokemon(GATE_POKEMON[(c * 5 + r) % GATE_POKEMON.length]));
+      cards.push(i % 3 === 1 ? sports(GATE_SPORTS[(c * 2 + r) % GATE_SPORTS.length]) : pokemon(GATE_POKEMON[(c * 5 + r) % GATE_POKEMON.length]));
     }
     const run = cards.join("");
     cols.push(`<div class="gate-col">${run}${run}</div>`); // doubled for a seamless loop
