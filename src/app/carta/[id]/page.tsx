@@ -26,6 +26,15 @@ export default async function ListingPage({ params }: PageProps<"/carta/[id]">) 
     `Quiero comprar con Compra Protegida: "${listing.title}" (${url}). Total ${quote ? formatUsd(quote.buyerTotalCents) : ""}.`,
   );
   const condition = CONDITIONS.find((c) => c.code === listing.condition);
+  // Same rules as holo.html: sold, reserved or removed listings are shown but cannot be bought.
+  const forSale = listing.isDemo || listing.status === "active";
+  const statusNote = listing.isDemo ? null : {
+    sold: "Esta carta ya se vendió.",
+    reserved: "Esta carta está reservada: hay una Compra Protegida en curso.",
+    removed: "Este anuncio fue retirado.",
+    draft: "Este anuncio todavía no está publicado.",
+    active: null,
+  }[listing.status];
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-16 pt-4">
@@ -39,10 +48,10 @@ export default async function ListingPage({ params }: PageProps<"/carta/[id]">) 
         <div className="md:sticky md:top-20 md:self-start">
           <div className="card-ratio relative mx-auto max-w-sm rounded-3xl bg-surface-2 [container-type:inline-size] md:max-w-none">
             <div className="absolute inset-[8%]">
-              <CardArt listing={listing} sizes="(min-width: 768px) 40vw, 90vw" priority />
+              <CardArt listing={listing} sizes="(min-width: 768px) 40vw, 90vw" preload />
             </div>
           </div>
-          {listing.photos.length > 0 && listing.card.catalogId && (
+          {listing.isDemo && listing.photos.length > 0 && (
             <p className="mt-2 text-center text-xs text-ink-2">
               Imagen de catálogo. Pide fotos reales del frente y el reverso antes de comprar.
             </p>
@@ -71,9 +80,15 @@ export default async function ListingPage({ params }: PageProps<"/carta/[id]">) 
             </p>
           )}
 
+          {statusNote && (
+            <p className={`rounded-xl p-3 text-sm font-semibold ${listing.status === "sold" ? "bg-good-bg text-good" : "bg-warn-bg text-warn"}`}>
+              {statusNote}
+            </p>
+          )}
+
           <EstimatePanel estimate={listing.estimate} priceUsd={listing.priceUsd} />
 
-          {quote && (
+          {quote && forSale && (
             <section className="rounded-2xl border border-line bg-surface p-4">
               <h2 className="flex items-center gap-2 text-sm font-semibold">Compra Protegida</h2>
               <p className="mt-1 text-sm text-ink-2">
@@ -96,7 +111,7 @@ export default async function ListingPage({ params }: PageProps<"/carta/[id]">) 
             </section>
           )}
 
-          {contact ? (
+          {!forSale ? null : contact ? (
             <a href={contact} target="_blank" rel="noopener" className="flex h-12 items-center justify-center rounded-xl border border-line bg-surface font-semibold">
               Preguntar por WhatsApp
             </a>

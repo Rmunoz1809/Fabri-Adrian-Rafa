@@ -25,6 +25,7 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// /api/recognize goes through here too: it needs a fresh session to check who is calling.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/recognize|.*\\.(?:png|jpg|jpeg|webp|svg)$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|webp|svg)$).*)"],
 };

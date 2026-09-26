@@ -12,7 +12,7 @@ Repo: https://github.com/Rmunoz1809/Fabri-Adrian-Rafa (remote `origin`, rama `ma
 
 1. **Antes de empezar cualquier cambio:** `git pull --rebase` para traer lo que subieron los demás.
 2. **Al terminar cada cambio, siempre:**
-   - Corre los checks: `npm test`, `npx tsc --noEmit` y `npx eslint src`. No subas nada que falle.
+   - Corre los checks: `npm test`, `npm run typecheck` (genera los tipos de Next y corre `tsc --noEmit`) y `npx eslint src`. No subas nada que falle.
    - Haz commit con un mensaje claro en inglés.
    - Haz **push a GitHub** (`git push`). Un cambio no está terminado hasta que está en GitHub.
 3. **Si el push falla porque otro socio subió cambios:** `git pull --rebase`, resuelve conflictos, vuelve a correr los checks y haz push. Nunca uses `git push --force` en `main`.
