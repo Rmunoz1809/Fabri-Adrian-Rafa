@@ -101,7 +101,12 @@ details.filters summary::-webkit-details-marker { display: none; }
 /* badges */
 .b { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
 .b.good { background: var(--good-bg); color: var(--good); } .b.neutral { background: var(--surface-2); color: var(--ink-2); }
-.b.warn { background: var(--warn-bg); color: var(--warn); } .b.prot { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.b.warn { background: var(--warn-bg); color: var(--warn); } .b.shop { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 600; }
+.seller-seg { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 14px; }
+.seller-seg a { display: flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--ink-2); text-align: center; line-height: 1.2; }
+.seller-seg a.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+.shop-note { border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+.b.prot { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .cond { border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--surface); }
 .graded { background: var(--ink); color: var(--bg); border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; }
 .demo { background: color-mix(in srgb, var(--surface) 90%, transparent); border-radius: 6px; padding: 2px 6px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
@@ -422,9 +427,26 @@ async function withProfiles(rows) {
 }
 const searchTokens = (q) => String(q ?? "").replace(/[,()%*\\"'.:]/g, " ").split(/\s+/).filter((t) => t.length >= 2).slice(0, 5);
 
+// "Tienda verificada" = shop flag + verified by Holo staff. Everyone else is a "particular".
+const isVerifiedShop = (seller) => Boolean(seller?.isShop && seller?.verified);
+async function verifiedShopIds() {
+  const { data, error } = await sb.from("public_profiles").select("id").eq("is_shop", true).eq("verified", true);
+  if (error) { console.error(error); return []; }
+  return (data ?? []).map((p) => p.id);
+}
+
 async function fetchRealListings(f) {
   if (!sb) return [];
   let q = sb.from("listings").select(LISTING_COLS).eq("status", "active").limit(60);
+  if (f.seller) {
+    const shops = await verifiedShopIds();
+    if (f.seller === "tiendas") {
+      if (!shops.length) return [];
+      q = q.in("seller_id", shops);
+    } else if (shops.length) {
+      q = q.not("seller_id", "in", `(${shops.join(",")})`);
+    }
+  }
   if (f.category) q = q.eq("category", f.category);
   if (f.graded === "graded") q = q.not("grading_company", "is", null);
   if (f.graded === "raw") q = q.is("grading_company", null);
@@ -445,6 +467,8 @@ async function fetchRealListing(id) {
 }
 
 function matchesFilters(l, f) {
+  if (f.seller === "tiendas" && !isVerifiedShop(l.seller)) return false;
+  if (f.seller === "particulares" && isVerifiedShop(l.seller)) return false;
   if (f.category && l.card.category !== f.category) return false;
   if (f.graded === "graded" && !l.grading) return false;
   if (f.graded === "raw" && l.grading) return false;
@@ -474,15 +498,16 @@ function parseHash() {
 function go(path) { location.hash = path; }
 function filtersFrom(params) {
   const num = (k) => { const v = params.get(k); const n = v ? Number(v) : NaN; return Number.isFinite(n) && n >= 0 ? n : undefined; };
-  const tipo = params.get("tipo"), orden = params.get("orden");
+  const tipo = params.get("tipo"), orden = params.get("orden"), vendedor = params.get("vendedor");
   return {
+    seller: vendedor === "tiendas" || vendedor === "particulares" ? vendedor : undefined,
     q: params.get("q")?.trim() || undefined, category: params.get("cat") || undefined,
     graded: tipo === "raw" || tipo === "graded" ? tipo : undefined, province: params.get("provincia") || undefined,
     minPrice: num("min"), maxPrice: num("max"), sort: orden === "precio-asc" || orden === "precio-desc" ? orden : "recientes",
   };
 }
 function hrefWith(f, patch) {
-  const base = { q: f.q, cat: f.category, tipo: f.graded, provincia: f.province, min: f.minPrice, max: f.maxPrice, orden: f.sort === "recientes" ? undefined : f.sort };
+  const base = { vendedor: f.seller, q: f.q, cat: f.category, tipo: f.graded, provincia: f.province, min: f.minPrice, max: f.maxPrice, orden: f.sort === "recientes" ? undefined : f.sort };
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries({ ...base, ...patch })) if (v != null && v !== "") p.set(k, v);
   const s = p.toString();
@@ -536,12 +561,13 @@ function verdictBadge(l) {
   return { "buen-precio": `<span class="b good">Buen precio</span>`, "en-rango": `<span class="b neutral">Precio justo</span>`, alto: `<span class="b warn">Sobre el mercado</span>` }[v] ?? "";
 }
 const protectedBadge = () => `<span class="b prot">🛡 Protegida</span>`;
+const shopBadge = () => `<span class="b shop">🏪 Tienda verificada</span>`;
 function tile(l) {
   return `<li><a class="tile" href="#/carta/${encodeURIComponent(l.id)}">
     <div class="art card-ratio"><div class="inner">${cardArt(l)}</div>
       <div class="corner-l">${conditionBadge(l)}</div>${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
     <div class="body"><p class="title">${esc(l.title)}</p><p class="price">${formatUsd(toCents(l.priceUsd))}</p>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">${verdictBadge(l)}${l.protectedEligible ? protectedBadge() : ""}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${isVerifiedShop(l.seller) ? shopBadge() : ""}${verdictBadge(l)}${l.protectedEligible ? protectedBadge() : ""}</div>
       <p class="loc">${esc(l.location.neighborhood)}, ${esc(l.location.district)}</p></div></a></li>`;
 }
 function estimatePanel(est, price) {
@@ -828,7 +854,8 @@ async function loadPriceChart(l) {
 // ============================================================= views
 async function viewHome(app, params) {
   const f = filtersFrom(params);
-  const filtered = Boolean(f.q || f.category || f.graded || f.province || f.minPrice != null || f.maxPrice != null);
+  const filtered = Boolean(f.seller || f.q || f.category || f.graded || f.province || f.minPrice != null || f.maxPrice != null);
+  const shopCta = waLink("Hola, tengo una tienda de cartas y quiero verificarla en Holo.");
   const active = [f.graded, f.province, f.minPrice, f.maxPrice].filter((v) => v != null).length;
   setTitle();
   $("#qTop").value = f.q ?? "";
@@ -838,6 +865,15 @@ async function viewHome(app, params) {
       <p class="muted">Pokémon, NBA y NFL. Cada anuncio muestra un rango de precio de mercado, y con Compra Protegida verificamos la carta antes de que el vendedor reciba tu pago.</p>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px"><a class="btn primary" href="#/vender">Publica tu carta gratis</a><a class="btn" href="#/protegida">¿Cómo funciona Compra Protegida?</a></div></section>`}
     <div style="display:flex;flex-direction:column;gap:12px;${filtered ? "padding-top:24px" : ""}">
+      <nav class="seller-seg" aria-label="Tipo de vendedor">
+        <a class="${!f.seller ? "on" : ""}" href="${hrefWith(f, { vendedor: undefined })}">Todos</a>
+        <a class="${f.seller === "tiendas" ? "on" : ""}" href="${hrefWith(f, { vendedor: "tiendas" })}">🏪 Tiendas verificadas</a>
+        <a class="${f.seller === "particulares" ? "on" : ""}" href="${hrefWith(f, { vendedor: "particulares" })}">Particulares</a>
+      </nav>
+      ${f.seller === "tiendas" ? `<div class="panel shop-note"><p style="margin:0;font-weight:600">Tiendas con local o marca comprobados por ${esc(CONFIG.APP_NAME)}</p>
+        <p class="small muted" style="margin:4px 0 0">Verificamos que la tienda existe y que vende cartas originales. Aun así, revisa cada carta antes de pagar o usa Compra Protegida.</p>
+        <p class="small" style="margin:8px 0 0">¿Tienes una tienda? ${shopCta ? `<a href="${esc(shopCta)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Pide tu verificación</a>` : `<span class="muted">Muy pronto podrás pedir tu verificación.</span>`}</p></div>` : ""}
+      ${f.seller === "particulares" ? `<p class="notice soft" style="margin:0">Coleccionistas que venden sus propias cartas. Pide fotos reales del frente y el reverso, y para cartas de valor usa Compra Protegida.</p>` : ""}
       <div class="chips">
         <a class="chip ${!f.category ? "on" : ""}" href="${hrefWith(f, { cat: undefined })}">Todo</a>
         ${CATEGORIES.map((c) => `<a class="chip ${f.category === c.slug ? "on" : ""}" href="${hrefWith(f, { cat: c.slug })}">${c.name}</a>`).join("")}
@@ -850,12 +886,12 @@ async function viewHome(app, params) {
           <label class="f muted-label">Provincia<select class="select" name="provincia"><option value="">Todo Panamá</option>${PROVINCES.map((p) => `<option ${f.province === p ? "selected" : ""}>${p}</option>`).join("")}</select></label>
           <div style="display:flex;gap:8px"><label class="f muted-label" style="flex:1">Mín $<input class="input" name="min" type="number" min="0" inputmode="decimal" value="${f.minPrice ?? ""}"></label><label class="f muted-label" style="flex:1">Máx $<input class="input" name="max" type="number" min="0" inputmode="decimal" value="${f.maxPrice ?? ""}"></label></div>
           <label class="f muted-label">Ordenar<select class="select" name="orden"><option value="recientes">Más recientes</option><option value="precio-asc" ${f.sort === "precio-asc" ? "selected" : ""}>Precio: menor a mayor</option><option value="precio-desc" ${f.sort === "precio-desc" ? "selected" : ""}>Precio: mayor a menor</option></select></label>
-          <div class="spanall"><button class="btn dark" style="border-radius:12px">Aplicar</button><a class="btn" style="border:0;background:none" href="${f.category ? `#/?cat=${f.category}` : "#/"}">Limpiar</a></div>
+          <div class="spanall"><button class="btn dark" style="border-radius:12px">Aplicar</button><a class="btn" style="border:0;background:none" href="${hrefWith({ seller: f.seller, category: f.category, sort: "recientes" }, {})}">Limpiar</a></div>
         </form>
       </details>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:24px">
-      <h2 class="display" style="font-size:20px;margin:0">${f.q ? `Resultados para “${esc(f.q)}”` : "Recién publicadas"}</h2><p class="small muted" id="count" style="margin:0"></p></div>
+      <h2 class="display" style="font-size:20px;margin:0">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : "Recién publicadas"}</h2><p class="small muted" id="count" style="margin:0"></p></div>
     <div id="list"><p class="muted small" style="margin-top:16px"><span class="spinner"></span> Cargando…</p></div>`;
 
   $("#filterForm").addEventListener("submit", (e) => {
@@ -871,6 +907,8 @@ async function viewHome(app, params) {
   $("#count").textContent = `${list.length} ${list.length === 1 ? "carta" : "cartas"}`;
   $("#list").innerHTML = list.length
     ? `<ul class="grid">${list.map(tile).join("")}</ul>`
+    : f.seller === "tiendas" && !f.q && !f.category
+    ? `<div class="panel" style="margin-top:24px;text-align:center;border-style:dashed;padding:40px"><p style="margin:0;font-weight:500">Todavía no hay tiendas verificadas con cartas publicadas.</p><p class="small muted">Estamos sumando las primeras tiendas de Panamá.</p></div>`
     : `<div class="panel" style="margin-top:24px;text-align:center;border-style:dashed;padding:40px"><p style="margin:0;font-weight:500">No encontramos cartas con esos filtros.</p><p class="small muted">Prueba con otra búsqueda o <a href="#/" style="text-decoration:underline">ve todo</a>.</p></div>`;
 }
 
@@ -918,7 +956,7 @@ async function viewDetail(app, id) {
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
         <section class="panel" style="display:flex;align-items:center;gap:12px">
           <div class="display" style="width:44px;height:44px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700">${esc(l.seller.displayName.slice(0, 1))}</div>
-          <div><p style="margin:0;font-weight:500">${esc(l.seller.displayName)} ${l.seller.verified ? `<span class="xs" style="color:var(--accent)">✓ Verificado</span>` : ""} ${l.seller.isShop ? `<span class="xs muted">· Tienda</span>` : ""}</p>
+          <div><p style="margin:0;font-weight:500;display:flex;flex-wrap:wrap;gap:6px;align-items:center">${esc(l.seller.displayName)} ${isVerifiedShop(l.seller) ? shopBadge() : `<span class="xs muted">Particular</span>${l.seller.verified ? ` <span class="xs" style="color:var(--accent)">✓ Verificado</span>` : ""}`}</p>
           <p class="xs muted" style="margin:0">${l.seller.rating ? `★ ${l.seller.rating.toFixed(1)} · ` : ""}${l.seller.salesCount} ventas</p></div></section>
         <section class="panel" style="background:var(--surface-2);border:0"><h2>Compra segura</h2>
           <ul class="small muted" style="padding:0;list-style:none;margin:8px 0 0;display:grid;gap:4px">
