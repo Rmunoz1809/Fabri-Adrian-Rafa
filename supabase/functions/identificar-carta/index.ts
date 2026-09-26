@@ -104,10 +104,8 @@ Deno.serve(async (req) => {
   client ??= new Anthropic();
   try {
     const response = await client.beta.messages.parse({
-      model: "claude-opus-5",
+      model: "claude-sonnet-5", // ~1-1.5 US cents per card; Opus 5 was ~2.5x that
       max_tokens: 4000,
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
       thinking: { type: "adaptive" },
       output_config: { effort: "low", format: betaZodOutputFormat(RecognitionSchema) },
       system: SYSTEM,
