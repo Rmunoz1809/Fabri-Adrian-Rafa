@@ -51,6 +51,17 @@ graduado si esa nota no se leyó de una foto del mismo vendedor en las últimas
 24 horas. Orden: 1) desplegar identificar-carta, 2) correr
 supabase/migrations/0009_grading_from_photo.sql en el SQL Editor.
 
+SEGURIDAD ENTRE USUARIOS (migración 0010) — CORRER ANTES DE ABRIR AL PÚBLICO
+Correr supabase/migrations/0010_user_security.sql en el SQL Editor de Supabase
+(se puede correr más de una vez). Cierra un fallo grave: sin ella, cualquiera
+con la clave pública podía modificar o borrar perfiles ajenos (y sus anuncios)
+a través de la vista public_profiles. También hace que un vendedor no pueda
+reactivar un anuncio que el staff quitó ni tocar uno con Compra Protegida en
+curso, y que el WhatsApp del comprador en las órdenes solo lo vea el staff.
+La página funciona igual antes y después de correrla.
+Después, volver a desplegar la función de IA (mismo comando de arriba):
+  supabase functions deploy identificar-carta --no-verify-jwt --project-ref vqcpqoedsyatxswdzqcy
+
 QUÉ NO INCLUYE ESTE ARCHIVO
 - Contacto por WhatsApp: se activa al poner el número en CONFIG.WHATSAPP
   (al inicio del <script> dentro de holo.html).
