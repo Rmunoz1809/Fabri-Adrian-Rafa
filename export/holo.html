@@ -20,7 +20,7 @@
 :root {
   color-scheme: dark;
   --bg: #0b1222; --card: #111a2e; --card-hover: #16203a; --popover: #121b31;
-  --muted: #1b2640; --border: #1f2a44; --input: #34446b; --field: rgb(255 255 255 / .04);
+  --muted: #1b2640; --muted-hover: #24314f; --border: #1f2a44; --input: #34446b; --field: rgb(255 255 255 / .04);
   --fg: #f4f6fb; --fg-2: #a4aec4; --fg-3: #7682a0;
   --primary: #ffffff; --primary-hover: #e3e8f2; --primary-fg: #0b1222;
   --brand: #ffffff; --brand-strong: #e3e8f2; --brand-soft: rgb(255 255 255 / .1); --brand-ink: #0b1222;
@@ -112,7 +112,7 @@ nav.links a[aria-current="page"] { color: var(--brand); }
 
 /* ---------------------------------------------------------------- buttons + fields */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 999px; background: var(--muted); color: var(--fg); font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; user-select: none; transition: color .15s var(--ease), background-color .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease), transform .15s var(--ease), opacity .15s var(--ease); }
-.btn:hover { background: #2e2e2e; }
+.btn:hover { background: var(--muted-hover); }
 .btn:active { transform: scale(.98); }
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
 .btn.primary { background: var(--primary); color: var(--primary-fg); }
@@ -129,7 +129,7 @@ nav.links a[aria-current="page"] { color: var(--brand); }
 .btn.lg { height: 44px; padding: 0 22px; }
 .btn.block { width: 100%; height: 44px; }
 .btn:disabled { opacity: .5; pointer-events: none; }
-.btn .i { width: 16px; height: 16px; }
+.btn .i { width: 16px; height: 16px; flex-shrink: 0; }
 .btn .count { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--brand); color: var(--brand-ink); font-size: 11px; font-weight: 700; }
 .input, .select, .textarea { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--input); border-radius: var(--radius-md); background: var(--field); color: var(--fg); font-size: 16px; outline: none; transition: border-color .15s var(--ease), box-shadow .15s var(--ease); }
 .input::placeholder, .textarea::placeholder { color: var(--fg-3); }
@@ -199,7 +199,9 @@ label.f .hint { font-weight: 400; color: var(--fg-2); }
 .chip { flex-shrink: 0; display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; color: var(--fg-2); font-size: 14px; font-weight: 600; transition: color .15s var(--ease), background-color .15s var(--ease), border-color .15s var(--ease); }
 .chip:hover { color: var(--fg); background: var(--muted); }
 .chip.on { background: var(--fg); border-color: var(--fg); color: var(--bg); }
-.tools { display: flex; gap: 8px; margin-left: auto; }
+.tools { display: flex; gap: 8px; margin-left: auto; min-width: 0; max-width: 100%; }
+.tools .btn { min-width: 0; }
+.tools .btn .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* long sort labels shrink on 320 px phones */
 .tools .lbl-k { color: var(--fg); }
 .tools .btn .muted { font-weight: 500; }
 .browse { display: grid; gap: 24px; margin-top: 16px; }
@@ -273,6 +275,10 @@ a.pcard:hover .act { background: var(--brand); color: var(--brand-ink); }
 .delta .tri { width: 9px; height: 9px; flex-shrink: 0; }
 .delta.good .tri { color: var(--up); } .delta.warn .tri { color: var(--warn); } .delta.neutral .tri { color: var(--fg-2); }
 .delta .vs { display: none; }
+/* On narrow tiles the text wraps next to its arrow instead of running under the "open" button. */
+.pcard .delta { white-space: normal; align-items: flex-start; }
+.pcard .delta > span { min-width: 0; }
+.pcard .delta .tri { margin-top: 3px; }
 @container (min-width: 220px) { .pcard .delta .vs { display: inline; } }
 .sk-card { box-shadow: none; }
 .placeholder { position: absolute; inset: 0; overflow: hidden; border-radius: 4.5% / 3.2%; padding: 10%; color: #fff; display: flex; flex-direction: column; justify-content: flex-end; box-shadow: 0 10px 24px rgb(0 0 0 / .45), inset 0 0 0 1px rgb(255 255 255 / .14); }
@@ -413,7 +419,8 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
 .tseller[data-seller]:not([data-seller=""]) { cursor: pointer; }
 .tseller[data-seller]:not([data-seller=""]):hover .nm { text-decoration: underline; text-underline-offset: 3px; }
 .seller-page .tseller { display: none; } /* every card on this page is from the same seller */
-.seller-layout { display: grid; gap: 24px; margin-top: 16px; padding-bottom: 32px; }
+.seller-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 16px; padding-bottom: 32px; }
+.seller-layout > * { min-width: 0; } /* the category chips scroll instead of widening the page */
 @media (min-width: 900px) {
   .seller-layout { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 32px; align-items: start; }
   .seller-side { position: sticky; top: calc(var(--header-h) + 16px); }
@@ -811,9 +818,14 @@ function priceVerdict(price, est) {
   return "en-rango";
 }
 const VARIANT_ORDER = ["normal", "holofoil", "reverseHolofoil", "1stEditionHolofoil", "unlimitedHolofoil"];
+// TCGdex writes variant keys in kebab-case (reverse-holofoil), pokemontcg.io and tcgcsv in camelCase.
+const variantNorm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+/** The price key for a variant hint: exact match, else the shortest key containing it ("Holo" → holofoil, not reverseHolofoil). */
 function pickVariantKey(keys, hint) {
-  const h = hint?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return (h && (keys.find((k) => k.toLowerCase() === h) || keys.find((k) => k.toLowerCase().includes(h)))) || VARIANT_ORDER.find((k) => keys.includes(k)) || keys[0];
+  const h = variantNorm(hint);
+  const exact = h && keys.find((k) => variantNorm(k) === h);
+  const partial = h && keys.filter((k) => variantNorm(k).includes(h)).sort((a, b) => a.length - b.length)[0];
+  return exact || partial || VARIANT_ORDER.map((v) => keys.find((k) => variantNorm(k) === variantNorm(v))).find(Boolean) || keys[0];
 }
 function pickReferencePrice(card, hint) {
   const prices = card?.tcgplayer?.prices;
@@ -868,6 +880,8 @@ const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
 const normalize = (s) => String(s ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+/** The URL when it is http(s), else "": links scraped from other sites must never become javascript: links. */
+const httpUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? String(u) : "");
 function waLink(message) { const n = CONFIG.WHATSAPP.replace(/\D/g, ""); return n ? `https://wa.me/${n}?text=${encodeURIComponent(message)}` : null; }
 function setTitle(t) { document.title = t ? `${t} · ${CONFIG.APP_NAME}` : `${CONFIG.APP_NAME} · Cartas coleccionables en Panamá`; }
 
@@ -1246,7 +1260,7 @@ function openSearch() {
     const f = { q };
     const local = [...(CONFIG.SHOW_DEMO_LISTINGS ? DEMO : []), ...listingCache.values()].filter((l) => matchesFilters(l, f));
     render(q, local);
-    if (!sb || !session) return;
+    if (!sb) return; // visitors without an account can search real listings too
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const real = await fetchRealListings(f).catch(() => []);
@@ -1333,12 +1347,20 @@ async function withProfiles(rows) {
   if (!rows.length) return [];
   const ids = [...new Set(rows.map((r) => r.seller_id))];
   let { data, error } = await sb.from("public_profiles").select("id, display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path").in("id", ids);
-  // Until migration 0003 runs the shop columns don't exist; fall back to the basics.
+  // Until migration 0004 runs the shop columns don't exist; fall back to the basics.
   if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids));
   const byId = new Map((data ?? []).map((p) => [p.id, p]));
   return rows.map((r) => rowToListing(r, byId.get(r.seller_id)));
 }
-const searchTokens = (q) => String(q ?? "").replace(/[,()%*\\"'.:]/g, " ").split(/\s+/).filter((t) => t.length >= 2).slice(0, 5);
+// Accent-insensitive search in the database: "pacifica" finds "Pacífica" and "pokemon" finds "Pokémon".
+// Each word becomes a case-insensitive regex (PostgREST imatch) in which vowels, n and c also match
+// their accented forms. Only letters, digits and # / & - survive, so nothing can break the filter syntax.
+const ACCENTS = { a: "aáàâäã", e: "eéèêë", i: "iíìîï", o: "oóòôöõ", u: "uúùûü", n: "nñ", c: "cç" };
+const searchTokens = (q) => normalize(q).replace(/[^\p{L}\p{N}#/&-]+/gu, " ").split(/\s+/).filter((t) => t.length >= 2).slice(0, 5);
+const searchFilter = (t, cols) => {
+  const re = [...t].map((ch) => (ACCENTS[ch] ? `[${ACCENTS[ch]}]` : ch)).join("");
+  return cols.map((c) => `${c}.imatch.${re}`).join(",");
+};
 
 // "Tienda verificada" = shop flag + verified by Holo staff. Everyone else is a "particular".
 const isVerifiedShop = (seller) => Boolean(seller?.isShop && seller?.verified);
@@ -1366,8 +1388,9 @@ async function fetchRealListings(f) {
   if (f.province) q = q.eq("province", f.province);
   if (f.minPrice != null) q = q.gte("price_cents", Math.round(f.minPrice * 100));
   if (f.maxPrice != null) q = q.lte("price_cents", Math.round(f.maxPrice * 100));
-  for (const t of searchTokens(f.q)) q = q.or(["title", "subject", "set_name", "neighborhood", "district", "province"].map((c) => `${c}.ilike.%${t}%`).join(","));
-  q = q.order("created_at", { ascending: false });
+  for (const t of searchTokens(f.q)) q = q.or(searchFilter(t, ["title", "subject", "set_name", "variant", "number", "neighborhood", "district", "province"]));
+  // Sort in the database too, so a price sort brings the cheapest (or priciest) of all listings, not of the newest 60.
+  q = f.sort === "precio-asc" || f.sort === "precio-desc" ? q.order("price_cents", { ascending: f.sort === "precio-asc" }) : q.order("created_at", { ascending: false });
   const { data, error } = await q;
   if (missingKind(error)) { photoKinds = false; return fetchRealListings(f); }
   if (error) { console.error(error); return []; }
@@ -1402,8 +1425,9 @@ function matchesFilters(l, f) {
   if (f.minPrice != null && l.priceUsd < f.minPrice) return false;
   if (f.maxPrice != null && l.priceUsd > f.maxPrice) return false;
   if (f.q) {
+    // Same words as the database search (searchTokens), so demo and real listings match alike.
     const hay = normalize([l.title, l.card.subject, l.card.setName, l.card.variant, l.card.number, l.location.neighborhood, l.location.district, l.location.province].join(" "));
-    if (!normalize(f.q).split(/\s+/).filter(Boolean).every((t) => hay.includes(t))) return false;
+    if (!searchTokens(f.q).every((t) => hay.includes(t))) return false;
   }
   return true;
 }
@@ -1881,7 +1905,7 @@ function fetchPriceCharting(l, factor = 1) {
         const a = tr.querySelector("td.title a"), date = tr.querySelector("td.date")?.textContent.trim();
         const price = pcMoney(tr.querySelector("td.numeric .js-price, td.numeric")?.textContent);
         const id = tr.id.split("-")[0], source = { ebay: "eBay", tcgplayer: "TCGplayer" }[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
-        return { date, price, source, url: a ? new URL(a.getAttribute("href"), site).href : "", title: a?.textContent.trim() ?? "" };
+        return { date, price, source, url: a ? httpUrl(new URL(a.getAttribute("href"), site).href) : "", title: a?.textContent.trim() ?? "" };
       }).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s.date ?? "") && s.price && Date.parse(s.date) > cut).slice(0, 40);
       const recent = sales.filter((s) => Date.parse(s.date) > Date.now() - 120 * DAY_MS).map((s) => s.price * factor).sort((a, b) => a - b);
       let market = guide.get(g.label) ?? (history.length ? history.at(-1).v / factor : null);
@@ -1900,7 +1924,7 @@ function fetchPriceCharting(l, factor = 1) {
       const quote = {
         market_price: market, low, high, basis, via: "pricecharting", grade: g.name,
         sales: sales.map((s) => ({ ...s, price: round2(s.price * factor) })), history,
-        sources: [{ name, url: page.doc.querySelector("link[rel=canonical]")?.getAttribute("href") || url }],
+        sources: [{ name, url: httpUrl(page.doc.querySelector("link[rel=canonical]")?.getAttribute("href")) || httpUrl(url) || site }],
         fetched_at: new Date().toISOString(),
       };
       try { localStorage.setItem(key, JSON.stringify(quote)); } catch { /* storage unavailable */ }
@@ -2037,7 +2061,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
     <details class="pdata"><summary>Ver datos en tabla${ic("chevronDown")}</summary><div class="tbl"><table class="fees"><thead><tr><th>Fecha</th><th>Tipo</th><th>Precio</th></tr></thead><tbody>${
       [...market.map((p) => ({ ...p, k: typeLabel(p, "TCGplayer · precio de mercado") })), ...cmk.map((p) => ({ ...p, k: typeLabel(p, `Cardmarket · ${p.k}`) })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" })), ...web.map((p) => ({ ...p, k: p.today ? "Valor aproximado hoy" : p.k ?? `Venta · ${p.src}` })),
         ...(h.quote?.history?.length ? h.quote.sales.map((x) => ({ t: noonUtc(x.date), v: x.price, k: `Venta en ${x.source}`, url: x.url })).filter((p) => p.t >= from) : [])].sort((a, b) => b.t - a.t)
-        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${p.url && !p.k.includes("valor del mes") ? `<a class="link" href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.k)}</a>` : esc(p.k)}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
+        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${httpUrl(p.url) && !p.k.includes("valor del mes") ? `<a class="link" href="${esc(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.k)}</a>` : esc(p.k)}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
   box.querySelectorAll(".ranges button").forEach((b) => b.addEventListener("click", () => { if (Number(b.dataset.d) !== rangeDays) setRange(Number(b.dataset.d)); }));
   const wrap = box.querySelector(".pchart");
   if (!wrap) return;
@@ -2444,7 +2468,7 @@ async function viewDetail(app, id) {
   $("#shareWa")?.addEventListener("click", () => track("compartir", l.id));
   $("#markSold")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget, raw = $("#soldPrice").value.trim(), usd = raw ? Number(raw) : null;
-    if (raw && !(usd > 0)) return toast("Escribe un precio válido o déjalo vacío.", { type: "error" });
+    if (raw && !(usd > 0 && usd <= 1000000)) return toast("Escribe un precio válido o déjalo vacío.", { type: "error" });
     const ok = await confirmDialog({ title: "¿Marcar como vendida?", body: "La carta deja de aparecer en la página.", confirm: "Marcar vendida" });
     if (!ok || !btn.isConnected) return;
     btn.disabled = true;
@@ -2474,6 +2498,15 @@ async function viewDetail(app, id) {
     // si falla el borrado de archivos quedan huérfanos en Storage, pero nunca un anuncio sin fotos.
     const { data: photos } = await sb.from("listing_photos").select("storage_path").eq("listing_id", l.id);
     const { data: gone, error } = await sb.from("listings").delete().eq("id", l.id).select("id");
+    if (error?.code === "23503") {
+      // A Compra Protegida points at this listing and its record must be kept: withdraw it instead of deleting.
+      const { data: hid, error: e2 } = l.status === "reserved" ? { error: true } : await sb.from("listings").update({ status: "removed" }).eq("id", l.id).select("id");
+      btn.disabled = false;
+      if (e2 || !hid?.length) { console.error(e2); return toast("Hay una Compra Protegida en curso con esta carta: escríbenos para cancelarla antes de retirarla.", { type: "error" }); }
+      listingCache.delete(l.id);
+      toast("Anuncio retirado", { description: "Ya no se ve en la página. Lo guardamos porque tiene una Compra Protegida registrada." });
+      return go("/");
+    }
     if (error || !gone?.length) { console.error(error); toast("No se pudo eliminar. Intenta de nuevo.", { type: "error" }); btn.disabled = false; return; }
     if (photos?.length) {
       const rm = await sb.storage.from("listing-photos").remove(photos.map((p) => p.storage_path));
@@ -2500,14 +2533,13 @@ function loadImg(src) {
   });
 }
 async function shareImage(l) {
+  // Same look as the site: flat navy, white as the second color, no gradients.
   const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H;
-  const x = c.getContext("2d");
+  const x = c.getContext("2d"), FG = "#f4f6fb", FG2 = "#a4aec4", pad = 80;
   await document.fonts?.ready;
-  const g = x.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#15151a"); g.addColorStop(1, "#0b0b0d");
-  x.fillStyle = g; x.fillRect(0, 0, W, H);
-  const holo = x.createLinearGradient(0, 0, W, 0);
-  [["#7cf3d5", 0], ["#8ab6ff", .35], ["#d59bff", .65], ["#ffc98a", 1]].forEach(([col, at]) => holo.addColorStop(at, col));
-  x.fillStyle = holo; x.fillRect(0, 0, W, 10);
+  x.fillStyle = "#0b1222"; x.fillRect(0, 0, W, H);
+  /** Cuts text with "…" so it fits in the given width at the current font. */
+  const fit = (t, max = W - pad * 2) => { let s = t; while (x.measureText(s).width > max && s.length > 4) s = s.slice(0, -2); return s === t ? t : `${s.trimEnd()}…`; };
   // card
   const img = await loadImg(l.photos[0]);
   const boxW = 560, boxH = 782, bx = (W - boxW) / 2, by = 70;
@@ -2516,39 +2548,37 @@ async function shareImage(l) {
     x.save(); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 50; x.shadowOffsetY = 20;
     x.drawImage(img, (W - w) / 2, by + (boxH - h) / 2, w, h); x.restore();
   } else {
-    x.fillStyle = "#26262d"; x.beginPath(); x.roundRect(bx, by, boxW, boxH, 36); x.fill();
-    x.fillStyle = "#f2f0eb"; x.font = "700 56px 'Bricolage Grotesque', sans-serif"; x.textAlign = "center";
-    x.fillText(l.card.subject.slice(0, 18), W / 2, by + boxH / 2);
+    x.fillStyle = "#1b2640"; x.beginPath(); x.roundRect(bx, by, boxW, boxH, 36); x.fill();
+    x.fillStyle = FG; x.font = "800 56px Inter, sans-serif"; x.textAlign = "center";
+    x.fillText(fit(l.card.subject, boxW - 60), W / 2, by + boxH / 2);
   }
   // text
-  x.textAlign = "left"; x.fillStyle = "#f2f0eb";
-  const pad = 80; let y = 930;
+  x.textAlign = "left"; x.fillStyle = FG;
+  let y = 930;
   x.font = "600 44px Inter, sans-serif";
-  let title = l.title; while (x.measureText(title).width > W - pad * 2 && title.length > 4) title = title.slice(0, -2);
-  if (title !== l.title) title = title.trimEnd() + "…";
-  x.fillText(title, pad, y); y += 110;
-  x.font = "700 104px 'Bricolage Grotesque', sans-serif"; x.fillText(formatUsd(toCents(l.priceUsd)), pad, y);
-  y += 64; x.font = "500 36px Inter, sans-serif"; x.fillStyle = "#a19d95";
+  x.fillText(fit(l.title), pad, y); y += 110;
+  x.font = "800 104px Inter, sans-serif"; x.fillText(formatUsd(toCents(l.priceUsd)), pad, y);
+  y += 64; x.font = "500 36px Inter, sans-serif"; x.fillStyle = FG2;
   const bits = [];
   if (l.estimate) bits.push(`Precio estimado ${fmtEstimate(l.estimate.low)} – ${fmtEstimate(l.estimate.high)}`);
   bits.push(`${l.location.neighborhood}, ${l.location.district}`);
-  x.fillText(bits.join("  ·  "), pad, y);
+  x.fillText(fit(bits.join("  ·  ")), pad, y);
   // pills
   const pills = [];
-  if (isVerifiedShop(l.seller)) pills.push(["🏪 Tienda verificada", "#4fd19c"]);
-  if (l.protectedEligible) pills.push(["🛡 Compra Protegida", "#7390ff"]);
-  if (l.verificationPhoto) pills.push(["📸 Foto de verificación", "#4fd19c"]);
+  if (isVerifiedShop(l.seller)) pills.push("🏪 Tienda verificada");
+  if (l.protectedEligible) pills.push("🛡 Compra Protegida");
+  if (l.verificationPhoto) pills.push("📸 Foto de verificación");
   let px = pad; y += 70; x.font = "600 30px Inter, sans-serif";
-  for (const [t, col] of pills) {
+  for (const t of pills) {
     const w = x.measureText(t).width + 44;
     if (px + w > W - pad) break;
-    x.fillStyle = col + "26"; x.beginPath(); x.roundRect(px, y - 38, w, 56, 28); x.fill();
-    x.fillStyle = col; x.fillText(t, px + 22, y); px += w + 14;
+    x.fillStyle = "rgba(255,255,255,.1)"; x.beginPath(); x.roundRect(px, y - 38, w, 56, 28); x.fill();
+    x.fillStyle = FG; x.fillText(t, px + 22, y); px += w + 14;
   }
-  // footer
-  x.fillStyle = holo; x.beginPath(); x.roundRect(pad, H - 110, 44, 44, 12); x.fill();
-  x.fillStyle = "#f2f0eb"; x.font = "700 40px 'Bricolage Grotesque', sans-serif"; x.fillText(CONFIG.APP_NAME, pad + 60, H - 74);
-  x.fillStyle = "#a19d95"; x.font = "500 30px Inter, sans-serif"; x.textAlign = "right";
+  // footer: the logo is a white square
+  x.fillStyle = "#ffffff"; x.beginPath(); x.roundRect(pad, H - 110, 44, 44, 12); x.fill();
+  x.fillStyle = FG; x.font = "800 40px Inter, sans-serif"; x.fillText(CONFIG.APP_NAME, pad + 60, H - 74);
+  x.fillStyle = FG2; x.font = "500 30px Inter, sans-serif"; x.textAlign = "right";
   x.fillText("Cartas coleccionables en Panamá", W - pad, H - 76);
   return new Promise((res) => c.toBlob(res, "image/jpeg", 0.9));
 }
@@ -2633,12 +2663,14 @@ function gateBackground() {
 
 function viewAuth(app, next) {
   setTitle("Entrar");
+  if (!next.startsWith("/") || /^\/entrar(\?|$)/.test(next)) next = "/"; // never bounce back to the sign-in page
   if (session) return go(next);
   if (!sb) { app.innerHTML = `<div class="wrap"><p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p></div>`; return; }
   gateBackground();
-  let mode = "entrar";
+  let mode = "entrar", captcha = null;
   const render = () => {
     const up = mode === "registro";
+    captcha?.then((c) => c?.remove()); // switching tabs re-renders the form: drop the old widget
     app.innerHTML = `<div class="wrap"><div class="gate-wrap">
       <section class="gate-hero">
         <div class="logo"><i class="mark" aria-hidden="true"></i><span>${esc(CONFIG.APP_NAME)}</span></div>
@@ -2660,28 +2692,35 @@ function viewAuth(app, next) {
             <button class="btn primary block" id="authBtn">${up ? "Crear cuenta" : "Entrar"}</button>
           </form></div></div></div></div>`;
     app.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { if (b.dataset.m !== mode) { mode = b.dataset.m; render(); app.querySelector(`.tabs [data-m="${mode}"]`)?.focus(); } }));
-    const captcha = mountCaptcha($("#captchaBox"));
+    captcha = mountCaptcha($("#captchaBox"));
+    const myCaptcha = captcha;
     $("#authForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const fd = new FormData(e.target), btn = $("#authBtn"), msg = $("#authMsg");
-      const cap = await captcha, captchaToken = cap?.token() || undefined;
-      if (CONFIG.TURNSTILE_SITE_KEY && !captchaToken) { msg.innerHTML = `<p class="notice bad">Completa la verificación de seguridad.</p>`; return; }
-      const email = String(fd.get("email")).trim().toLowerCase(), password = String(fd.get("password"));
+      const fd = new FormData(e.target), btn = $("#authBtn"), msg = $("#authMsg"), signup = mode === "registro";
+      if (btn.disabled) return; // already submitting
+      const label = signup ? "Crear cuenta" : "Entrar";
       btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Un momento…`; msg.innerHTML = "";
-      const res = await (mode === "registro"
+      const cap = await myCaptcha, captchaToken = (await cap?.token()) || undefined;
+      if (!btn.isConnected) return;
+      if (CONFIG.TURNSTILE_SITE_KEY && !captchaToken) {
+        btn.disabled = false; btn.textContent = label;
+        msg.innerHTML = `<p class="notice bad">Completa la verificación de seguridad.</p>`; return;
+      }
+      const email = String(fd.get("email")).trim().toLowerCase(), password = String(fd.get("password"));
+      const res = await (signup
         ? sb.auth.signUp({ email, password, options: { captchaToken, data: { display_name: String(fd.get("displayName")).trim(), terms_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString() } } })
         : sb.auth.signInWithPassword({ email, password, options: { captchaToken } })).catch(() => ({ error: { code: "network" } }));
       cap?.reset(); // Turnstile tokens are single-use
       if (!btn.isConnected) return;
-      btn.disabled = false; btn.textContent = mode === "registro" ? "Crear cuenta" : "Entrar";
+      btn.disabled = false; btn.textContent = label;
       if (res.error) {
         const c = res.error.code;
-        const text = c === "user_already_exists" ? "Ya existe una cuenta con ese correo. Usa “Entrar”." : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
+        const text = c === "user_already_exists" ? "Ya existe una cuenta con ese correo. Usa “Entrar”." : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "email_not_confirmed" ? "Confirma tu correo: te enviamos un enlace al crear la cuenta." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "captcha_failed" ? "La verificación de seguridad falló. Intenta de nuevo." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
         msg.innerHTML = `<p class="notice bad">${esc(text)}</p>`; return;
       }
-      if (mode === "registro") track("registro");
-      if (mode === "registro" && !res.data.session) { msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.</p>`; return; }
-      toast(mode === "registro" ? "Cuenta creada" : "Sesión iniciada");
+      if (signup) track("registro");
+      if (signup && !res.data.session) { msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.</p>`; return; }
+      toast(signup ? "Cuenta creada" : "Sesión iniciada");
       go(next);
     });
   };
@@ -3098,7 +3137,8 @@ function viewSell(app) {
 
   const form = $("#sellForm");
   const val = (n) => form.elements[n]?.value?.trim() ?? "";
-  const set = (n, v) => { if (form.elements[n]) form.elements[n].value = v ?? ""; };
+  // Setting .value skips maxlength, so text filled in by the AI or the catalog is clipped to each field's limit.
+  const set = (n, v) => { const el = form.elements[n]; if (el) el.value = String(v ?? "").slice(0, el.maxLength > 0 ? el.maxLength : undefined); };
 
   function renderGrade() {
     // The grade comes only from the slab label in the photo (read by the AI); sellers cannot type or change it.
@@ -3118,6 +3158,7 @@ function viewSell(app) {
     return fromCatalog ?? estimateFromQuote(st.hist?.quote); // graded, NBA/NFL: price researched on the web
   }
   function renderEstimate() {
+    if (!form.isConnected) return; // late callbacks (timers, identification) after leaving the page
     const est = currentEstimate();
     $("#estBox").innerHTML = est
       ? `<div class="panel accent small"><p class="ptitle" style="font-size:15px">${ic("tag")}Precio estimado: ${fmtEstimate(est.low)} – ${fmtEstimate(est.high)}</p><p class="xs muted" style="margin-top:6px">${est.basis.map(esc).join(" · ")}. Es una referencia, no una garantía.</p></div>`
@@ -3170,8 +3211,9 @@ function viewSell(app) {
     const run = ++st.idRun, box = $("#idBox");
     const status = (t) => { if (run === st.idRun) box.innerHTML = `<div class="panel accent small" style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>${esc(t)}</div>`; };
     let res = null;
-    try { res = await identifyCard(st.files, status); } catch (e) { console.error("identification failed", e); }
-    if (run !== st.idRun) return;
+    // A script or image that fails to load rejects with an Event: log what failed, not "[object Event]".
+    try { res = await identifyCard(st.files, status); } catch (e) { console.warn("identification failed", e instanceof Event ? `${e.type} ${e.target?.src ?? ""}` : e); }
+    if (run !== st.idRun || !form.isConnected) return;
     st.ident = res;
     const ai = res?.ai;
     const grading = ai?.is_graded && GRADERS.includes(ai.grading_company) && ai.grade >= 1 && ai.grade <= 10
@@ -3205,10 +3247,13 @@ function viewSell(app) {
   }
   function fillDescription(text) {
     // Only replace text we wrote ourselves; never overwrite what the seller typed.
+    // Setting .value skips the textarea's maxlength, so clip to the database limit (1000) here.
+    text = text.slice(0, 1000);
     if (!val("description") || val("description") === st.autoDesc) { set("description", text); st.autoDesc = text; }
   }
   /** Approximate market value of the selected card, shown inside the price field. */
   function renderPriceHint() {
+    if (!form.isConnected) return;
     const h = st.hist, cur = h ? h.market.at(-1) ?? h.cardmarket.at(-1) : null, est = currentEstimate();
     const v = cur?.v ?? est?.mid;
     form.elements.price.placeholder = v > 0 ? `Aprox. ${fmtEstimate(v)}` : "";
@@ -3218,7 +3263,7 @@ function viewSell(app) {
   async function pickCard(c, { fromIdent = false, replace = false } = {}) {
     const run = ++st.pickRun;
     if (c.brief || (!c.set?.releaseDate && c.dexId)) c = (await catalogFromDex(c.dexId)) ?? c;
-    if (run !== st.pickRun) return;
+    if (run !== st.pickRun || !form.isConnected) return;
     st.picked = c;
     set("subject", c.name); set("setName", c.set.name); set("year", c.set.releaseDate?.slice(0, 4)); set("number", c.set.printedTotal ? `${c.number}/${c.set.printedTotal}` : c.number); set("variant", c.rarity ?? "");
     const autoTitle = `${c.name} ${c.number}${c.set.printedTotal ? `/${c.set.printedTotal}` : ""} · ${c.set.name}`.slice(0, 80);
@@ -3243,6 +3288,7 @@ function viewSell(app) {
   let chartRo = null;
   async function loadSellChart() {
     const box = $("#sellChart");
+    if (!box || !form.isConnected) return;
     const picked = st.picked && val("category") === "pokemon";
     if (!picked && !(val("subject").length >= 2 && val("setName"))) { box.hidden = true; st.hist = null; renderEstimate(); renderPriceHint(); return; }
     const run = ++st.chartRun, c = st.picked;
@@ -3263,7 +3309,7 @@ function viewSell(app) {
   }
   function drawSellChart(animate = false) {
     const box = $("#sellChart");
-    if (!st.hist || box.hidden) return;
+    if (!box || !st.hist || box.hidden) return;
     renderPriceChart(box, sellListing(), st.hist, st.range, (r) => { st.range = r; drawSellChart(true); }, animate);
   }
 
@@ -3296,7 +3342,8 @@ function viewSell(app) {
     if (!st.files.length) return fail("Agrega al menos una foto real de la carta.");
     if (val("subject").length < 2) return fail("Falta el nombre del Pokémon o jugador.");
     if (!val("setName")) return fail("Falta el set o producto.");
-    if (year != null && !(Number.isInteger(year) && year >= 1990 && year <= 2030)) return fail("Año no válido.");
+    // Sports cards go back to the 1880s (the demo listings include 1948 Bowman); Pokémon starts in 1996.
+    if (year != null && !(Number.isInteger(year) && year >= 1880 && year <= new Date().getFullYear() + 1)) return fail("Año no válido.");
     if (st.slabUnread) return fail("Vimos un slab pero no pudimos leer la nota. Sube una foto donde se lea la etiqueta.");
     if (!(price >= 1 && price <= 100000)) return fail("Escribe un precio entre $1 y $100,000.");
     if (val("title").length < 5) return fail("El título es muy corto.");
@@ -3428,7 +3475,7 @@ async function viewAccount(app) {
   const { data: prof, error } = await sb.from("profiles").select(PROFILE_COLS).eq("id", uid).maybeSingle();
   if (error || !prof) {
     console.error(error);
-    app.innerHTML = `<p class="notice bad" style="margin-top:24px">No pudimos cargar tu perfil. ${error?.code === "42703" ? "Falta aplicar la migración 0003 en Supabase." : "Recarga la página."}</p>`;
+    app.innerHTML = `<p class="notice bad" style="margin-top:24px">No pudimos cargar tu perfil. ${error?.code === "42703" ? "Falta aplicar la migración 0004 en Supabase." : "Recarga la página."}</p>`;
     return;
   }
   const st = { avatar: null, shopPhoto: null };
@@ -3616,7 +3663,7 @@ async function adminOrders(body) {
     if (q.length < 2) { out.innerHTML = `<p class="xs muted">Escribe al menos 2 letras.</p>`; return; }
     out.innerHTML = `<p class="xs muted"><span class="spinner"></span> Buscando…</p>`;
     let query = sb.from("listings").select("id, title, price_cents, seller_id, status").eq("status", "active").limit(8);
-    for (const t of searchTokens(q)) query = query.or(["title", "subject", "set_name"].map((c) => `${c}.ilike.%${t}%`).join(","));
+    for (const t of searchTokens(q)) query = query.or(searchFilter(t, ["title", "subject", "set_name"]));
     const { data, error } = await query;
     if (error) return adminFail(error, out, "No se pudo buscar.");
     if (!data.length) { out.innerHTML = `<p class="xs muted">No hay anuncios activos con ese texto.</p>`; return; }
@@ -3691,7 +3738,7 @@ async function adminOrders(body) {
 // ------------------------------------------------------------- listings
 async function adminListings(body, q) {
   let query = sb.from("listings").select("id, title, price_cents, status, protected_eligible, seller_id, created_at").order("created_at", { ascending: false }).limit(50);
-  for (const t of searchTokens(q)) query = query.or(["title", "subject", "set_name"].map((c) => `${c}.ilike.%${t}%`).join(","));
+  for (const t of searchTokens(q)) query = query.or(searchFilter(t, ["title", "subject", "set_name"]));
   const { data, error } = await query;
   if (error) throw error;
   const sellers = await profilesById(data.map((l) => l.seller_id));
@@ -3955,7 +4002,15 @@ async function mountCaptcha(box) {
     // The normal widget is at least 300 px wide; on narrow phones use the compact one so the form doesn't overflow.
     const size = box.clientWidth < 300 ? "compact" : "flexible";
     const id = ts.render(box, { sitekey: CONFIG.TURNSTILE_SITE_KEY, language: "es", theme: "auto", appearance: "interaction-only", size });
-    return { token: () => ts.getResponse(id) || "", reset: () => ts.reset(id) };
+    // The widget solves itself in the background; a fast submit (or a password manager) can beat it,
+    // so wait a few seconds for the token instead of failing right away.
+    const token = async (ms = 8000) => {
+      for (const until = Date.now() + ms; ; await new Promise((r) => setTimeout(r, 150))) {
+        const t = ts.getResponse(id);
+        if (t || Date.now() > until || !box.isConnected) return t || "";
+      }
+    };
+    return { token, reset: () => ts.reset(id), remove: () => { try { ts.remove(id); } catch { /* already gone */ } } };
   } catch (e) {
     console.error(e);
     box.innerHTML = `<p class="notice bad">No se pudo cargar la verificación. Recarga la página.</p>`;
@@ -4002,7 +4057,9 @@ async function loadProfileName() {
     sb.auth.onAuthStateChange((_evt, s) => {
       const changed = (s?.user.id ?? null) !== (session?.user.id ?? null);
       session = s;
-      if (changed) { loadProfileName(); route(); }
+      // supabase-js runs this callback while holding its auth lock: calling it again from inside
+      // can deadlock, so the follow-up queries run on the next tick.
+      if (changed) setTimeout(() => { loadProfileName(); route(); }, 0);
     });
     loadProfileName();
   }
