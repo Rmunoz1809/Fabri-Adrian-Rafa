@@ -598,13 +598,21 @@ function niceTicks(lo, hi, n = 4) {
   return out;
 }
 
+/** Links to the public sources so buyers can check the price themselves. */
+function priceSources(l) {
+  const links = [];
+  if (l.card.category === "pokemon" && l.card.catalogId && !l.grading) links.push([`https://prices.pokemontcg.io/tcgplayer/${encodeURIComponent(l.card.catalogId)}`, "Precio en TCGplayer"]);
+  const q = [l.card.year, l.card.subject, l.card.setName, l.card.number, l.grading ? `${l.grading.company} ${l.grading.grade}` : ""].filter(Boolean).join(" ");
+  links.push([`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&LH_Sold=1&LH_Complete=1`, "Ventas vendidas en eBay"]);
+  return `<p class="xs" style="margin:6px 0 0;display:flex;flex-wrap:wrap;gap:4px 14px"><span class="muted">Verifica la fuente:</span>${links.map(([u, t]) => `<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">${t} ↗</a>`).join("")}</p>`;
+}
 function renderPriceChart(box, l, h, rangeDays, setRange) {
   const price = l.priceUsd, now = Date.now();
   const header = `<div class="phead"><h2>Valor en el mercado</h2>${h.market.length + h.sales.length ? `<div class="pranges" role="group" aria-label="Periodo">${CHART_RANGES.map(([t, d]) => `<button type="button" data-d="${d}" class="${d === rangeDays ? "on" : ""}" aria-pressed="${d === rangeDays}">${t}</button>`).join("")}</div>` : ""}</div>`;
   if (!h.market.length && !h.sales.length) {
     box.innerHTML = `${header}<p class="small muted" style="margin:6px 0 0">${l.card.category === "pokemon" && !l.grading
       ? "Todavía no tenemos historial de precios para esta carta."
-      : "Todavía no hay historial para esta carta. Para cartas deportivas y graduadas lo armamos con las ventas registradas en Panamá; cuando haya ventas, aparecerán aquí."}</p>`;
+      : "Todavía no hay historial para esta carta. Para cartas deportivas y graduadas lo armamos con las ventas registradas en Panamá; cuando haya ventas, aparecerán aquí."}</p>${priceSources(l)}`;
     return;
   }
   const from = now - rangeDays * DAY_MS;
@@ -636,6 +644,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
     ${market.length || sales.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin:12px 0 0">No hay datos en este periodo. Prueba con uno más largo.</p>`}
     <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>Valor de mercado</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}<span><i class="k" style="height:0;border-top:2px dashed var(--ink)"></i>Este anuncio</span></div>
     <p class="xs muted" style="margin:8px 0 0">${notes.map(esc).join(" ")} Es una referencia, no una garantía.</p>
+    ${priceSources(l)}
     <details class="pdata"><summary>Ver datos en tabla</summary><div class="tbl"><table class="fees"><thead><tr><th>Fecha</th><th>Tipo</th><th>Precio</th></tr></thead><tbody>${
       [...market.map((p) => ({ ...p, k: "Valor de mercado" })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" }))].sort((a, b) => b.t - a.t)
         .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${p.k}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
