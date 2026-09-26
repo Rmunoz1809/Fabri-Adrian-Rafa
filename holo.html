@@ -158,6 +158,25 @@ h1 { margin: 0; }
 .hero h1 { font-size: clamp(34px, 6vw, 48px); line-height: 1.05; max-width: 640px; }
 .hero p { max-width: 560px; }
 .spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+/* gráfica de valor en el mercado */
+.phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pranges { display: flex; gap: 4px; }
+.pranges button { height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--ink-2); font-size: 12px; font-weight: 600; cursor: pointer; }
+.pranges button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.pchart { position: relative; margin-top: 12px; }
+.pchart svg { display: block; width: 100%; touch-action: pan-y; }
+.pchart svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }
+.pchart .axis { fill: var(--ink-2); font-size: 11px; font-family: var(--sans); }
+.ptip { position: absolute; top: 4px; pointer-events: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12px; min-width: 160px; box-shadow: 0 8px 24px rgb(0 0 0 / .5); display: none; }
+.ptip .d { color: var(--ink-2); margin-bottom: 4px; }
+.ptip .r { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--ink-2); }
+.ptip .r b { color: var(--ink); font-size: 13px; }
+.ptip .k, .plegend .k { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; display: inline-block; }
+.plegend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+.plegend span { display: inline-flex; align-items: center; gap: 6px; }
+details.pdata summary { cursor: pointer; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+details.pdata .tbl { max-height: 240px; overflow: auto; margin-top: 8px; }
+
 /* pantalla de entrada (sin sesión) */
 body.gate header.top, body.gate footer.bottom { display: none; }
 .gate-wrap { min-height: 100vh; display: grid; align-items: center; gap: 40px; padding: 48px 0; }
@@ -288,12 +307,14 @@ function priceVerdict(price, est) {
   return "en-rango";
 }
 const VARIANT_ORDER = ["normal", "holofoil", "reverseHolofoil", "1stEditionHolofoil", "unlimitedHolofoil"];
+function pickVariantKey(keys, hint) {
+  const h = hint?.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return (h && (keys.find((k) => k.toLowerCase() === h) || keys.find((k) => k.toLowerCase().includes(h)))) || VARIANT_ORDER.find((k) => keys.includes(k)) || keys[0];
+}
 function pickReferencePrice(card, hint) {
   const prices = card?.tcgplayer?.prices;
   if (!prices) return null;
-  const keys = Object.keys(prices);
-  const h = hint?.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const key = (h && keys.find((k) => k.toLowerCase().includes(h))) || VARIANT_ORDER.find((k) => keys.includes(k)) || keys[0];
+  const key = pickVariantKey(Object.keys(prices), hint);
   return key ? { ...prices[key], variant: key, updatedAt: card.tcgplayer.updatedAt } : null;
 }
 
@@ -505,6 +526,233 @@ function estimatePanel(est, price) {
     <p class="xs muted" style="margin:10px 0 0">Es una referencia, no una garantía ni una tasación.</p></section>`;
 }
 
+// ============================================================= price history
+// Market value over time: one TCGplayer snapshot per day, stored by the database
+// (supabase/price_snapshots.sql), plus sales recorded in Panama.
+const CHART_COLORS = { market: "#6d86f5", cardmarket: "#2f9e8f", sales: "#c9823d" };
+const DAY_MS = 86400000;
+const CHART_RANGES = [["30 días", 30], ["90 días", 90], ["1 año", 365]];
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const noonUtc = (day) => Date.parse(`${day}T12:00:00Z`);
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+const fmtDay = (t, year) => new Intl.DateTimeFormat("es-PA", year ? { day: "numeric", month: "short", year: "numeric" } : { day: "numeric", month: "short" }).format(t);
+const fmtAxis = (v) => (v >= 1000 ? `$${+(v / 1000).toFixed(1)}k` : `$${+v.toFixed(v < 10 ? 2 : 0)}`);
+const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a.length ? quantile(a, 0.5) : null; };
+
+const TCGDEX_API = "https://api.tcgdex.net/v2/en";
+/** pokemontcg.io ids (sv3pt5-199) → TCGdex ids (sv03.5-199). */
+function tcgdexId(id) {
+  const i = id.lastIndexOf("-"), set = id.slice(0, i), m = set.match(/^sv(\d+)(pt5)?$/);
+  return `${m ? `sv${m[1].padStart(2, "0")}${m[2] ? ".5" : ""}` : set}-${id.slice(i + 1)}`;
+}
+let eurUsdPromise = null;
+/** EUR→USD from the European Central Bank reference rate (Frankfurter). */
+const eurUsd = () => (eurUsdPromise ??= withTimeout(fetch("https://api.frankfurter.dev/v1/latest?from=EUR&to=USD"), 8000)
+  .then((r) => r.json()).then((j) => ({ rate: j.rates.USD, date: j.date })).catch(() => null));
+
+async function fetchPriceHistory(l) {
+  const { catalogId, category } = l.card;
+  const factor = l.grading ? 1 : CONDITION_FACTOR[l.condition] ?? 1;
+  const h = { market: [], cardmarket: [], sales: [], factor, fx: null, productId: null, cmUpdated: null };
+  if (catalogId && !l.grading && category === "pokemon") {
+    const [dbRows, dex, fx] = await Promise.all([
+      (async () => {
+        if (!sb) return [];
+        // Asks the database to store today's price if it doesn't have it yet (it fetches the price itself).
+        await withTimeout(sb.rpc("snapshot_price", { p_catalog_id: catalogId }), 6000).catch(() => {});
+        const { data } = await sb.from("price_snapshots").select("variant, market_cents, captured_on").eq("catalog_id", catalogId).order("captured_on").limit(1500);
+        return data ?? [];
+      })().catch(() => []),
+      withTimeout(fetch(`${TCGDEX_API}/cards/${encodeURIComponent(tcgdexId(catalogId))}`), 8000).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      eurUsd(),
+    ]);
+    // TCGplayer (EE.UU.): daily history stored by the database + today's market price.
+    const key = dbRows.length ? pickVariantKey([...new Set(dbRows.map((r) => r.variant))], l.card.variant) : null;
+    h.market = dbRows.filter((r) => r.variant === key).map((r) => ({ t: noonUtc(r.captured_on), v: round2((r.market_cents / 100) * factor), k: "precio de mercado" }));
+    const tp = dex?.pricing?.tcgplayer;
+    if (tp) {
+      const tkey = pickVariantKey(Object.keys(tp).filter((k) => typeof tp[k] === "object" && tp[k]), key ?? l.card.variant);
+      const v = tp[tkey]?.marketPrice ?? tp[tkey]?.midPrice;
+      h.productId = tp[tkey]?.productId ?? null;
+      const today = isoDay(new Date(tp.updated ?? Date.now()));
+      if (v > 0 && !h.market.some((p) => isoDay(new Date(p.t)) === today)) h.market.push({ t: noonUtc(today), v: round2(v * factor), k: "precio de mercado" });
+    }
+    // Cardmarket (Europa): rolling averages of real sales, converted with the ECB rate.
+    const cm = dex?.pricing?.cardmarket;
+    if (cm && fx) {
+      const upd = Date.parse(cm.updated), usd = (eur) => round2(eur * fx.rate * factor);
+      h.fx = fx; h.cmUpdated = upd;
+      h.cardmarket = [[cm.avg30, 15, "promedio de ventas, últimos 30 días"], [cm.avg7, 3.5, "promedio de ventas, últimos 7 días"], [cm.avg1, 1, "promedio de ventas del último día"], [cm.trend, 0, "precio de tendencia"]]
+        .filter(([v]) => v > 0).map(([v, back, k]) => ({ t: upd - back * DAY_MS, v: usd(v), k }));
+    }
+  }
+  if (sb && catalogId && !l.isDemo) {
+    const gradingKey = l.grading ? `${l.grading.company}${l.grading.grade}` : "raw";
+    const since = new Date(Date.now() - 366 * DAY_MS).toISOString();
+    const { data } = await sb.from("sales").select("price_cents, sold_at").eq("catalog_id", catalogId).eq("grading_key", gradingKey).gte("sold_at", since).order("sold_at").limit(500);
+    h.sales = (data ?? []).map((r) => ({ t: Date.parse(r.sold_at), v: r.price_cents / 100 }));
+  }
+  return h;
+}
+
+function niceTicks(lo, hi, n = 4) {
+  if (hi - lo < 1e-6) { lo *= 0.9; hi = hi * 1.1 || 1; }
+  const raw = (hi - lo) / n, mag = 10 ** Math.floor(Math.log10(raw)), e = raw / mag;
+  const step = (e >= 7.5 ? 10 : e >= 3.5 ? 5 : e >= 1.5 ? 2 : 1) * mag;
+  const out = [];
+  for (let v = Math.max(0, Math.floor(lo / step) * step); v <= Math.ceil(hi / step) * step + step * 1e-6; v += step) out.push(round2(v));
+  return out;
+}
+
+/** Links to the public sources so buyers can check the price themselves. */
+/** Links to the public sources so buyers can check the price themselves. */
+function priceSources(l, h) {
+  const links = [];
+  if (h?.productId) links.push([`https://www.tcgplayer.com/product/${h.productId}`, "TCGplayer"]);
+  if (h?.cardmarket?.length) links.push([`https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(l.card.subject)}`, "Cardmarket"]);
+  const q = [l.card.year, l.card.subject, l.card.setName, l.card.number, l.grading ? `${l.grading.company} ${l.grading.grade}` : ""].filter(Boolean).join(" ");
+  links.push([`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&LH_Sold=1&LH_Complete=1`, "Ventas completadas en eBay"]);
+  return `<p class="xs" style="margin:6px 0 0;display:flex;flex-wrap:wrap;gap:4px 14px"><span class="muted">Verifica la fuente:</span>${links.map(([u, t]) => `<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">${t} ↗</a>`).join("")}</p>`;
+}
+function renderPriceChart(box, l, h, rangeDays, setRange) {
+  const price = l.priceUsd, now = Date.now();
+  const header = `<div class="phead"><h2>Valor en el mercado</h2>${h.market.length + h.cardmarket.length + h.sales.length ? `<div class="pranges" role="group" aria-label="Periodo">${CHART_RANGES.map(([t, d]) => `<button type="button" data-d="${d}" class="${d === rangeDays ? "on" : ""}" aria-pressed="${d === rangeDays}">${t}</button>`).join("")}</div>` : ""}</div>`;
+  if (!h.market.length && !h.cardmarket.length && !h.sales.length) {
+    box.innerHTML = `${header}<p class="small muted" style="margin:6px 0 0">${l.card.category === "pokemon" && !l.grading
+      ? "Todavía no tenemos historial de precios para esta carta."
+      : "Todavía no hay historial para esta carta. Para cartas deportivas y graduadas lo armamos con las ventas registradas en Panamá; cuando haya ventas, aparecerán aquí."}</p>${priceSources(l, h)}`;
+    return;
+  }
+  const from = now - rangeDays * DAY_MS;
+  const market = h.market.filter((p) => p.t >= from), cmk = h.cardmarket.filter((p) => p.t >= from), sales = h.sales.filter((p) => p.t >= from);
+
+  // Headline: how this listing compares with the value today.
+  const current = h.market.at(-1) ?? h.cardmarket.at(-1);
+  let head = "";
+  if (current) {
+    const d = (price - current.v) / current.v, pct = Math.round(Math.abs(d) * 100);
+    const rel = pct < 3 ? "en línea con el valor de mercado" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} del valor de mercado`;
+    const when = isoDay(new Date(current.t)) === isoDay(new Date()) ? "hoy" : `al ${fmtDay(current.t)}`;
+    head = `<p style="margin:8px 0 0"><span class="display" style="font-size:24px;font-weight:700">${fmtEstimate(current.v)}</span> <span class="small muted">valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})</span></p>
+      <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.${market.length >= 2 ? ` En ${rangeDays === 365 ? "el último año" : `los últimos ${rangeDays} días`} el valor ${market.at(-1).v >= market[0].v ? "subió" : "bajó"} ${Math.round(Math.abs(market.at(-1).v / market[0].v - 1) * 100)}%.` : ""}${h.cardmarket.length >= 2 ? ` En Europa (Cardmarket) el promedio de ventas pasó de ${fmtEstimate(h.cardmarket[0].v)} (últimos 30 días) a ${fmtEstimate(h.cardmarket.at(-1).v)} (tendencia actual): ${h.cardmarket.at(-1).v >= h.cardmarket[0].v ? "+" : "−"}${Math.round(Math.abs(h.cardmarket.at(-1).v / h.cardmarket[0].v - 1) * 100)}%.` : ""}</p>`;
+  } else {
+    const recent = h.sales.filter((p) => p.t >= now - 180 * DAY_MS).map((p) => p.v);
+    const med = median(recent.length ? recent : h.sales.map((p) => p.v));
+    const d = (price - med) / med, pct = Math.round(Math.abs(d) * 100);
+    head = `<p style="margin:8px 0 0"><span class="display" style="font-size:24px;font-weight:700">${fmtEstimate(med)}</span> <span class="small muted">mediana de ventas en Panamá</span></p>
+      <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${pct < 3 ? "en línea con las ventas recientes" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} de las ventas recientes`}</strong>.</p>`;
+  }
+  const notes = [];
+  if (h.market.length) notes.push("TCGplayer (EE.UU.): precio de mercado, un registro por día.");
+  if (h.cardmarket.length) notes.push(`Cardmarket (Europa): promedios de ventas reales, actualizados el ${fmtDay(h.cmUpdated, true)}, convertidos de EUR a USD con la tasa del Banco Central Europeo (1 € = $${h.fx.rate}).`);
+  if (h.factor !== 1) notes.push(`Precios ajustados a condición ${l.condition} (×${h.factor}).`);
+  if (h.sales.length) notes.push("Ventas en Panamá: ventas registradas en la plataforma.");
+  if (h.market.length === 1) notes.push("El historial diario de TCGplayer se guarda desde hoy.");
+
+  box.innerHTML = `${header}${head}
+    ${market.length || cmk.length || sales.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin:12px 0 0">No hay datos en este periodo. Prueba con uno más largo.</p>`}
+    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}<span><i class="k" style="height:0;border-top:2px dashed var(--ink)"></i>Este anuncio</span></div>
+    <p class="xs muted" style="margin:8px 0 0">${notes.map(esc).join(" ")} Es una referencia, no una garantía.</p>
+    ${priceSources(l, h)}
+    <details class="pdata"><summary>Ver datos en tabla</summary><div class="tbl"><table class="fees"><thead><tr><th>Fecha</th><th>Tipo</th><th>Precio</th></tr></thead><tbody>${
+      [...market.map((p) => ({ ...p, k: "TCGplayer · precio de mercado" })), ...cmk.map((p) => ({ ...p, k: `Cardmarket · ${p.k}` })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" }))].sort((a, b) => b.t - a.t)
+        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${p.k}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
+  box.querySelectorAll(".pranges button").forEach((b) => b.addEventListener("click", () => setRange(Number(b.dataset.d))));
+  const wrap = box.querySelector(".pchart");
+  if (!wrap) return;
+
+  // Geometry
+  const W = Math.max(260, Math.round(wrap.clientWidth)), H = 220, m = { l: 46, r: 10, t: 14, b: 26 };
+  const pts = [...market, ...cmk, ...sales];
+  let xMin = Math.min(...pts.map((p) => p.t));
+  if (now - xMin < 7 * DAY_MS) xMin = now - 7 * DAY_MS;
+  const xMax = now;
+  const vals = [...pts.map((p) => p.v), price];
+  const ticks = niceTicks(Math.min(...vals) * 0.94, Math.max(...vals) * 1.04);
+  const yMin = ticks[0], yMax = ticks.at(-1);
+  const X = (t) => m.l + ((t - xMin) / (xMax - xMin)) * (W - m.l - m.r);
+  const Y = (v) => m.t + (1 - (v - yMin) / (yMax - yMin)) * (H - m.t - m.b);
+  const xTicks = [0, 1 / 3, 2 / 3, 1].map((f) => xMin + f * (xMax - xMin));
+  const spansYear = new Date(xMin).getFullYear() !== new Date(xMax).getFullYear();
+  const line = market.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join("");
+  const last = market.at(-1);
+
+  wrap.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="Gráfica del valor de mercado en TCGplayer y Cardmarket en el tiempo. Usa las flechas para recorrer los puntos.">
+    ${ticks.map((v) => `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)" stroke-width="1"/><text class="axis" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmtAxis(v)}</text>`).join("")}
+    ${xTicks.map((t, i) => `<text class="axis" x="${X(t)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === 3 ? "end" : "middle"}">${i === 3 ? "Hoy" : fmtDay(t, spansYear)}</text>`).join("")}
+    <line x1="${m.l}" x2="${W - m.r}" y1="${Y(price)}" y2="${Y(price)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".75"/>
+    <text class="axis" x="${W - m.r}" y="${Y(price) - 6}" text-anchor="end" style="fill:var(--ink)">Este anuncio ${formatUsd(toCents(price))}</text>
+    ${market.length > 1 ? `<path d="${line}" fill="none" stroke="${CHART_COLORS.market}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+    ${last ? `<circle cx="${X(last.t)}" cy="${Y(last.v)}" r="4.5" fill="${CHART_COLORS.market}" stroke="var(--surface)" stroke-width="2"/>` : ""}
+    ${cmk.length > 1 ? `<path d="${cmk.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join("")}" fill="none" stroke="${CHART_COLORS.cardmarket}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+    ${cmk.map((p) => `<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4" fill="${CHART_COLORS.cardmarket}" stroke="var(--surface)" stroke-width="2"/>`).join("")}
+    ${sales.map((p) => `<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4.5" fill="${CHART_COLORS.sales}" stroke="var(--surface)" stroke-width="2"/>`).join("")}
+    <g class="cross" style="display:none"><line y1="${m.t}" y2="${H - m.b}" stroke="var(--ink-2)" stroke-width="1"/><circle r="5.5" fill="none" stroke="var(--ink)" stroke-width="2"/></g>
+  </svg><div class="ptip" role="status"></div>`;
+
+  // Hover / keyboard layer: snap to the nearest date that has data.
+  const byDay = new Map();
+  for (const p of market) byDay.set(isoDay(new Date(p.t)), { t: p.t, market: p.v, cm: null, sales: [] });
+  for (const p of cmk) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? { t: p.t, market: null, cm: null, sales: [] }; s.cm = p; byDay.set(k, s); }
+  for (const p of sales) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? { t: p.t, market: null, cm: null, sales: [] }; s.sales.push(p.v); byDay.set(k, s); }
+  const stops = [...byDay.values()].sort((a, b) => a.t - b.t);
+  const svg = wrap.querySelector("svg"), tip = wrap.querySelector(".ptip"), cross = svg.querySelector(".cross");
+  let idx = stops.length - 1;
+  const row = (color, value, label, round) => {
+    const r = document.createElement("div"); r.className = "r";
+    const k = document.createElement("i"); k.className = "k"; k.style.background = color; if (round) Object.assign(k.style, { width: "8px", height: "8px", borderRadius: "50%" });
+    const b = document.createElement("b"); b.textContent = value;
+    r.append(k, b, document.createTextNode(label)); return r;
+  };
+  const show = (i) => {
+    idx = Math.max(0, Math.min(stops.length - 1, i));
+    const s = stops[idx], x = X(s.t), y = Y(s.market ?? s.cm?.v ?? s.sales[0]);
+    cross.style.display = "";
+    cross.querySelector("line").setAttribute("x1", x); cross.querySelector("line").setAttribute("x2", x);
+    cross.querySelector("circle").setAttribute("cx", x); cross.querySelector("circle").setAttribute("cy", y);
+    const d = document.createElement("div"); d.className = "d"; d.textContent = fmtDay(s.t, true);
+    tip.replaceChildren(d);
+    if (s.market != null) tip.append(row(CHART_COLORS.market, formatUsd(toCents(s.market)), "TCGplayer"));
+    if (s.cm) tip.append(row(CHART_COLORS.cardmarket, formatUsd(toCents(s.cm.v)), `Cardmarket · ${s.cm.k}`));
+    for (const v of s.sales) tip.append(row(CHART_COLORS.sales, formatUsd(toCents(v)), "venta en Panamá", true));
+    const ref = s.market ?? s.cm?.v ?? s.sales[0], diff = Math.round(((price - ref) / ref) * 100);
+    tip.append(row("var(--ink)", formatUsd(toCents(price)), `este anuncio (${diff > 0 ? "+" : ""}${diff}%)`));
+    tip.style.display = "block";
+    const tw = tip.offsetWidth;
+    tip.style.left = `${x > W / 2 ? Math.max(0, x - tw - 12) : Math.min(W - tw, x + 12)}px`;
+  };
+  const hide = () => { cross.style.display = "none"; tip.style.display = "none"; };
+  svg.addEventListener("pointermove", (e) => {
+    const r = svg.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0;
+    stops.forEach((s, i) => { if (Math.abs(X(s.t) - px) < Math.abs(X(stops[best].t) - px)) best = i; });
+    show(best);
+  });
+  svg.addEventListener("pointerleave", () => { if (document.activeElement !== svg) hide(); });
+  svg.addEventListener("focus", () => show(idx));
+  svg.addEventListener("blur", hide);
+  svg.addEventListener("keydown", (e) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (step) { e.preventDefault(); show(idx + step); }
+    else if (e.key === "Home" || e.key === "End") { e.preventDefault(); show(e.key === "Home" ? 0 : stops.length - 1); }
+  });
+}
+
+async function loadPriceChart(l) {
+  const box = $("#priceChart");
+  if (!box) return;
+  const h = await fetchPriceHistory(l).catch((e) => { console.error(e); return { market: [], sales: [], factor: 1 }; });
+  if (!box.isConnected) return;
+  let range = 90, width = box.clientWidth;
+  const draw = () => renderPriceChart(box, l, h, range, (r) => { range = r; draw(); });
+  draw();
+  const ro = new ResizeObserver(() => {
+    if (!box.isConnected) return ro.disconnect();
+    if (box.clientWidth !== width) { width = box.clientWidth; draw(); }
+  });
+  ro.observe(box);
+}
+
 // ============================================================= views
 async function viewHome(app, params) {
   const f = filtersFrom(params);
@@ -584,6 +832,7 @@ async function viewDetail(app, id) {
         </div>
         ${l.isDemo ? `<p class="notice warn" style="margin:0">Anuncio de ejemplo para mostrar cómo funciona la plataforma. No está a la venta.</p>` : ""}
         ${estimatePanel(l.estimate, l.priceUsd)}
+        <section class="panel" id="priceChart"><h2>Valor en el mercado</h2><p class="muted small" style="margin:8px 0 0"><span class="spinner"></span> Cargando historial…</p></section>
         ${quote ? `<section class="panel"><h2>Compra Protegida</h2>
           <p class="small muted" style="margin:6px 0 0">Pagas a ${esc(CONFIG.APP_NAME)}, verificamos la carta en persona y solo entonces le pagamos al vendedor. Si no es lo anunciado, te devolvemos todo.</p>
           <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección y verificación (4%)</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
@@ -606,6 +855,7 @@ async function viewDetail(app, id) {
       </div>
     </div>`;
 
+  loadPriceChart(l);
   app.querySelectorAll(".thumbs img").forEach((t) => t.addEventListener("click", () => {
     $("#bigArt img").src = l.photos[Number(t.dataset.i)];
     app.querySelectorAll(".thumbs img").forEach((x) => x.classList.toggle("on", x === t));
