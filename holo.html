@@ -103,7 +103,26 @@ details.filters summary::-webkit-details-marker { display: none; }
 /* badges */
 .b { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
 .b.good { background: var(--good-bg); color: var(--good); } .b.neutral { background: var(--surface-2); color: var(--ink-2); }
-.b.warn { background: var(--warn-bg); color: var(--warn); } .b.shop { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 600; }
+.b.warn { background: var(--warn-bg); color: var(--warn); } .row-input { display: flex; gap: 8px; } .row-input .input { flex: 1; min-width: 0; } .row-input .btn { flex-shrink: 0; }
+.admin { padding-top: 24px; display: flex; flex-direction: column; gap: 16px; }
+.admin-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.admin-tabs a { padding: 10px 14px; font-weight: 600; font-size: 14px; color: var(--ink-2); border-bottom: 2px solid transparent; white-space: nowrap; }
+.admin-tabs a.on { color: var(--ink); border-bottom-color: var(--accent); }
+.admin-h { font-size: 18px; margin: 16px 0 0; }
+.admin-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 12px; }
+@media (min-width: 900px) { .admin-list { grid-template-columns: 1fr 1fr; } }
+.phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.order-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.order-actions .btn { height: 38px; border-radius: 10px; }
+.order-msg:not(:empty) { margin-top: 8px; }
+.admin-closed summary { cursor: pointer; font-weight: 600; margin-top: 16px; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 500; }
+.stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 900px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+.goal { height: 12px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.goal div { height: 100%; background: var(--holo); border-radius: 999px; }
+.nav-admin { color: var(--accent) !important; font-weight: 600; }
+.b.shop { background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); font-weight: 600; }
 .seller-seg { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 14px; }
 .seller-seg a { display: flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--ink-2); text-align: center; line-height: 1.2; }
 .seller-seg a.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
@@ -426,6 +445,7 @@ function setTitle(t) { document.title = t ? `${t} · ${CONFIG.APP_NAME}` : `${CO
 const sb = window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
 let session = null;
 let profileName = null;
+let isStaff = false;
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
 const photoUrl = (path) => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
 
@@ -561,6 +581,7 @@ async function route() {
     if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
     if (path === "/vender") return viewSell(app);
     if (path === "/cuenta") return await viewAccount(app);
+    if (path === "/admin") return await viewAdmin(app, params);
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Página no encontrada.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
   } catch (e) {
     console.error(e);
@@ -572,6 +593,7 @@ function renderNav() {
   const name = session ? esc(profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta") : null;
   $("#nav").innerHTML = `
     <a class="hide-sm" href="#/protegida">Compra Protegida</a>
+    ${isStaff ? `<a href="#/admin" class="nav-admin">Admin</a>` : ""}
     ${session ? `<a href="#/cuenta" title="Mi cuenta" class="nav-me">${name}</a><button class="link" id="signOut">Salir</button>` : `<a href="#/entrar">Entrar</a>`}
     <a class="btn primary" style="height:36px;padding:0 16px" href="#/vender">Vender</a>`;
   $("#signOut")?.addEventListener("click", async () => { await sb.auth.signOut(); go("/"); });
@@ -903,7 +925,6 @@ async function loadPriceChart(l) {
 async function viewHome(app, params) {
   const f = filtersFrom(params);
   const filtered = Boolean(f.seller || f.q || f.category || f.graded || f.province || f.minPrice != null || f.maxPrice != null);
-  const shopCta = waLink("Hola, tengo una tienda de cartas y quiero verificarla en Holo.");
   const active = [f.graded, f.province, f.minPrice, f.maxPrice].filter((v) => v != null).length;
   setTitle();
   $("#qTop").value = f.q ?? "";
@@ -920,7 +941,7 @@ async function viewHome(app, params) {
       </nav>
       ${f.seller === "tiendas" ? `<div class="panel shop-note"><p style="margin:0;font-weight:600">Tiendas con local o marca comprobados por ${esc(CONFIG.APP_NAME)}</p>
         <p class="small muted" style="margin:4px 0 0">Verificamos que la tienda existe y que vende cartas originales. Aun así, revisa cada carta antes de pagar o usa Compra Protegida.</p>
-        <p class="small" style="margin:8px 0 0">¿Tienes una tienda? ${shopCta ? `<a href="${esc(shopCta)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Pide tu verificación</a>` : `<span class="muted">Muy pronto podrás pedir tu verificación.</span>`}</p></div>` : ""}
+        <p class="small" style="margin:8px 0 0">¿Tienes una tienda? <a href="#/cuenta" style="color:var(--accent);font-weight:600">Pide tu verificación</a></p></div>` : ""}
       ${f.seller === "particulares" ? `<p class="notice soft" style="margin:0">Coleccionistas que venden sus propias cartas. Pide fotos reales del frente y el reverso, y para cartas de valor usa Compra Protegida.</p>` : ""}
       <div class="chips">
         <a class="chip ${!f.category ? "on" : ""}" href="${hrefWith(f, { cat: undefined })}">Todo</a>
@@ -1384,6 +1405,33 @@ function viewSell(app) {
 }
 
 // ============================================================= account
+// Shop verification request (reviewed by staff in #/admin?tab=tiendas).
+async function renderShopRequest(uid) {
+  const box = $("#shopReqBody");
+  if (!box) return;
+  const { data: reqs, error } = await sb.from("shop_requests").select("status, shop_name, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1);
+  if (error) { box.innerHTML = `<p class="xs muted">Muy pronto podrás pedir la verificación desde aquí.</p>`; return; }
+  const last = reqs?.[0];
+  if (last?.status === "pending") {
+    box.innerHTML = `<p class="notice soft" style="margin:0">Recibimos tu solicitud para <b style="color:var(--ink)">${esc(last.shop_name)}</b>. La revisamos en 1 a 2 días y te avisamos.</p>`;
+    return;
+  }
+  box.innerHTML = `${last?.status === "rejected" ? `<p class="notice warn" style="margin:0 0 12px">No pudimos verificar tu solicitud anterior. Revisa los datos y vuelve a enviarla.</p>` : ""}
+    <div class="col" style="gap:10px">
+      <label class="f">Nombre de la tienda<input class="input" id="srName" maxlength="80" required></label>
+      <label class="f">Instagram o WhatsApp de la tienda<input class="input" id="srContact" maxlength="120" placeholder="@mitienda o 6XXX-XXXX"></label>
+      <label class="f">¿Dónde queda?<input class="input" id="srLoc" maxlength="120" placeholder="Centro comercial, local, ciudad"></label>
+      <div id="srMsg"></div>
+      <button type="button" class="btn block" id="srSend">Pedir verificación de tienda</button></div>`;
+  $("#srSend").addEventListener("click", async (e) => {
+    const name = $("#srName").value.trim(), msg = $("#srMsg");
+    if (name.length < 2) { msg.innerHTML = `<p class="notice bad" style="margin:0">Escribe el nombre de la tienda.</p>`; return; }
+    e.target.disabled = true;
+    const { error } = await sb.from("shop_requests").insert({ user_id: uid, shop_name: name, contact: $("#srContact").value.trim() || null, location: $("#srLoc").value.trim() || null });
+    if (error) { e.target.disabled = false; console.error(error); msg.innerHTML = `<p class="notice bad" style="margin:0">No pudimos enviar la solicitud. Intenta de nuevo.</p>`; return; }
+    renderShopRequest(uid);
+  });
+}
 const PROFILE_COLS = "display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path";
 async function viewAccount(app) {
   setTitle("Mi cuenta");
@@ -1397,7 +1445,6 @@ async function viewAccount(app) {
     return;
   }
   const st = { avatar: null, shopPhoto: null };
-  const shopCta = waLink("Hola, tengo una tienda de cartas y quiero verificarla en Holo.");
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
   app.innerHTML = `<div class="account"><h1 class="display" style="font-size:30px">Mi cuenta</h1>
     <p class="muted" style="margin:4px 0 0">Así te ven los compradores en tus anuncios.</p>
@@ -1409,7 +1456,7 @@ async function viewAccount(app) {
           <div><p style="margin:0;font-weight:600">Foto de perfil</p><p class="xs muted" style="margin:2px 0 0">Tu cara o el logo de tu tienda. Toca la foto para cambiarla.</p></div></div>
         <label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" value="${esc(prof.display_name)}"></label>
       </section>
-      ${prof.is_shop ? "" : `<section class="panel"><h2>¿Tienes una tienda?</h2><p class="small muted" style="margin:6px 0 0">Las cuentas de tienda muestran la descripción y la foto del local en cada anuncio. ${shopCta ? `<a href="${esc(shopCta)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Escríbenos para activarla</a>` : "Muy pronto podrás pedirla."}</p></section>`}
+      ${prof.is_shop ? "" : `<section class="panel col" id="shopReq"><h2>¿Tienes una tienda?</h2><p class="small muted" style="margin:0">Las tiendas verificadas llevan el sello “🏪 Tienda verificada” y muestran la foto del local en cada anuncio.</p><div id="shopReqBody"><p class="xs muted"><span class="spinner"></span></p></div></section>`}
       ${prof.is_shop ? `<section class="panel col">
         <div class="phead"><h2>Tu tienda</h2>${sellerBadge({ isShop: true, verified: prof.verified })}</div>
         <label class="f">Describe tu tienda<textarea class="textarea" name="shopDescription" rows="4" maxlength="280" placeholder="Qué vendes, dónde queda el local, horario…">${esc(prof.shop_description ?? "")}</textarea><span class="xs muted" id="descCount"></span></label>
@@ -1418,7 +1465,7 @@ async function viewAccount(app) {
             <input type="file" id="shopIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
           <span class="xs muted" style="font-weight:400">Una foto real del local da confianza: la gente ve que existes.</span></div>
         ${prof.verified ? `<p class="notice good" style="margin:0">✓ Tu tienda está verificada.</p>`
-          : `<p class="notice soft" style="margin:0"><b style="color:var(--ink)">¿Quieres el sello “Tienda verificada”?</b> Sube la foto del local y ${shopCta ? `<a href="${esc(shopCta)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">escríbenos</a>` : "escríbenos"}: revisamos que la tienda exista y lo activamos.</p>`}
+          : `<p class="notice soft" style="margin:0"><b style="color:var(--ink)">Tu tienda está en revisión.</b> Sube la foto del local: nos ayuda a verificar que existe. Te avisamos cuando tengas el sello.</p>`}
       </section>` : ""}
       <div id="accMsg"></div>
       <button class="btn primary block" id="accBtn">Guardar cambios</button>
@@ -1434,6 +1481,7 @@ async function viewAccount(app) {
     const img = document.createElement("img"); img.className = cls; img.alt = ""; img.src = URL.createObjectURL(f);
     holder.replaceWith(img);
   });
+  if (!prof.is_shop) renderShopRequest(uid);
   preview($("#avatarIn"), "avatar", "av");
   if (prof.is_shop) preview($("#shopIn"), "shopPhoto", "shp");
 
@@ -1475,16 +1523,296 @@ async function viewAccount(app) {
   });
 }
 
+// ============================================================= staff panel (#/admin)
+// Everything here is also enforced by RLS: a non-staff user who opens #/admin just
+// gets empty lists and failed writes. The UI check is for convenience only.
+const ORDER_FLOW = {
+  awaiting_payment: { label: "Esperando pago", next: "paid", action: "Marcar pagada" },
+  paid: { label: "Pagada", next: "verifying", action: "Empezar verificación" },
+  verifying: { label: "Verificando carta", next: "delivered", action: "Verificada y entregada" },
+  delivered: { label: "Entregada", next: "released", action: "Liberar pago al vendedor" },
+  released: { label: "Liberada ✓", next: null },
+  refunded: { label: "Reembolsada", next: null },
+  cancelled: { label: "Cancelada", next: null },
+};
+const PAID_STATES = ["paid", "verifying", "delivered", "released"];
+const LISTING_STATUS = { draft: "Borrador", active: "Activo", reserved: "Reservado", sold: "Vendido", removed: "Quitado" };
+const GOAL_ORDERS = 20;
+
+async function viewAdmin(app, params) {
+  setTitle("Panel de staff");
+  if (!isStaff) {
+    app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
+    return;
+  }
+  const tab = ["ordenes", "anuncios", "tiendas", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["resumen", "Resumen"]];
+  app.innerHTML = `<div class="admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
+    <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
+    <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
+  const body = $("#adminBody");
+  try {
+    if (tab === "ordenes") await adminOrders(body);
+    else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
+    else if (tab === "tiendas") await adminShops(body);
+    else await adminSummary(body);
+  } catch (e) {
+    console.error(e);
+    body.innerHTML = `<p class="notice bad">${e?.code === "42P01" || e?.code === "42703" ? "Falta aplicar la migración 0005 en Supabase." : "No pudimos cargar esta sección. Recarga la página."}</p>`;
+  }
+}
+function adminFail(err, el, fallback = "No se pudo guardar. Intenta de nuevo.") {
+  console.error(err);
+  el.innerHTML = `<p class="notice bad" style="margin:0">${esc(fallback)}</p>`;
+}
+async function profilesById(ids) {
+  const uniq = [...new Set(ids.filter(Boolean))];
+  if (!uniq.length) return new Map();
+  const { data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", uniq);
+  return new Map((data ?? []).map((p) => [p.id, p]));
+}
+const fmtDate = (s) => s ? new Date(s).toLocaleDateString("es-PA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+
+// ------------------------------------------------------------- orders
+async function adminOrders(body) {
+  const { data: orders, error } = await sb.from("protected_orders")
+    .select("id, listing_id, seller_id, buyer_contact, price_cents, fee_cents, itbms_cents, status, payment_ref, notes, created_at, updated_at")
+    .order("created_at", { ascending: false }).limit(200);
+  if (error) throw error;
+  const listingIds = [...new Set(orders.map((o) => o.listing_id))];
+  const { data: listings } = listingIds.length
+    ? await sb.from("listings").select("id, title, status, catalog_id, grading_company, grade, condition").in("id", listingIds)
+    : { data: [] };
+  const byListing = new Map((listings ?? []).map((l) => [l.id, l]));
+  const sellers = await profilesById(orders.map((o) => o.seller_id));
+  const open = orders.filter((o) => ORDER_FLOW[o.status]?.next);
+  const closed = orders.filter((o) => !ORDER_FLOW[o.status]?.next);
+
+  const card = (o) => {
+    const l = byListing.get(o.listing_id), f = ORDER_FLOW[o.status];
+    const total = o.price_cents + o.fee_cents + o.itbms_cents;
+    const canCancel = !["released", "refunded", "cancelled"].includes(o.status);
+    return `<li class="panel order" data-id="${o.id}">
+      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(l?.title ?? "Anuncio")}</a><span class="b ${o.status === "released" ? "good" : ["refunded", "cancelled"].includes(o.status) ? "warn" : "prot"}">${f?.label ?? o.status}</span></div>
+      <dl class="rows">
+        <div><dt>Vendedor</dt><dd>${esc(sellers.get(o.seller_id)?.display_name ?? "—")}</dd></div>
+        <div><dt>Comprador</dt><dd>${esc(o.buyer_contact || "—")}</dd></div>
+        <div><dt>El comprador paga</dt><dd>${formatUsd(total)}</dd></div>
+        <div><dt>Pagar al vendedor</dt><dd>${formatUsd(o.price_cents)}</dd></div>
+        <div><dt>Comisión (+ ITBMS ${formatUsd(o.itbms_cents)})</dt><dd>${formatUsd(o.fee_cents)}</dd></div>
+        ${o.payment_ref ? `<div><dt>Ref. de pago</dt><dd>${esc(o.payment_ref)}</dd></div>` : ""}
+        <div><dt>Creada / actualizada</dt><dd>${fmtDate(o.created_at)} · ${fmtDate(o.updated_at)}</dd></div>
+      </dl>
+      <label class="f muted-label" style="margin-top:8px">Notas<textarea class="textarea order-notes" rows="2" maxlength="500">${esc(o.notes ?? "")}</textarea></label>
+      <div class="order-actions">
+        ${f?.next ? `<button class="btn primary" data-act="next">${f.action}</button>` : ""}
+        ${canCancel ? `<button class="btn danger" data-act="cancel">${PAID_STATES.includes(o.status) ? "Reembolsar" : "Cancelar"}</button>` : ""}
+        <button class="btn" data-act="notes">Guardar notas</button>
+      </div><div class="order-msg"></div></li>`;
+  };
+
+  body.innerHTML = `
+    <section class="panel col"><h2>Nueva orden protegida</h2>
+      <p class="small muted" style="margin:0">Cuando un comprador te escribe para comprar protegido, búscale el anuncio y crea la orden. El monto se calcula solo (4%, mín. $1, máx. $40 + ITBMS).</p>
+      <div class="row-input"><input class="input" id="noSearch" placeholder="Busca el anuncio (título, jugador, set…)"><button class="btn" id="noFind" style="border-radius:12px">Buscar</button></div>
+      <div id="noResults"></div>
+    </section>
+    <h2 class="display admin-h">Abiertas (${open.length})</h2>
+    ${open.length ? `<ul class="admin-list">${open.map(card).join("")}</ul>` : `<p class="muted small">No hay órdenes abiertas.</p>`}
+    <details class="admin-closed"><summary>Cerradas (${closed.length})</summary>${closed.length ? `<ul class="admin-list">${closed.map(card).join("")}</ul>` : `<p class="muted small">Ninguna todavía.</p>`}</details>`;
+
+  // new order
+  const find = async () => {
+    const q = $("#noSearch").value.trim(), out = $("#noResults");
+    if (q.length < 2) { out.innerHTML = `<p class="xs muted">Escribe al menos 2 letras.</p>`; return; }
+    out.innerHTML = `<p class="xs muted"><span class="spinner"></span> Buscando…</p>`;
+    let query = sb.from("listings").select("id, title, price_cents, seller_id, status").eq("status", "active").limit(8);
+    for (const t of searchTokens(q)) query = query.or(["title", "subject", "set_name"].map((c) => `${c}.ilike.%${t}%`).join(","));
+    const { data, error } = await query;
+    if (error) return adminFail(error, out, "No se pudo buscar.");
+    if (!data.length) { out.innerHTML = `<p class="xs muted">No hay anuncios activos con ese texto.</p>`; return; }
+    const sellersFound = await profilesById(data.map((l) => l.seller_id));
+    out.innerHTML = `<ul class="admin-list">${data.map((l) => {
+      const q2 = quoteProtected(l.price_cents);
+      return `<li class="panel" data-lid="${l.id}"><div class="phead"><span style="font-weight:600">${esc(l.title)}</span><span class="small muted">${esc(sellersFound.get(l.seller_id)?.display_name ?? "")}</span></div>
+        <p class="small" style="margin:6px 0">Carta ${formatUsd(q2.priceCents)} + comisión ${formatUsd(q2.feeCents)} + ITBMS ${formatUsd(q2.itbmsCents)} = <b>${formatUsd(q2.buyerTotalCents)}</b></p>
+        <div class="row-input"><input class="input no-buyer" maxlength="120" placeholder="Comprador: nombre y WhatsApp"><button class="btn primary no-create" style="border-radius:12px">Crear orden</button></div><div class="no-msg"></div></li>`;
+    }).join("")}</ul>`;
+    out.querySelectorAll("[data-lid]").forEach((li) => li.querySelector(".no-create").addEventListener("click", async (e) => {
+      const l = data.find((x) => x.id === li.dataset.lid), q2 = quoteProtected(l.price_cents), msg = li.querySelector(".no-msg");
+      e.target.disabled = true;
+      const { error } = await sb.from("protected_orders").insert({
+        listing_id: l.id, seller_id: l.seller_id, buyer_contact: li.querySelector(".no-buyer").value.trim() || null,
+        price_cents: q2.priceCents, fee_cents: q2.feeCents, itbms_cents: q2.itbmsCents, status: "awaiting_payment",
+      });
+      if (error) { e.target.disabled = false; return adminFail(error, msg, "No se pudo crear la orden."); }
+      await sb.from("listings").update({ protected_eligible: true }).eq("id", l.id);
+      route();
+    }));
+  };
+  $("#noFind").addEventListener("click", find);
+  $("#noSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); find(); } });
+
+  // order actions
+  body.querySelectorAll("li.order").forEach((li) => {
+    const o = orders.find((x) => x.id === li.dataset.id), msg = li.querySelector(".order-msg");
+    li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+      const act = b.dataset.act;
+      if (act === "notes") {
+        const { error } = await sb.from("protected_orders").update({ notes: li.querySelector(".order-notes").value.trim() || null }).eq("id", o.id);
+        return error ? adminFail(error, msg) : (msg.innerHTML = `<p class="notice good" style="margin:0">Notas guardadas.</p>`);
+      }
+      const patch = {};
+      let listingStatus = null;
+      if (act === "cancel") {
+        const refund = PAID_STATES.includes(o.status);
+        if (!confirm(refund ? "¿Marcar como reembolsada? Confirma que ya le devolviste el dinero al comprador." : "¿Cancelar esta orden?")) return;
+        patch.status = refund ? "refunded" : "cancelled";
+        listingStatus = "active";
+      } else {
+        patch.status = ORDER_FLOW[o.status].next;
+        if (patch.status === "paid") {
+          const ref = prompt("Referencia del pago (Yappy o transferencia):", o.payment_ref ?? "");
+          if (ref === null) return;
+          patch.payment_ref = ref.trim() || null;
+          listingStatus = "reserved";
+        }
+        if (patch.status === "released" && !confirm(`¿Ya le pagaste ${formatUsd(o.price_cents)} al vendedor? Esto cierra la orden y marca la carta como vendida.`)) return;
+        if (patch.status === "released") listingStatus = "sold";
+      }
+      li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+      const { error } = await sb.from("protected_orders").update(patch).eq("id", o.id);
+      if (error) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(error, msg); }
+      if (listingStatus) await sb.from("listings").update({ status: listingStatus }).eq("id", o.listing_id);
+      if (patch.status === "released") {
+        // Record the sale: this is the local Panama price data behind the estimates.
+        const l = byListing.get(o.listing_id);
+        const { error: saleErr } = await sb.from("sales").insert({
+          listing_id: o.listing_id, catalog_id: l?.catalog_id ?? null,
+          grading_key: l?.grading_company ? `${l.grading_company}${Number(l.grade)}` : "raw",
+          condition: l?.condition ?? null, price_cents: o.price_cents, via_protected: true,
+        });
+        if (saleErr && saleErr.code !== "23505") console.error(saleErr); // 23505 = already recorded
+      }
+      route();
+    }));
+  });
+}
+
+// ------------------------------------------------------------- listings
+async function adminListings(body, q) {
+  let query = sb.from("listings").select("id, title, price_cents, status, protected_eligible, seller_id, created_at").order("created_at", { ascending: false }).limit(50);
+  for (const t of searchTokens(q)) query = query.or(["title", "subject", "set_name"].map((c) => `${c}.ilike.%${t}%`).join(","));
+  const { data, error } = await query;
+  if (error) throw error;
+  const sellers = await profilesById(data.map((l) => l.seller_id));
+  body.innerHTML = `
+    <form id="alSearch" class="row-input" style="margin-bottom:12px"><input class="input" name="q" value="${esc(q)}" placeholder="Buscar anuncio"><button class="btn" style="border-radius:12px">Buscar</button></form>
+    ${data.length ? `<ul class="admin-list">${data.map((l) => `<li class="panel" data-id="${l.id}">
+      <div class="phead"><a href="#/carta/${encodeURIComponent(l.id)}" style="font-weight:600">${esc(l.title)}</a><span class="small">${formatUsd(l.price_cents)}</span></div>
+      <p class="xs muted" style="margin:4px 0 8px">${esc(sellers.get(l.seller_id)?.display_name ?? "—")} · ${LISTING_STATUS[l.status] ?? l.status} · ${fmtDate(l.created_at)}</p>
+      <div class="order-actions">
+        <label class="toggle"><input type="checkbox" class="al-prot" ${l.protected_eligible ? "checked" : ""}> Compra Protegida</label>
+        ${l.status === "removed" ? `<button class="btn" data-status="active">Reactivar</button>` : `<button class="btn danger" data-status="removed">Quitar anuncio</button>`}
+      </div><div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">No hay anuncios${q ? " con ese texto" : ""}.</p>`}`;
+  $("#alSearch").addEventListener("submit", (e) => { e.preventDefault(); go(`/admin?tab=anuncios&q=${encodeURIComponent(e.target.q.value.trim())}`); });
+  body.querySelectorAll("li[data-id]").forEach((li) => {
+    const msg = li.querySelector(".order-msg");
+    li.querySelector(".al-prot").addEventListener("change", async (e) => {
+      const { error } = await sb.from("listings").update({ protected_eligible: e.target.checked }).eq("id", li.dataset.id);
+      if (error) { e.target.checked = !e.target.checked; adminFail(error, msg); }
+    });
+    li.querySelector("[data-status]").addEventListener("click", async (e) => {
+      const status = e.target.dataset.status;
+      if (status === "removed" && !confirm("¿Quitar este anuncio? Deja de verse en la página (se puede reactivar).")) return;
+      const { error } = await sb.from("listings").update({ status }).eq("id", li.dataset.id);
+      if (error) return adminFail(error, msg);
+      route();
+    });
+  });
+}
+
+// ------------------------------------------------------------- shops
+async function adminShops(body) {
+  const [{ data: reqs, error }, { data: shops }] = await Promise.all([
+    sb.from("shop_requests").select("id, user_id, shop_name, contact, location, status, created_at").eq("status", "pending").order("created_at"),
+    sb.from("public_profiles").select("id, display_name, verified").eq("is_shop", true).order("display_name"),
+  ]);
+  if (error) throw error;
+  const names = await profilesById(reqs.map((r) => r.user_id));
+  body.innerHTML = `
+    <h2 class="display admin-h" style="margin-top:0">Solicitudes pendientes (${reqs.length})</h2>
+    ${reqs.length ? `<ul class="admin-list">${reqs.map((r) => `<li class="panel" data-id="${r.id}" data-user="${r.user_id}">
+      <div class="phead"><span style="font-weight:600">${esc(r.shop_name)}</span><span class="xs muted">${fmtDate(r.created_at)}</span></div>
+      <dl class="rows"><div><dt>Cuenta</dt><dd>${esc(names.get(r.user_id)?.display_name ?? "—")}</dd></div>
+        <div><dt>Contacto</dt><dd>${esc(r.contact || "—")}</dd></div><div><dt>Ubicación</dt><dd>${esc(r.location || "—")}</dd></div></dl>
+      <p class="xs muted" style="margin:8px 0">Antes de aprobar: revisa su Instagram, que el local exista y que venda cartas originales.</p>
+      <div class="order-actions"><button class="btn primary" data-act="approve">Aprobar y verificar</button><button class="btn danger" data-act="reject">Rechazar</button></div>
+      <div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">No hay solicitudes pendientes.</p>`}
+    <h2 class="display admin-h">Tiendas (${shops?.length ?? 0})</h2>
+    ${shops?.length ? `<ul class="admin-list">${shops.map((s) => `<li class="panel" data-user="${s.id}"><div class="phead"><span style="font-weight:600">${esc(s.display_name)}</span>${s.verified ? shopBadge() : `<span class="b neutral">Sin verificar</span>`}</div>
+      <div class="order-actions" style="margin-top:8px">${s.verified ? `<button class="btn danger" data-act="unverify">Quitar verificación</button>` : `<button class="btn primary" data-act="verify">Verificar</button>`}</div><div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">Todavía no hay tiendas.</p>`}`;
+
+  body.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), msg = li.querySelector(".order-msg"), act = b.dataset.act, user = li.dataset.user;
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const fail = (e) => { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); adminFail(e, msg); };
+    if (act === "approve" || act === "verify" || act === "unverify") {
+      const { error } = await sb.from("profiles").update(act === "unverify" ? { verified: false } : { is_shop: true, verified: true }).eq("id", user);
+      if (error) return fail(error);
+    }
+    if (act === "approve" || act === "reject") {
+      const { error } = await sb.from("shop_requests").update({ status: act === "approve" ? "approved" : "rejected", reviewed_at: new Date().toISOString() }).eq("id", li.dataset.id);
+      if (error) return fail(error);
+    }
+    route();
+  }));
+}
+
+// ------------------------------------------------------------- summary
+async function adminSummary(body) {
+  const [{ data: orders, error }, { count: activeCount }, { count: shopCount }, { count: pendingShops }] = await Promise.all([
+    sb.from("protected_orders").select("status, price_cents, fee_cents, created_at"),
+    sb.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
+    sb.from("public_profiles").select("id", { count: "exact", head: true }).eq("is_shop", true).eq("verified", true),
+    sb.from("shop_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+  ]);
+  if (error) throw error;
+  const paid = orders.filter((o) => PAID_STATES.includes(o.status));
+  const released = orders.filter((o) => o.status === "released");
+  const sum = (arr, k) => arr.reduce((a, o) => a + o[k], 0);
+  const pct = Math.min(100, Math.round((paid.length / GOAL_ORDERS) * 100));
+  const first = orders.length ? orders.map((o) => o.created_at).sort()[0] : null;
+  const days = first ? Math.max(1, Math.ceil((Date.now() - new Date(first)) / 86400000)) : 0;
+  const stat = (n, t) => `<div class="panel stat"><p class="display" style="font-size:28px;font-weight:700;margin:0">${n}</p><p class="xs muted" style="margin:2px 0 0">${t}</p></div>`;
+  body.innerHTML = `
+    <section class="panel col"><h2>Meta: ${GOAL_ORDERS} Compras Protegidas pagadas en 4 semanas</h2>
+      <div class="goal" role="progressbar" aria-valuemin="0" aria-valuemax="${GOAL_ORDERS}" aria-valuenow="${paid.length}"><div style="width:${pct}%"></div></div>
+      <p class="small" style="margin:0"><b>${paid.length} de ${GOAL_ORDERS}</b>${first ? ` · día ${days} desde la primera orden${days > 28 ? " (ya pasaron las 4 semanas)" : ""}` : " · aún no hay órdenes"}</p></section>
+    <div class="stats">
+      ${stat(paid.length, "órdenes pagadas")}
+      ${stat(formatUsd(sum(released, "fee_cents")), "comisiones cobradas (liberadas)")}
+      ${stat(formatUsd(sum(paid, "price_cents")), "valor de cartas protegidas (GMV)")}
+      ${stat(orders.filter((o) => o.status === "awaiting_payment").length, "esperando pago")}
+      ${stat(activeCount ?? 0, "anuncios activos")}
+      ${stat(shopCount ?? 0, "tiendas verificadas")}
+      ${stat(pendingShops ?? 0, "solicitudes de tienda")}
+      ${stat(orders.filter((o) => ["refunded", "cancelled"].includes(o.status)).length, "reembolsadas o canceladas")}
+    </div>`;
+}
+
 // ============================================================= boot
 document.querySelectorAll(".brand-name, #brand").forEach((n) => (n.textContent = CONFIG.APP_NAME));
 $("#topSearch").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#qTop").value.trim(); go(q ? `/?q=${encodeURIComponent(q)}` : "/"); });
 window.addEventListener("hashchange", route);
 async function loadProfileName() {
-  profileName = null;
+  profileName = null; isStaff = false;
   if (!session) return;
-  const { data } = await sb.from("profiles").select("display_name").eq("id", session.user.id).maybeSingle();
+  const { data } = await sb.from("profiles").select("display_name, is_staff").eq("id", session.user.id).maybeSingle();
   profileName = data?.display_name ?? null;
+  isStaff = Boolean(data?.is_staff);
   renderNav();
+  if (isStaff && parseHash().path === "/admin") route(); // staff flag arrived after the first render
 }
 (async () => {
   if (sb) {
