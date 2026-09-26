@@ -422,6 +422,14 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
 .display { letter-spacing: -.025em; font-weight: 800; }
 .panel h2:not(.ptitle) { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
 label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
+.funnel { display: grid; gap: 14px; margin-top: 4px; }
+.flabel { display: flex; justify-content: space-between; font-size: 14px; }
+.fbar { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.fbar div { height: 100%; background: var(--holo); border-radius: 999px; }
+.daily { display: flex; align-items: flex-end; gap: 4px; height: 120px; }
+.daily > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
+.daily span { width: 100%; max-width: 28px; min-height: 2px; background: var(--brand, var(--accent)); border-radius: 4px 4px 0 0; }
+.daily em { font-style: normal; font-size: 10px; color: var(--ink-2); }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; } .share-row .btn { flex: 1 1 130px; min-width: 0; }
 .verif img { width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; background: var(--surface-2); margin-top: 10px; }
 .verif-up img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; margin-top: 10px; background: var(--surface-2); }
@@ -1232,6 +1240,31 @@ let session = null;
 let profileName = null;
 let isStaff = false;
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
+// ------------------------------------------------------------- analytics (migration 0007)
+// First-party funnel events. Visitors get a random id kept in their browser; no IP,
+// email or name is stored (Ley 81). Fire-and-forget: tracking never blocks the page.
+let trackOff = false;
+function visitorId() {
+  try {
+    let v = localStorage.getItem("holo_vid");
+    if (!v) { v = crypto.randomUUID(); localStorage.setItem("holo_vid", v); }
+    return v;
+  } catch { return (window.__holoVid ??= crypto.randomUUID()); }
+}
+function track(name, listingRef = null) {
+  if (!sb || trackOff) return;
+  sb.from("events").insert({ name, visitor_id: visitorId(), listing_ref: listingRef ? String(listingRef).slice(0, 64) : null, path: parseHash().path.slice(0, 200) })
+    .then(({ error }) => {
+      if (!error) return;
+      if (["PGRST205", "42P01"].includes(error.code)) trackOff = true; // table not created yet (migration 0007)
+      console.warn("track", name, error.code);
+    });
+}
+function trackVisitOncePerSession() {
+  try { if (sessionStorage.getItem("holo_visit")) return; sessionStorage.setItem("holo_visit", "1"); } catch { /* private mode: count every load */ }
+  track("visita");
+}
+
 // Migration 0006 adds listing_photos.kind ("card" | "verification"). Until it is applied the
 // select falls back to the old columns, so the site keeps working either way.
 let photoKinds = true;
@@ -1996,6 +2029,7 @@ async function viewDetail(app, id) {
     return;
   }
   rememberListings([l]);
+  track("ver_carta", l.id);
   setTitle(l.title);
   const price = toCents(l.priceUsd);
   const quote = l.protectedEligible ? quoteProtected(price) : null;
@@ -2046,9 +2080,9 @@ async function viewDetail(app, id) {
           <p class="sub">Pagas a ${esc(CONFIG.APP_NAME)}, verificamos la carta en persona y solo entonces le pagamos al vendedor. Si no es lo anunciado, te devolvemos todo.</p>
           <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección y verificación (4%)</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
           <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
-          ${buy ? `<a class="btn primary block" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
+          ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
         ${!forSale ? "" : `<section class="panel"><h2 class="ptitle">${ic("chat")}Contacto</h2>
-          ${contact ? `<a class="btn outline block" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}</section>`}
+          ${contact ? `<a class="btn outline block" id="contactBtn" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}</section>`}
         <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
           <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
           <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a></div></section>
@@ -2079,6 +2113,9 @@ async function viewDetail(app, id) {
     t.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(t); } });
   });
   setupShare(l);
+  $("#buyBtn")?.addEventListener("click", () => track("click_protegida", l.id));
+  $("#contactBtn")?.addEventListener("click", () => track("click_whatsapp", l.id));
+  $("#shareWa")?.addEventListener("click", () => track("compartir", l.id));
   $("#markSold")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget, raw = $("#soldPrice").value.trim(), usd = raw ? Number(raw) : null;
     if (raw && !(usd > 0)) return toast("Escribe un precio válido o déjalo vacío.", { type: "error" });
@@ -2194,6 +2231,7 @@ function setupShare(l) {
   const wa = $("#shareWa"); if (wa) wa.href = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
   $("#shareBtn")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget, label = btn.innerHTML;
+    track("compartir", l.id);
     btn.disabled = true; btn.textContent = "Preparando imagen…";
     try {
       let blob = null;
@@ -2310,6 +2348,7 @@ function viewAuth(app, next) {
         const text = c === "user_already_exists" ? "Ya existe una cuenta con ese correo. Usa “Entrar”." : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
         msg.innerHTML = `<p class="notice bad">${esc(text)}</p>`; return;
       }
+      if (mode === "registro") track("registro");
       if (mode === "registro" && !res.data.session) { msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.</p>`; return; }
       toast(mode === "registro" ? "Cuenta creada" : "Sesión iniciada");
       go(next);
@@ -2996,6 +3035,7 @@ function viewSell(app) {
     }
     const act = await sb.from("listings").update({ status: "active" }).eq("id", id).select("id");
     if (act.error || !act.data?.length) return abort(act.error ?? "activate: 0 rows", dbMessage(act.error, "No pudimos publicar el anuncio. Intenta de nuevo."));
+    track("publicar", id);
     toast("Anuncio publicado", { description: "Ya está visible para los compradores." });
     go(`/carta/${id}`);
   });
@@ -3142,9 +3182,9 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["ordenes", "anuncios", "tiendas", "reportes", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
-  const tabs = [["ordenes", "Órdenes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["resumen", "Resumen"]];
-  app.innerHTML = `<div class="admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
+  const tab = ["ordenes", "anuncios", "tiendas", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
+  app.innerHTML = `<div class="wrap admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
   const body = $("#adminBody");
@@ -3153,6 +3193,7 @@ async function viewAdmin(app, params) {
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
     else if (tab === "tiendas") await adminShops(body);
     else if (tab === "reportes") await adminReports(body);
+    else if (tab === "analitica") await adminAnalytics(body, Number(params.get("dias")) || 7);
     else await adminSummary(body);
   } catch (e) {
     console.error(e);
@@ -3367,6 +3408,49 @@ async function adminShops(body) {
   }));
 }
 
+// ------------------------------------------------------------- analytics
+// [event, label, step it is compared against]. WhatsApp and "Comprar protegido" are
+// parallel choices after opening a card, so both compare against ver_carta.
+const FUNNEL = [
+  ["visita", "Visitaron Holo", null], ["registro", "Crearon cuenta", "visita"], ["ver_carta", "Abrieron una carta", "registro"],
+  ["click_whatsapp", "Tocaron WhatsApp", "ver_carta"], ["click_protegida", "Tocaron “Comprar protegido”", "ver_carta"],
+];
+async function adminAnalytics(body, days) {
+  days = [7, 30, 90].includes(days) ? days : 7;
+  const { data, error } = await sb.rpc("analytics_summary", { p_days: days });
+  if (error) {
+    if (error.code === "PGRST202") { body.innerHTML = `<p class="notice warn">Falta aplicar la migración 0007 en Supabase para ver la analítica.</p>`; return; }
+    throw error;
+  }
+  const f = data.funnel ?? {}, top = f.visita?.visitors || 0;
+  const pct = (n, of) => (of ? `${Math.round((n / of) * 100)}%` : "—");
+  const maxDay = Math.max(1, ...(data.daily ?? []).map((d) => d.visitors));
+  body.innerHTML = `
+    <div class="row-input" style="justify-content:flex-start">${[7, 30, 90].map((d) => `<a class="btn ${d === days ? "primary" : "outline"}" href="#/admin?tab=analitica&dias=${d}">${d} días</a>`).join("")}</div>
+    <section class="panel col"><h2>Embudo · últimos ${days} días</h2>
+      <p class="xs muted" style="margin:0">Personas distintas (visitantes anónimos). No incluye al staff.</p>
+      <div class="funnel">${FUNNEL.map(([k, label, from]) => {
+        const v = f[k]?.visitors ?? 0, prev = from ? f[from]?.visitors ?? 0 : 0;
+        const fromLabel = { visita: "de las visitas", registro: "de quienes crearon cuenta", ver_carta: "de quienes abrieron una carta" }[from];
+        return `<div class="frow"><div class="flabel"><span>${label}</span><b>${v}</b></div>
+          <div class="fbar"><div style="width:${top ? Math.max(2, (v / top) * 100) : 0}%"></div></div>
+          <p class="xs muted" style="margin:2px 0 0">${from && from !== "visita" ? `${pct(v, prev)} ${fromLabel} · ` : ""}${pct(v, top)} de las visitas</p></div>`;
+      }).join("")}</div></section>
+    <div class="stats">
+      <div class="panel stat"><p class="display" style="font-size:28px;font-weight:700;margin:0">${f.publicar?.events ?? 0}</p><p class="xs muted" style="margin:2px 0 0">cartas publicadas</p></div>
+      <div class="panel stat"><p class="display" style="font-size:28px;font-weight:700;margin:0">${f.compartir?.events ?? 0}</p><p class="xs muted" style="margin:2px 0 0">veces compartidas</p></div>
+      <div class="panel stat"><p class="display" style="font-size:28px;font-weight:700;margin:0">${f.ver_carta?.events ?? 0}</p><p class="xs muted" style="margin:2px 0 0">cartas vistas (total)</p></div>
+      <div class="panel stat"><p class="display" style="font-size:28px;font-weight:700;margin:0">${(f.click_whatsapp?.events ?? 0) + (f.click_protegida?.events ?? 0)}</p><p class="xs muted" style="margin:2px 0 0">contactos (WhatsApp + protegida)</p></div>
+    </div>
+    <section class="panel col"><h2>Visitantes por día</h2>
+      ${(data.daily ?? []).length ? `<div class="daily">${data.daily.map((d) => `<div title="${esc(d.day)}: ${d.visitors}"><span style="height:${(d.visitors / maxDay) * 100}%"></span><em>${esc(String(d.day).slice(8, 10))}</em></div>`).join("")}</div>` : `<p class="muted small" style="margin:0">Todavía no hay visitas registradas.</p>`}</section>
+    <section class="panel col"><h2>Cartas más vistas</h2>
+      ${(data.top_listings ?? []).length ? `<table class="fees"><thead><tr><th>Carta</th><th>Vistas</th><th>Personas</th><th>Contactos</th></tr></thead><tbody>${data.top_listings.map((t) => {
+        const title = t.title ?? DEMO.find((d) => d.id === t.ref)?.title ?? "Anuncio eliminado";
+        return `<tr><td><a href="#/carta/${encodeURIComponent(t.ref)}">${esc(title)}</a></td><td>${t.views}</td><td>${t.visitors}</td><td>${t.clicks}</td></tr>`;
+      }).join("")}</tbody></table>` : `<p class="muted small" style="margin:0">Todavía nadie ha abierto una carta.</p>`}</section>`;
+}
+
 // ------------------------------------------------------------- reports
 const REPORT_REASON = { replica: "Réplica o falsificación", estafa: "Posible estafa", precio: "Precio o datos engañosos", contenido: "Contenido inapropiado", otro: "Otro" };
 async function adminReports(body) {
@@ -3478,6 +3562,7 @@ async function loadProfileName() {
     });
     loadProfileName();
   }
+  trackVisitOncePerSession();
   route();
 })();
 </script>
