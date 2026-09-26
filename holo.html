@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="es-PA">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Holo · Cartas coleccionables en Panamá</title>
+<meta name="description" content="Compra y vende cartas Pokémon, NBA y NFL en Panamá, con precio estimado y Compra Protegida.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root {
+  --bg: #f5f3ee; --surface: #fff; --surface-2: #edeae3; --ink: #15130f; --ink-2: #5e5a52; --line: #e2ded5;
+  --accent: #1f4bff; --accent-ink: #fff; --good: #0f8a5f; --good-bg: #e3f4ec; --warn: #9a6200; --warn-bg: #fbf0d9;
+  --bad: #b93c0c; --bad-bg: #fbe6dc;
+  --holo: linear-gradient(115deg, #7cf3d5 0%, #8ab6ff 35%, #d59bff 65%, #ffc98a 100%);
+  --display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0e10; --surface: #17171a; --surface-2: #212126; --ink: #f2f0eb; --ink-2: #a19d95; --line: #2c2c32;
+    --accent: #7390ff; --accent-ink: #0e0e10; --good: #4fd19c; --good-bg: #13291f; --warn: #f0b54a; --warn-bg: #2e2412;
+    --bad: #ff8a5c; --bad-bg: #321a10;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column; }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+img { max-width: 100%; }
+.wrap { max-width: 1152px; margin: 0 auto; padding: 0 16px; width: 100%; }
+.display { font-family: var(--display); letter-spacing: -0.02em; }
+.muted { color: var(--ink-2); }
+.small { font-size: 13px; } .xs { font-size: 12px; }
+.holo-text { background: var(--holo); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.holo-border { border: 1.5px solid transparent; background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--holo) border-box; }
+.card-ratio { aspect-ratio: 63 / 88; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* header */
+header.top { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 85%, transparent); backdrop-filter: blur(8px); }
+header.top .row { display: flex; align-items: center; gap: 12px; height: 56px; }
+.logo { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 20px; }
+.logo i { width: 20px; height: 20px; border-radius: 6px; background: var(--holo); display: inline-block; }
+.top-search { flex: 1; display: none; }
+.top-search input { width: 100%; max-width: 420px; }
+@media (min-width: 640px) { .top-search { display: block; } }
+nav.links { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 14px; }
+nav.links a, nav.links button.link { padding: 8px 12px; border-radius: 999px; color: var(--ink-2); background: none; border: 0; cursor: pointer; }
+nav.links a:hover, nav.links button.link:hover { color: var(--ink); }
+.hide-sm { display: none !important; } @media (min-width: 768px) { .hide-sm { display: inline-block !important; } }
+
+/* controls */
+.input, .select, .textarea { width: 100%; height: 44px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 0 12px; outline: none; font-size: 16px; }
+.textarea { height: auto; padding: 12px; }
+.input:focus, .select:focus, .textarea:focus { border-color: var(--accent); }
+.pill-input { height: 40px; border-radius: 999px; padding: 0 16px; font-size: 14px; }
+@media (min-width: 640px) { .input, .select, .textarea { font-size: 14px; } }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.dark { background: var(--ink); color: var(--bg); border-color: transparent; }
+.btn.block { width: 100%; height: 48px; border-radius: 12px; }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.danger { color: var(--bad); }
+label.f { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 500; }
+label.f.muted-label { font-size: 12px; color: var(--ink-2); font-weight: 400; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* chips + filters */
+.chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 4px; scrollbar-width: none; }
+.chip { flex-shrink: 0; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; }
+.chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+details.filters { border: 1px solid var(--line); background: var(--surface); border-radius: 16px; }
+details.filters summary { list-style: none; cursor: pointer; padding: 12px 16px; font-size: 14px; font-weight: 500; display: flex; justify-content: space-between; }
+details.filters summary::-webkit-details-marker { display: none; }
+.filters form { border-top: 1px solid var(--line); padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.filters .span2 { grid-column: span 2; }
+@media (min-width: 1024px) { .filters form { grid-template-columns: repeat(6, 1fr); } .filters .span2 { grid-column: span 2; } .filters .spanall { grid-column: 1 / -1; } }
+.filters .spanall { grid-column: 1 / -1; display: flex; gap: 8px; }
+.badge-count { margin-left: 8px; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 1px 8px; font-size: 12px; }
+
+/* listing grid */
+.grid { list-style: none; padding: 0; margin: 16px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } }
+@media (min-width: 1024px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 16px; overflow: hidden; transition: transform .16s ease, box-shadow .16s ease; }
+.tile:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -12px rgb(0 0 0 / .25); }
+.tile .art { position: relative; background: var(--surface-2); container-type: inline-size; }
+.tile .art .inner { position: absolute; inset: 7%; }
+.tile .body { display: flex; flex-direction: column; gap: 6px; padding: 12px; flex: 1; }
+.tile .title { font-size: 14px; font-weight: 500; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
+.tile .price { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 0; }
+.tile .loc { margin-top: auto; padding-top: 4px; font-size: 12px; color: var(--ink-2); }
+.corner-l { position: absolute; left: 8px; top: 8px; display: flex; gap: 4px; }
+.corner-r { position: absolute; right: 8px; top: 8px; }
+.art img.card { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 6px 14px rgba(0,0,0,.25)); }
+.placeholder { position: absolute; inset: 6%; border-radius: 6%; padding: 8%; color: #fff; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 8px 20px rgb(0 0 0 / .25); }
+.placeholder .tag { align-self: flex-start; background: rgb(255 255 255 / .2); border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.placeholder .who { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 9cqi, 22px); line-height: 1.1; margin: 0; }
+.placeholder .meta { font-size: 11px; opacity: .8; margin: 4px 0 0; }
+.placeholder .note { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .6; margin: 8px 0 0; }
+
+/* badges */
+.b { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px; font-size: 12px; font-weight: 500; }
+.b.good { background: var(--good-bg); color: var(--good); } .b.neutral { background: var(--surface-2); color: var(--ink-2); }
+.b.warn { background: var(--warn-bg); color: var(--warn); } .b.prot { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.cond { border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); background: var(--surface); }
+.graded { background: var(--ink); color: var(--bg); border-radius: 6px; padding: 1px 6px; font-size: 12px; font-weight: 700; }
+.demo { background: color-mix(in srgb, var(--surface) 90%, transparent); border-radius: 6px; padding: 2px 6px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
+
+/* panels */
+.panel { border: 1px solid var(--line); background: var(--surface); border-radius: 16px; padding: 16px; }
+.panel h2 { font-size: 14px; font-weight: 600; margin: 0; }
+.notice { border-radius: 12px; padding: 12px; font-size: 14px; }
+.notice.bad { background: var(--bad-bg); color: var(--bad); } .notice.good { background: var(--good-bg); color: var(--good); }
+.notice.warn { background: var(--warn-bg); color: var(--warn); } .notice.soft { background: var(--surface-2); color: var(--ink-2); }
+.range { position: relative; height: 8px; border-radius: 999px; background: var(--surface-2); margin: 28px 0 8px; }
+.range .fill { position: absolute; height: 8px; border-radius: 999px; background: var(--holo); }
+.range .mark { position: absolute; top: -4px; width: 4px; height: 16px; border-radius: 4px; background: var(--ink); transform: translateX(-50%); }
+.range .lbl { position: absolute; top: -22px; transform: translateX(-50%); font-size: 10px; font-weight: 600; white-space: nowrap; }
+dl.rows { margin: 12px 0 0; font-size: 14px; } dl.rows div { display: flex; justify-content: space-between; padding: 3px 0; } dl.rows dt { color: var(--ink-2); } dl.rows dd { margin: 0; }
+dl.rows div.total { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 8px; font-weight: 600; } dl.rows div.total dt { color: var(--ink); }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0 0; font-size: 14px; } .facts dt { font-size: 12px; color: var(--ink-2); } .facts dd { margin: 0; }
+
+/* detail layout */
+.detail { display: grid; gap: 24px; margin-top: 16px; }
+@media (min-width: 768px) { .detail { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; } .detail .left { position: sticky; top: 80px; align-self: start; } }
+.big-art { position: relative; border-radius: 24px; background: var(--surface-2); max-width: 384px; margin: 0 auto; container-type: inline-size; }
+@media (min-width: 768px) { .big-art { max-width: none; } }
+.big-art .inner { position: absolute; inset: 8%; }
+.thumbs { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.thumbs img { width: 48px; height: 64px; object-fit: cover; border-radius: 6px; border: 2px solid var(--line); cursor: pointer; }
+.thumbs img.on { border-color: var(--accent); }
+.col { display: flex; flex-direction: column; gap: 16px; }
+
+/* sell */
+.sell { display: grid; gap: 24px; }
+@media (min-width: 1024px) { .sell { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); } .sell .left { position: sticky; top: 80px; align-self: start; } }
+.drop { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow: hidden; border: 2px dashed var(--line); border-radius: 24px; background: var(--surface); text-align: center; cursor: pointer; width: 100%; max-width: 260px; margin: 0 auto; }
+@media (min-width: 1024px) { .drop { max-width: none; } }
+.drop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 16px; }
+.results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+.results button { border: 2px solid var(--line); background: var(--surface); border-radius: 10px; padding: 4px; cursor: pointer; text-align: left; font-size: 11px; }
+.results button.on { border-color: var(--accent); }
+.results img { width: 100%; border-radius: 6px; display: block; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg label { display: flex; height: 44px; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); font-size: 14px; font-weight: 500; cursor: pointer; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; padding: 4px; }
+.tabs button { height: 40px; border: 0; border-radius: 8px; background: none; font-weight: 600; cursor: pointer; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+
+table.fees { width: 100%; border-collapse: collapse; font-size: 14px; } table.fees th { text-align: left; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+table.fees th, table.fees td { padding: 12px; border-bottom: 1px solid var(--line); } table.fees tr:last-child td { border-bottom: 0; }
+footer.bottom { border-top: 1px solid var(--line); margin-top: 48px; }
+footer.bottom .wrap { padding-top: 32px; padding-bottom: 32px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--ink-2); }
+@media (min-width: 640px) { footer.bottom .wrap { flex-direction: row; justify-content: space-between; } }
+h1 { margin: 0; }
+.hero h1 { font-size: clamp(34px, 6vw, 48px); line-height: 1.05; max-width: 640px; }
+.hero p { max-width: 560px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tile { transition: none; } .spinner { animation-duration: 3s; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap row">
+    <a class="logo" href="#/"><i aria-hidden="true"></i><span id="brand">Holo</span></a>
+    <form class="top-search" id="topSearch"><label class="sr-only" for="qTop">Buscar</label><input class="input pill-input" id="qTop" name="q" placeholder="Busca Charizard, Wembanyama, Prizm…"></form>
+    <nav class="links" id="nav"></nav>
+  </div>
+</header>
+<main id="app" class="wrap" style="flex:1"></main>
+<footer class="bottom"><div class="wrap"><p style="margin:0">© 2026 <span class="brand-name">Holo</span> · Hecho en Panamá 🇵🇦 · Precios en USD</p><p style="margin:0">Los precios estimados son referencias, no garantías ni tasaciones oficiales.</p></div></footer>
+
+<script>
+"use strict";
+// ============================================================= configuration
+// The publishable key is public by design: row-level security in the database
+// decides what each visitor can read or write. Never put a secret key here.
+const CONFIG = {
+  APP_NAME: "Holo",
+  SUPABASE_URL: "https://vqcpqoedsyatxswdzqcy.supabase.co",
+  SUPABASE_KEY: "sb_publishable_tDP2wsl-yvSv2egMu7QFtw_cTQ12NZg",
+  WHATSAPP: "", // platform WhatsApp, international format without "+", e.g. "5076XXXXXXX"
+  SHOW_DEMO_LISTINGS: true,
+  CATALOG_API: "https://api.pokemontcg.io/v2",
+};
+
+// ============================================================= catalog
+const CATEGORIES = [
+  { slug: "pokemon", name: "Pokémon" },
+  { slug: "nba", name: "NBA" },
+  { slug: "nfl", name: "NFL" },
+];
+const categoryName = (s) => CATEGORIES.find((c) => c.slug === s)?.name ?? s;
+const CONDITIONS = [
+  { code: "NM", label: "Near Mint", hint: "Como nueva, a lo sumo detalles mínimos" },
+  { code: "LP", label: "Lightly Played", hint: "Desgaste leve en bordes o esquinas" },
+  { code: "MP", label: "Moderately Played", hint: "Desgaste visible, sin dobleces" },
+  { code: "HP", label: "Heavily Played", hint: "Desgaste fuerte, marcas o rayones" },
+  { code: "DMG", label: "Dañada", hint: "Dobleces, roturas o manchas" },
+];
+const GRADERS = ["PSA", "BGS", "CGC", "SGC", "TAG"];
+const LOCATIONS = [
+  { province: "Panamá", district: "Panamá", neighborhoods: ["Bella Vista", "Brisas del Golf", "Clayton", "Condado del Rey", "Costa del Este", "El Cangrejo", "Obarrio", "Punta Pacífica", "San Francisco", "Tumba Muerto", "Villa de las Fuentes", "Albrook", "Juan Díaz", "Pedregal"] },
+  { province: "Panamá", district: "San Miguelito", neighborhoods: ["Los Andes", "Villa Lucre", "Cerro Viento"] },
+  { province: "Panamá Oeste", district: "Arraiján", neighborhoods: ["Vista Alegre", "Costa Verde", "Nuevo Chorrillo"] },
+  { province: "Panamá Oeste", district: "La Chorrera", neighborhoods: ["Centro", "Guadalupe"] },
+  { province: "Colón", district: "Colón", neighborhoods: ["Centro", "Sabanitas"] },
+  { province: "Chiriquí", district: "David", neighborhoods: ["Centro", "San Mateo"] },
+  { province: "Veraguas", district: "Santiago", neighborhoods: ["Centro"] },
+  { province: "Herrera", district: "Chitré", neighborhoods: ["Centro"] },
+  { province: "Coclé", district: "Penonomé", neighborhoods: ["Centro"] },
+];
+const PROVINCES = [...new Set(LOCATIONS.map((l) => l.province))];
+const FLAT_LOCATIONS = LOCATIONS.flatMap((l) => l.neighborhoods.map((n) => ({ province: l.province, district: l.district, neighborhood: n })));
+
+// ============================================================= fees (Compra Protegida)
+// Buyer pays: 4% of the card price, min $1, max $40, plus 7% ITBMS on the fee. Cents.
+const FEES = { rateBps: 400, fixedCents: 0, minCents: 100, maxCents: 4000, itbmsBps: 700 };
+const roundHalfUp = (n) => Math.floor(n + 0.5);
+function quoteProtected(priceCents, cfg = FEES) {
+  if (!Number.isInteger(priceCents) || priceCents <= 0) throw new RangeError("priceCents must be a positive integer");
+  const raw = roundHalfUp((priceCents * cfg.rateBps) / 10000) + cfg.fixedCents;
+  const feeCents = Math.min(cfg.maxCents, Math.max(cfg.minCents, raw));
+  const itbmsCents = roundHalfUp((feeCents * cfg.itbmsBps) / 10000);
+  return { priceCents, feeCents, itbmsCents, buyerTotalCents: priceCents + feeCents + itbmsCents, sellerPayoutCents: priceCents };
+}
+const toCents = (usd) => Math.round(usd * 100);
+function formatUsd(cents) {
+  return new Intl.NumberFormat("es-PA", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
+}
+const fmtEstimate = (usd) => formatUsd(toCents(usd >= 20 ? Math.round(usd) : usd));
+
+// ============================================================= price estimate
+const CONDITION_FACTOR = { NM: 1, LP: 0.85, MP: 0.7, HP: 0.5, DMG: 0.3 };
+const parseDate = (s) => new Date(s.includes("/") ? s.replaceAll("/", "-") : s);
+const daysBetween = (a, b) => Math.abs(a - b) / 86400000;
+function quantile(sorted, q) { const p = (sorted.length - 1) * q, lo = Math.floor(p), hi = Math.ceil(p); return sorted[lo] + (sorted[hi] - sorted[lo]) * (p - lo); }
+const round2 = (n) => Math.round(n * 100) / 100;
+
+/** Combine a TCGplayer reference price with local Panama sales; null when there is no honest basis. */
+function estimatePrice({ reference, localComps = [], condition, grading, now = new Date() }) {
+  const basis = [];
+  const recent = localComps.filter((c) => daysBetween(parseDate(c.soldAt), now) <= 180).map((c) => c.priceUsd).sort((a, b) => a - b);
+  let local = null;
+  if (recent.length >= 3) {
+    local = { low: quantile(recent, 0.25), mid: quantile(recent, 0.5), high: quantile(recent, 0.75) };
+    basis.push(`${recent.length} ventas en Panamá en los últimos 6 meses`);
+  }
+  let ref = null;
+  const refValue = reference ? (reference.market ?? reference.mid) : null;
+  if (reference && refValue > 0 && !grading) {
+    const factor = condition ? CONDITION_FACTOR[condition] : 1;
+    const mid = refValue * factor;
+    ref = { low: mid * 0.85, mid, high: mid * 1.15, stale: daysBetween(parseDate(reference.updatedAt), now) > 14 };
+    basis.push(`Precio de mercado en EE.UU. (TCGplayer, ${reference.variant})`);
+    if (condition && condition !== "NM") basis.push(`Ajustado por condición ${condition} (×${factor})`);
+  }
+  if (!local && !ref) return null;
+  let v, source;
+  if (local && ref) { const w = 0.6; v = { low: local.low * w + ref.low * (1 - w), mid: local.mid * w + ref.mid * (1 - w), high: local.high * w + ref.high * (1 - w) }; source = "mixto"; }
+  else if (local) { v = local; source = "local"; }
+  else { v = ref; source = "tcgplayer"; }
+  let confidence = "baja";
+  if (local && recent.length >= 8) confidence = "alta";
+  else if (local || (ref && !ref.stale)) confidence = "media";
+  if (ref?.stale) basis.push("La referencia externa tiene más de 2 semanas");
+  return { low: round2(v.low), mid: round2(v.mid), high: round2(v.high), currency: "USD", confidence, basis, source, updatedAt: now.toISOString() };
+}
+function priceVerdict(price, est) {
+  if (!est) return null;
+  if (price < est.low) return "buen-precio";
+  if (price > est.high) return "alto";
+  return "en-rango";
+}
+const VARIANT_ORDER = ["normal", "holofoil", "reverseHolofoil", "1stEditionHolofoil", "unlimitedHolofoil"];
+function pickReferencePrice(card, hint) {
+  const prices = card?.tcgplayer?.prices;
+  if (!prices) return null;
+  const keys = Object.keys(prices);
+  const h = hint?.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const key = (h && keys.find((k) => k.toLowerCase().includes(h))) || VARIANT_ORDER.find((k) => keys.includes(k)) || keys[0];
+  return key ? { ...prices[key], variant: key, updatedAt: card.tcgplayer.updatedAt } : null;
+}
+
+// ============================================================= demo data
+// Example listings to show how the marketplace works. Clearly labeled; not for sale.
+const img = (set, num) => `https://images.pokemontcg.io/${set}/${num}_hires.png`;
+const DEMO_SELLERS = {
+  tienda: { displayName: "Tienda Demo TCG", isShop: true, verified: true, rating: 4.9, salesCount: 214 },
+  ana: { displayName: "Ana R.", isShop: false, verified: true, rating: 5, salesCount: 12 },
+  diego: { displayName: "Diego M.", isShop: false, verified: false, rating: 4.6, salesCount: 5 },
+  kevin: { displayName: "Kevin Sports Cards", isShop: false, verified: true, rating: 4.8, salesCount: 31 },
+};
+const SNAP = (market, variant = "holofoil") => ({ market, low: null, mid: null, high: null, variant, updatedAt: "2026/09/25" });
+const DEMO_REFS = { "sv3pt5-199": SNAP(347.46), "sv8-238": SNAP(286.77), "swsh7-215": SNAP(2299.94), "sv3pt5-151": SNAP(6.56), "sv2-254": SNAP(10.54) };
+const DEMO_COMPS = {
+  "sv3pt5-199|PSA10": [780, 820, 750, 800].map((p, i) => ({ priceUsd: p, soldAt: `2026-0${8 + (i > 1 ? 1 : 0)}-1${i}` })),
+  "nba-wemby-prizm-136|raw": [18, 22, 20].map((p, i) => ({ priceUsd: p, soldAt: `2026-09-0${i + 1}` })),
+};
+const DEMO = [
+  ["l-001", "Charizard ex SIR 199/165 · 151", "Sacada de sobre y directo a sleeve + toploader. Centrado muy bueno.", "pokemon", "Charizard ex", "151", 2023, "199/165", "Special Illustration Rare", "sv3pt5-199", "NM", null, 335, [img("sv3pt5", "199")], ["Panamá", "Panamá", "Costa del Este"], "tienda", true, "2026-09-24T15:00:00Z"],
+  ["l-002", "Charizard ex SIR 199/165 · PSA 10", "Slab PSA 10, certificado verificable en psacard.com.", "pokemon", "Charizard ex", "151", 2023, "199/165", "Special Illustration Rare", "sv3pt5-199", null, { company: "PSA", grade: 10 }, 760, [img("sv3pt5", "199")], ["Panamá", "Panamá", "San Francisco"], "ana", true, "2026-09-23T20:10:00Z"],
+  ["l-003", "Umbreon VMAX 215/203 · Evolving Skies", "La 'Moonbreon'. Leve blanqueado en una esquina trasera, frente impecable.", "pokemon", "Umbreon VMAX", "Evolving Skies", 2021, "215/203", "Alternate Art", "swsh7-215", "LP", null, 1850, [img("swsh7", "215")], ["Panamá", "Panamá", "Obarrio"], "tienda", true, "2026-09-22T12:00:00Z"],
+  ["l-004", "Pikachu ex SIR 238/191 · Surging Sparks", "Near mint. Entrego en Albrook o Multiplaza.", "pokemon", "Pikachu ex", "Surging Sparks", 2024, "238/191", "Special Illustration Rare", "sv8-238", "NM", null, 240, [img("sv8", "238")], ["Panamá", "Panamá", "Albrook"], "diego", true, "2026-09-25T02:30:00Z"],
+  ["l-005", "Mew ex 151/165 · Double Rare", "Perfecta para mazo. También cambio por Iono.", "pokemon", "Mew ex", "151", 2023, "151/165", "Double Rare", "sv3pt5-151", "NM", null, 8, [img("sv3pt5", "151")], ["Chiriquí", "David", "Centro"], "diego", false, "2026-09-21T18:00:00Z"],
+  ["l-006", "Iono 254/193 · Paldea Evolved", "Full art. Leve desgaste en borde.", "pokemon", "Iono", "Paldea Evolved", 2023, "254/193", "Ultra Rare", "sv2-254", "LP", null, 9, [img("sv2", "254")], ["Panamá Oeste", "Arraiján", "Costa Verde"], "ana", false, "2026-09-20T13:45:00Z"],
+  ["l-007", "Victor Wembanyama Prizm RC #136", "Rookie base de Prizm 2023-24. Esquinas filosas.", "nba", "Victor Wembanyama", "Panini Prizm", 2023, "#136", "Base RC", "nba-wemby-prizm-136", "NM", null, 19, [], ["Panamá", "Panamá", "El Cangrejo"], "kevin", false, "2026-09-24T22:00:00Z"],
+  ["l-008", "LeBron James Select Concourse · Silver", "Paralelo Silver Prizm. Sale en toploader con sleeve.", "nba", "LeBron James", "Panini Select", 2022, "#1", "Silver Prizm", null, "NM", null, 25, [], ["Panamá", "Panamá", "Condado del Rey"], "kevin", false, "2026-09-19T16:20:00Z"],
+  ["l-009", "C.J. Stroud Prizm RC · PSA 9", "Rookie graduado PSA 9. Cert verificable.", "nfl", "C.J. Stroud", "Panini Prizm", 2023, "#339", "Base RC", null, null, { company: "PSA", grade: 9 }, 65, [], ["Panamá", "San Miguelito", "Villa Lucre"], "kevin", true, "2026-09-18T11:00:00Z"],
+  ["l-010", "Patrick Mahomes Donruss Optic · Holo", "Paralelo Holo. Buen estado, leve descentrado.", "nfl", "Patrick Mahomes", "Donruss Optic", 2022, "#50", "Holo", null, "LP", null, 14, [], ["Veraguas", "Santiago", "Centro"], "diego", false, "2026-09-17T09:30:00Z"],
+].map(([id, title, description, category, subject, setName, year, number, variant, catalogId, condition, grading, priceUsd, photos, [province, district, neighborhood], sellerKey, protectedEligible, createdAt]) => {
+  const key = catalogId ? `${catalogId}|${grading ? grading.company + grading.grade : "raw"}` : null;
+  return {
+    id, title, description, card: { category, subject, setName, year, number, variant, catalogId }, condition, grading, priceUsd, photos,
+    location: { province, district, neighborhood }, seller: DEMO_SELLERS[sellerKey], status: "active", protectedEligible, createdAt, isDemo: true,
+    estimate: estimatePrice({ reference: catalogId ? DEMO_REFS[catalogId] : null, localComps: key ? DEMO_COMPS[key] ?? [] : [], condition, grading, now: new Date("2026-09-25T12:00:00Z") }),
+  };
+});
+
+// ============================================================= helpers
+const $ = (sel, root = document) => root.querySelector(sel);
+const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+const normalize = (s) => String(s ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+function waLink(message) { const n = CONFIG.WHATSAPP.replace(/\D/g, ""); return n ? `https://wa.me/${n}?text=${encodeURIComponent(message)}` : null; }
+function setTitle(t) { document.title = t ? `${t} · ${CONFIG.APP_NAME}` : `${CONFIG.APP_NAME} · Cartas coleccionables en Panamá`; }
+
+// ============================================================= supabase
+const sb = window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
+let session = null;
+let profileName = null;
+const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
+const photoUrl = (path) => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
+
+function rowToListing(r, prof) {
+  return {
+    id: r.id, title: r.title, description: r.description ?? "",
+    card: { category: r.category, subject: r.subject, setName: r.set_name, year: r.year, number: r.number, variant: r.variant, catalogId: r.catalog_id },
+    condition: r.condition, grading: r.grading_company && r.grade != null ? { company: r.grading_company, grade: Number(r.grade) } : null,
+    priceUsd: r.price_cents / 100,
+    photos: [...(r.listing_photos ?? [])].sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
+    location: { province: r.province, district: r.district, neighborhood: r.neighborhood },
+    seller: { id: r.seller_id, displayName: prof?.display_name ?? "Vendedor", isShop: prof?.is_shop ?? false, verified: prof?.verified ?? false, rating: null, salesCount: 0 },
+    sellerId: r.seller_id, status: r.status, estimate: r.estimate, protectedEligible: r.protected_eligible, createdAt: r.created_at,
+  };
+}
+async function withProfiles(rows) {
+  if (!rows.length) return [];
+  const ids = [...new Set(rows.map((r) => r.seller_id))];
+  const { data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids);
+  const byId = new Map((data ?? []).map((p) => [p.id, p]));
+  return rows.map((r) => rowToListing(r, byId.get(r.seller_id)));
+}
+const searchTokens = (q) => String(q ?? "").replace(/[,()%*\\"'.:]/g, " ").split(/\s+/).filter((t) => t.length >= 2).slice(0, 5);
+
+async function fetchRealListings(f) {
+  if (!sb) return [];
+  let q = sb.from("listings").select(LISTING_COLS).eq("status", "active").limit(60);
+  if (f.category) q = q.eq("category", f.category);
+  if (f.graded === "graded") q = q.not("grading_company", "is", null);
+  if (f.graded === "raw") q = q.is("grading_company", null);
+  if (f.province) q = q.eq("province", f.province);
+  if (f.minPrice != null) q = q.gte("price_cents", Math.round(f.minPrice * 100));
+  if (f.maxPrice != null) q = q.lte("price_cents", Math.round(f.maxPrice * 100));
+  for (const t of searchTokens(f.q)) q = q.or(["title", "subject", "set_name", "neighborhood", "district", "province"].map((c) => `${c}.ilike.%${t}%`).join(","));
+  q = q.order("created_at", { ascending: false });
+  const { data, error } = await q;
+  if (error) { console.error(error); return []; }
+  return withProfiles(data ?? []);
+}
+async function fetchRealListing(id) {
+  if (!sb) return null;
+  const { data, error } = await sb.from("listings").select(LISTING_COLS).eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  return (await withProfiles([data]))[0];
+}
+
+function matchesFilters(l, f) {
+  if (f.category && l.card.category !== f.category) return false;
+  if (f.graded === "graded" && !l.grading) return false;
+  if (f.graded === "raw" && l.grading) return false;
+  if (f.province && l.location.province !== f.province) return false;
+  if (f.minPrice != null && l.priceUsd < f.minPrice) return false;
+  if (f.maxPrice != null && l.priceUsd > f.maxPrice) return false;
+  if (f.q) {
+    const hay = normalize([l.title, l.card.subject, l.card.setName, l.card.variant, l.card.number, l.location.neighborhood, l.location.district, l.location.province].join(" "));
+    if (!normalize(f.q).split(/\s+/).filter(Boolean).every((t) => hay.includes(t))) return false;
+  }
+  return true;
+}
+function sortListings(list, sort) {
+  const c = [...list];
+  if (sort === "precio-asc") c.sort((a, b) => a.priceUsd - b.priceUsd);
+  else if (sort === "precio-desc") c.sort((a, b) => b.priceUsd - a.priceUsd);
+  else c.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  return c;
+}
+
+// ============================================================= router
+function parseHash() {
+  const raw = location.hash.replace(/^#/, "") || "/";
+  const [path, qs] = raw.split("?");
+  return { path, params: new URLSearchParams(qs ?? "") };
+}
+function go(path) { location.hash = path; }
+function filtersFrom(params) {
+  const num = (k) => { const v = params.get(k); const n = v ? Number(v) : NaN; return Number.isFinite(n) && n >= 0 ? n : undefined; };
+  const tipo = params.get("tipo"), orden = params.get("orden");
+  return {
+    q: params.get("q")?.trim() || undefined, category: params.get("cat") || undefined,
+    graded: tipo === "raw" || tipo === "graded" ? tipo : undefined, province: params.get("provincia") || undefined,
+    minPrice: num("min"), maxPrice: num("max"), sort: orden === "precio-asc" || orden === "precio-desc" ? orden : "recientes",
+  };
+}
+function hrefWith(f, patch) {
+  const base = { q: f.q, cat: f.category, tipo: f.graded, provincia: f.province, min: f.minPrice, max: f.maxPrice, orden: f.sort === "recientes" ? undefined : f.sort };
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries({ ...base, ...patch })) if (v != null && v !== "") p.set(k, v);
+  const s = p.toString();
+  return s ? `#/?${s}` : "#/";
+}
+
+async function route() {
+  const { path, params } = parseHash();
+  window.scrollTo(0, 0);
+  renderNav();
+  const app = $("#app");
+  try {
+    if (path === "/" || path === "") return await viewHome(app, params);
+    if (path.startsWith("/carta/")) return await viewDetail(app, decodeURIComponent(path.slice(7)));
+    if (path === "/protegida") return viewProtected(app);
+    if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
+    if (path === "/vender") return viewSell(app);
+    app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Página no encontrada.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
+  } catch (e) {
+    console.error(e);
+    app.innerHTML = `<div class="notice bad" style="margin-top:24px">Algo salió mal. Recarga la página.</div>`;
+  }
+}
+
+function renderNav() {
+  const name = session ? esc(profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta") : null;
+  $("#nav").innerHTML = `
+    <a class="hide-sm" href="#/protegida">Compra Protegida</a>
+    ${session ? `<button class="link" id="signOut" title="Salir">${name} · Salir</button>` : `<a href="#/entrar">Entrar</a>`}
+    <a class="btn primary" style="height:36px;padding:0 16px" href="#/vender">Vender</a>`;
+  $("#signOut")?.addEventListener("click", async () => { await sb.auth.signOut(); go("/"); });
+}
+
+// ============================================================= components
+function cardArt(l) {
+  if (l.photos[0]) return `<img class="card" src="${esc(l.photos[0])}" alt="${esc(l.title)}" loading="lazy">`;
+  const s = { nba: ["#1d428a", "#c8102e", "NBA"], nfl: ["#013369", "#2f6f3e", "NFL"] }[l.card.category] ?? ["#444", "#888", "Carta"];
+  return `<div class="placeholder" role="img" aria-label="${esc(l.title)} (sin foto)" style="background:linear-gradient(150deg,${s[0]},${s[1]})">
+    <span class="tag">${s[2]}</span>
+    <div><p class="who">${esc(l.card.subject)}</p><p class="meta">${esc(l.card.year ?? "")} ${esc(l.card.setName)} ${esc(l.card.number ?? "")}</p><p class="note">Foto de ejemplo</p></div></div>`;
+}
+function conditionBadge(l) {
+  if (l.grading) return `<span class="graded">${esc(l.grading.company)} ${esc(l.grading.grade)}</span>`;
+  return l.condition ? `<span class="cond">${esc(l.condition)}</span>` : "";
+}
+function verdictBadge(l) {
+  const v = priceVerdict(l.priceUsd, l.estimate);
+  return { "buen-precio": `<span class="b good">Buen precio</span>`, "en-rango": `<span class="b neutral">Precio justo</span>`, alto: `<span class="b warn">Sobre el mercado</span>` }[v] ?? "";
+}
+const protectedBadge = () => `<span class="b prot">🛡 Protegida</span>`;
+function tile(l) {
+  return `<li><a class="tile" href="#/carta/${encodeURIComponent(l.id)}">
+    <div class="art card-ratio"><div class="inner">${cardArt(l)}</div>
+      <div class="corner-l">${conditionBadge(l)}</div>${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
+    <div class="body"><p class="title">${esc(l.title)}</p><p class="price">${formatUsd(toCents(l.priceUsd))}</p>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${verdictBadge(l)}${l.protectedEligible ? protectedBadge() : ""}</div>
+      <p class="loc">${esc(l.location.neighborhood)}, ${esc(l.location.district)}</p></div></a></li>`;
+}
+function estimatePanel(est, price) {
+  if (!est) return `<section class="panel"><h2>Precio estimado</h2><p class="small muted" style="margin:6px 0 0">Todavía no hay suficientes datos para estimar esta carta. Para cartas deportivas y graduadas usamos ventas reales en Panamá (mínimo 3).</p></section>`;
+  const span = est.high - est.low, pad = span * 0.35 || est.mid * 0.2, min = Math.max(0, est.low - pad), max = est.high + pad;
+  const pct = (v) => `${Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100))}%`;
+  const conf = { alta: "Confianza alta", media: "Confianza media", baja: "Confianza baja" }[est.confidence];
+  return `<section class="panel holo-border">
+    <div style="display:flex;justify-content:space-between;gap:8px"><h2>Precio estimado <span class="holo-text" style="font-weight:700">IA</span></h2><span class="xs muted">${conf}</span></div>
+    <p class="display" style="font-size:24px;font-weight:700;margin:8px 0 0">${fmtEstimate(est.low)} – ${fmtEstimate(est.high)}</p>
+    <p class="small muted" style="margin:0">Valor medio ${fmtEstimate(est.mid)}</p>
+    ${price != null ? `<div class="range" aria-hidden="true"><div class="fill" style="left:${pct(est.low)};right:calc(100% - ${pct(est.high)})"></div><div class="lbl" style="left:${pct(price)}">Este anuncio</div><div class="mark" style="left:${pct(price)}"></div></div>` : ""}
+    <ul class="xs muted" style="padding:0;list-style:none;margin:12px 0 0">${est.basis.map((b) => `<li>• ${esc(b)}</li>`).join("")}</ul>
+    <p class="xs muted" style="margin:10px 0 0">Es una referencia, no una garantía ni una tasación.</p></section>`;
+}
+
+// ============================================================= views
+async function viewHome(app, params) {
+  const f = filtersFrom(params);
+  const filtered = Boolean(f.q || f.category || f.graded || f.province || f.minPrice != null || f.maxPrice != null);
+  const active = [f.graded, f.province, f.minPrice, f.maxPrice].filter((v) => v != null).length;
+  setTitle();
+  $("#qTop").value = f.q ?? "";
+  app.innerHTML = `
+    ${filtered ? "" : `<section class="hero" style="padding:40px 0 32px">
+      <h1 class="display" style="font-weight:700">Cartas coleccionables en Panamá, <span class="holo-text">con precio claro</span>.</h1>
+      <p class="muted">Pokémon, NBA y NFL. Cada anuncio muestra un rango de precio de mercado, y con Compra Protegida verificamos la carta antes de que el vendedor reciba tu pago.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px"><a class="btn primary" href="#/vender">Publica tu carta gratis</a><a class="btn" href="#/protegida">¿Cómo funciona Compra Protegida?</a></div></section>`}
+    <div style="display:flex;flex-direction:column;gap:12px;${filtered ? "padding-top:24px" : ""}">
+      <div class="chips">
+        <a class="chip ${!f.category ? "on" : ""}" href="${hrefWith(f, { cat: undefined })}">Todo</a>
+        ${CATEGORIES.map((c) => `<a class="chip ${f.category === c.slug ? "on" : ""}" href="${hrefWith(f, { cat: c.slug })}">${c.name}</a>`).join("")}
+      </div>
+      <details class="filters" ${active ? "open" : ""}>
+        <summary><span>Filtros${active ? `<span class="badge-count">${active}</span>` : ""}</span><span class="muted">▾</span></summary>
+        <form id="filterForm">
+          <label class="f muted-label span2">Buscar<input class="input" name="q" value="${esc(f.q ?? "")}" placeholder="Nombre, jugador, set…"></label>
+          <label class="f muted-label">Tipo<select class="select" name="tipo"><option value="">Todas</option><option value="raw" ${f.graded === "raw" ? "selected" : ""}>Sin graduar</option><option value="graded" ${f.graded === "graded" ? "selected" : ""}>Graduadas</option></select></label>
+          <label class="f muted-label">Provincia<select class="select" name="provincia"><option value="">Todo Panamá</option>${PROVINCES.map((p) => `<option ${f.province === p ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+          <div style="display:flex;gap:8px"><label class="f muted-label" style="flex:1">Mín $<input class="input" name="min" type="number" min="0" inputmode="decimal" value="${f.minPrice ?? ""}"></label><label class="f muted-label" style="flex:1">Máx $<input class="input" name="max" type="number" min="0" inputmode="decimal" value="${f.maxPrice ?? ""}"></label></div>
+          <label class="f muted-label">Ordenar<select class="select" name="orden"><option value="recientes">Más recientes</option><option value="precio-asc" ${f.sort === "precio-asc" ? "selected" : ""}>Precio: menor a mayor</option><option value="precio-desc" ${f.sort === "precio-desc" ? "selected" : ""}>Precio: mayor a menor</option></select></label>
+          <div class="spanall"><button class="btn dark" style="border-radius:12px">Aplicar</button><a class="btn" style="border:0;background:none" href="${f.category ? `#/?cat=${f.category}` : "#/"}">Limpiar</a></div>
+        </form>
+      </details>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:24px">
+      <h2 class="display" style="font-size:20px;margin:0">${f.q ? `Resultados para “${esc(f.q)}”` : "Recién publicadas"}</h2><p class="small muted" id="count" style="margin:0"></p></div>
+    <div id="list"><p class="muted small" style="margin-top:16px"><span class="spinner"></span> Cargando…</p></div>`;
+
+  $("#filterForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    go(hrefWith(f, { q: fd.get("q"), tipo: fd.get("tipo"), provincia: fd.get("provincia"), min: fd.get("min"), max: fd.get("max"), orden: fd.get("orden") === "recientes" ? "" : fd.get("orden") }).slice(1));
+  });
+
+  const demo = CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => matchesFilters(l, f)) : [];
+  const real = await fetchRealListings(f).catch(() => []);
+  const list = sortListings([...real, ...demo], f.sort);
+  if (parseHash().path !== "/" && parseHash().path !== "") return; // navigated away while loading
+  $("#count").textContent = `${list.length} ${list.length === 1 ? "carta" : "cartas"}`;
+  $("#list").innerHTML = list.length
+    ? `<ul class="grid">${list.map(tile).join("")}</ul>`
+    : `<div class="panel" style="margin-top:24px;text-align:center;border-style:dashed;padding:40px"><p style="margin:0;font-weight:500">No encontramos cartas con esos filtros.</p><p class="small muted">Prueba con otra búsqueda o <a href="#/" style="text-decoration:underline">ve todo</a>.</p></div>`;
+}
+
+async function viewDetail(app, id) {
+  app.innerHTML = `<p class="muted small" style="margin-top:24px"><span class="spinner"></span> Cargando…</p>`;
+  const l = DEMO.find((d) => d.id === id) ?? (isUuid(id) ? await fetchRealListing(id) : null);
+  if (!l) { app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Este anuncio no existe o ya no está disponible.</p><a class="btn" href="#/">Ver cartas</a></div>`; return; }
+  setTitle(l.title);
+  const price = toCents(l.priceUsd);
+  const quote = l.protectedEligible ? quoteProtected(price) : null;
+  const ref = `ref ${l.id.slice(0, 8)}`;
+  const contact = waLink(`Hola, me interesa "${l.title}" (${formatUsd(price)}, ${ref}).`);
+  const buy = quote ? waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.`) : null;
+  const cond = CONDITIONS.find((c) => c.code === l.condition);
+  const isOwner = session && l.sellerId === session.user.id;
+
+  app.innerHTML = `
+    <nav class="small muted" style="margin-top:16px"><a href="#/">Inicio</a> <span style="margin:0 6px">/</span> <a href="#/?cat=${esc(l.card.category)}">${esc(categoryName(l.card.category))}</a></nav>
+    <div class="detail">
+      <div class="left">
+        <div class="big-art card-ratio"><div class="inner" id="bigArt">${cardArt(l)}</div></div>
+        ${l.photos.length > 1 ? `<div class="thumbs">${l.photos.map((p, i) => `<img src="${esc(p)}" data-i="${i}" class="${i === 0 ? "on" : ""}" alt="Foto ${i + 1}">`).join("")}</div>` : ""}
+        ${l.isDemo && l.photos.length ? `<p class="xs muted" style="text-align:center">Imagen de catálogo. Pide fotos reales del frente y el reverso antes de comprar.</p>` : ""}
+      </div>
+      <div class="col">
+        <div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">${conditionBadge(l)}${l.protectedEligible ? protectedBadge() : ""}${verdictBadge(l)}</div>
+          <h1 class="display" style="font-size:30px;line-height:1.1;margin-top:8px">${esc(l.title)}</h1>
+          <p class="small muted" style="margin:4px 0 0">${[l.card.year, l.card.setName, l.card.number, l.card.variant].filter(Boolean).map(esc).join(" · ")}</p>
+          <p class="display" style="font-size:36px;font-weight:700;margin:12px 0 0">${formatUsd(price)}</p>
+        </div>
+        ${l.isDemo ? `<p class="notice warn" style="margin:0">Anuncio de ejemplo para mostrar cómo funciona la plataforma. No está a la venta.</p>` : ""}
+        ${estimatePanel(l.estimate, l.priceUsd)}
+        ${quote ? `<section class="panel"><h2>Compra Protegida</h2>
+          <p class="small muted" style="margin:6px 0 0">Pagas a ${esc(CONFIG.APP_NAME)}, verificamos la carta en persona y solo entonces le pagamos al vendedor. Si no es lo anunciado, te devolvemos todo.</p>
+          <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección y verificación (4%)</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
+          <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
+          ${buy ? `<a class="btn primary block" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">Comprar protegido</a>` : `<p class="notice soft" style="margin:16px 0 0;text-align:center">Compra Protegida disponible pronto.</p>`}</section>` : ""}
+        ${contact ? `<a class="btn block" href="${esc(contact)}" target="_blank" rel="noopener">Preguntar por WhatsApp</a>` : `<p class="notice soft" style="margin:0;text-align:center">El contacto por WhatsApp se activa pronto.</p>`}
+        <section class="panel"><h2>Descripción</h2><p class="small" style="white-space:pre-line;margin:6px 0 0">${esc(l.description) || "Sin descripción."}</p>
+          <dl class="facts"><div><dt>Categoría</dt><dd>${esc(categoryName(l.card.category))}</dd></div>
+          <div><dt>${l.grading ? "Graduación" : "Condición"}</dt><dd>${l.grading ? `${esc(l.grading.company)} ${esc(l.grading.grade)}` : cond ? `${cond.label} (${cond.code})` : "—"}</dd></div>
+          <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
+        <section class="panel" style="display:flex;align-items:center;gap:12px">
+          <div class="display" style="width:44px;height:44px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700">${esc(l.seller.displayName.slice(0, 1))}</div>
+          <div><p style="margin:0;font-weight:500">${esc(l.seller.displayName)} ${l.seller.verified ? `<span class="xs" style="color:var(--accent)">✓ Verificado</span>` : ""} ${l.seller.isShop ? `<span class="xs muted">· Tienda</span>` : ""}</p>
+          <p class="xs muted" style="margin:0">${l.seller.rating ? `★ ${l.seller.rating.toFixed(1)} · ` : ""}${l.seller.salesCount} ventas</p></div></section>
+        <section class="panel" style="background:var(--surface-2);border:0"><h2>Compra segura</h2>
+          <ul class="small muted" style="padding:0;list-style:none;margin:8px 0 0;display:grid;gap:4px">
+          <li>• Reúnete en un lugar público (mall o tienda aliada) y a la luz del día.</li><li>• Revisa la carta con luz: textura, brillo holo, tipografía y reverso.</li>
+          <li>• Si es graduada, verifica el número de certificado en la web de la empresa.</li><li>• Nunca pagues por adelantado fuera de Compra Protegida.</li></ul></section>
+        ${isOwner ? `<button class="btn danger" id="deleteListing">Eliminar mi anuncio</button>` : ""}
+      </div>
+    </div>`;
+
+  app.querySelectorAll(".thumbs img").forEach((t) => t.addEventListener("click", () => {
+    $("#bigArt img").src = l.photos[Number(t.dataset.i)];
+    app.querySelectorAll(".thumbs img").forEach((x) => x.classList.toggle("on", x === t));
+  }));
+  $("#deleteListing")?.addEventListener("click", async (e) => {
+    if (!confirm("¿Eliminar este anuncio? No se puede deshacer.")) return;
+    e.target.disabled = true;
+    const { data: photos } = await sb.from("listing_photos").select("storage_path").eq("listing_id", l.id);
+    if (photos?.length) await sb.storage.from("listing-photos").remove(photos.map((p) => p.storage_path));
+    const { error } = await sb.from("listings").delete().eq("id", l.id);
+    if (error) { alert("No se pudo eliminar. Intenta de nuevo."); e.target.disabled = false; return; }
+    go("/");
+  });
+}
+
+function viewProtected(app) {
+  setTitle("Compra Protegida");
+  const steps = [["Pagas a " + CONFIG.APP_NAME, "Por Yappy o transferencia. El vendedor todavía no recibe el dinero."], ["Verificamos la carta", "La revisamos en persona: autenticidad, condición y que sea la misma de las fotos."], ["Recibes tu carta", "Te la entregamos en un punto seguro o la retiras en una tienda aliada."], ["El vendedor cobra", "Solo cuando confirmas. Si la carta no es lo anunciado, te devolvemos todo."]];
+  const rows = [10, 50, 150, 500, 1500].map((u) => quoteProtected(toCents(u)));
+  app.innerHTML = `<div style="max-width:768px;padding-top:32px">
+    <h1 class="display" style="font-size:40px">Compra Protegida</h1>
+    <p class="muted">Para comprar cartas de valor sin miedo a réplicas, cartas en peor estado o gente que no llega. Es opcional para el comprador y publicar sigue siendo gratis para el vendedor.</p>
+    <ol style="list-style:none;padding:0;display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:32px">
+      ${steps.map(([t, d], i) => `<li class="panel"><span class="display small" style="color:var(--accent);font-weight:700">Paso ${i + 1}</span><p style="margin:4px 0 0;font-weight:600">${t}</p><p class="small muted" style="margin:4px 0 0">${d}</p></li>`).join("")}
+    </ol>
+    <h2 class="display" style="font-size:24px;margin-top:40px">Cuánto cuesta</h2>
+    <p class="small muted">4% del precio, mínimo ${formatUsd(FEES.minCents)} y máximo ${formatUsd(FEES.maxCents)}. Lo paga el comprador, más 7% de ITBMS sobre la tarifa.</p>
+    <div class="panel" style="padding:0;overflow-x:auto"><table class="fees"><thead><tr><th>Precio de la carta</th><th>Protección</th><th>ITBMS</th><th>Total</th></tr></thead>
+      <tbody>${rows.map((q) => `<tr><td>${formatUsd(q.priceCents)}</td><td>${formatUsd(q.feeCents)}</td><td>${formatUsd(q.itbmsCents)}</td><td style="font-weight:600">${formatUsd(q.buyerTotalCents)}</td></tr>`).join("")}</tbody></table></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:40px"><a class="btn primary" href="#/">Ver cartas</a><a class="btn" href="#/vender">Vender una carta</a></div></div>`;
+}
+
+function viewAuth(app, next) {
+  setTitle("Entrar");
+  if (session) return go(next);
+  if (!sb) { app.innerHTML = `<p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p>`; return; }
+  let mode = "registro";
+  const render = () => {
+    const up = mode === "registro";
+    app.innerHTML = `<div style="max-width:448px;margin:0 auto;padding-top:40px">
+      <h1 class="display" style="font-size:30px">Tu cuenta</h1><p class="muted" style="margin:4px 0 0">Necesitas una cuenta para publicar cartas.</p>
+      <div class="panel" style="margin-top:24px;padding:24px;border-radius:24px">
+        <div class="tabs"><button type="button" data-m="entrar" class="${!up ? "on" : ""}">Entrar</button><button type="button" data-m="registro" class="${up ? "on" : ""}">Crear cuenta</button></div>
+        <form id="authForm" style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
+          ${up ? `<label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
+          <label class="f">Correo<input class="input" name="email" type="email" required autocomplete="email"></label>
+          <label class="f">Contraseña<input class="input" name="password" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}"></label>
+          <div id="authMsg"></div>
+          <button class="btn primary block" id="authBtn">${up ? "Crear cuenta" : "Entrar"}</button>
+          ${up ? `<p class="xs muted" style="margin:0">Al crear tu cuenta aceptas que tratemos tus datos para operar el marketplace (Ley 81 de 2019). Nunca mostramos tu correo ni tu dirección.</p>` : ""}
+        </form></div></div>`;
+    app.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { mode = b.dataset.m; render(); }));
+    $("#authForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target), btn = $("#authBtn"), msg = $("#authMsg");
+      const email = String(fd.get("email")).trim().toLowerCase(), password = String(fd.get("password"));
+      btn.disabled = true; btn.textContent = "Un momento…"; msg.innerHTML = "";
+      const res = mode === "registro"
+        ? await sb.auth.signUp({ email, password, options: { data: { display_name: String(fd.get("displayName")).trim() } } })
+        : await sb.auth.signInWithPassword({ email, password });
+      btn.disabled = false; btn.textContent = mode === "registro" ? "Crear cuenta" : "Entrar";
+      if (res.error) {
+        const c = res.error.code;
+        const text = c === "user_already_exists" ? "Ya existe una cuenta con ese correo. Usa “Entrar”." : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : "No pudimos completar la operación. Intenta de nuevo.";
+        msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(text)}</p>`; return;
+      }
+      if (mode === "registro" && !res.data.session) { msg.innerHTML = `<p class="notice good" style="margin:0">Te enviamos un correo para confirmar tu cuenta.</p>`; return; }
+      go(next);
+    });
+  };
+  render();
+}
+
+// ------------------------------------------------------------- sell
+async function compressImage(file) {
+  if (!file.type.startsWith("image/")) return file;
+  let bmp;
+  try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); } catch { return file; }
+  const s = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement("canvas"); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+  c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height); bmp.close?.();
+  const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
+  if (!blob) return file;
+  if (["image/jpeg", "image/png", "image/webp"].includes(file.type) && blob.size >= file.size) return file;
+  return new File([blob], "foto.jpg", { type: "image/jpeg" });
+}
+async function catalogSearch(name, number) {
+  const clean = (s) => s.replace(/["\\]/g, "").trim();
+  const n = number?.split("/")[0].replace(/^#/, "").trim();
+  const queries = n ? [`name:"${clean(name)}" number:"${clean(n)}"`, `name:"${clean(name)}"`] : [`name:"${clean(name)}"`];
+  for (const q of queries) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 600 * 2 ** (attempt - 1)));
+      try {
+        const res = await fetch(`${CONFIG.CATALOG_API}/cards?q=${encodeURIComponent(q)}&pageSize=9&orderBy=-set.releaseDate&select=id,name,number,rarity,set,images,tcgplayer`);
+        if (res.ok) { const d = (await res.json()).data; if (d.length) return d; break; }
+        if (res.status < 500) break;
+      } catch { /* network hiccup, retry */ }
+    }
+  }
+  return [];
+}
+
+function viewSell(app) {
+  setTitle("Vender una carta");
+  if (!sb) { app.innerHTML = `<p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p>`; return; }
+  if (!session) {
+    app.innerHTML = `<div style="padding-top:24px"><h1 class="display" style="font-size:30px">Vende tu carta</h1><p class="muted">Publicar es gratis.</p>
+      <div class="panel" style="max-width:448px;margin-top:24px;padding:24px;border-radius:24px"><p style="margin:0;font-weight:500">Entra o crea tu cuenta para publicar.</p><p class="small muted">Toma menos de un minuto.</p>
+      <a class="btn primary block" href="#/entrar?next=/vender">Entrar o crear cuenta</a></div></div>`;
+    return;
+  }
+  const st = { files: [], previews: [], catalog: [], picked: null, graded: false };
+  const locOptions = FLAT_LOCATIONS.map((l, i) => `<option value="${i}">${esc(l.neighborhood)}, ${esc(l.district)}</option>`).join("");
+  app.innerHTML = `<div style="padding-top:24px"><h1 class="display" style="font-size:30px">Vende tu carta</h1>
+    <p class="muted" style="margin:4px 0 0">Publicar es gratis. Para Pokémon, busca la carta en el catálogo y te sugerimos un rango de precio.</p>
+    <form id="sellForm" class="sell" style="margin-top:24px" novalidate>
+      <section class="left" style="display:flex;flex-direction:column;gap:12px">
+        <h2 class="display" style="font-size:18px;margin:0">1. Fotos reales</h2>
+        <label class="drop card-ratio" id="drop"><span style="font-size:36px" aria-hidden="true">📸</span><span style="font-weight:500">Toma o sube una foto</span><span class="xs muted" style="padding:0 24px">Frente y reverso (hasta 4 fotos), con buena luz y sin reflejos.</span>
+          <input type="file" id="photos" accept="image/jpeg,image/png,image/webp" multiple class="sr-only"></label>
+        <div id="thumbs" class="thumbs" style="justify-content:flex-start"></div>
+        <p class="xs muted" style="margin:0">Las fotos se reducen en tu teléfono antes de subirse.</p>
+      </section>
+      <section style="display:flex;flex-direction:column;gap:16px">
+        <h2 class="display" style="font-size:18px;margin:0">2. Detalles de la carta</h2>
+        <label class="f">Categoría<select class="select" name="category" id="category">${CATEGORIES.map((c) => `<option value="${c.slug}">${c.name}</option>`).join("")}</select></label>
+        <div id="catalogBox" class="panel holo-border">
+          <p style="margin:0;font-weight:600;font-size:14px">Buscar en el catálogo de Pokémon</p>
+          <div class="grid2" style="margin-top:10px"><input class="input" id="catName" placeholder="Nombre (ej. Charizard ex)"><input class="input" id="catNum" placeholder="Número (ej. 199/165)"></div>
+          <button type="button" class="btn" id="catBtn" style="margin-top:10px;border-radius:12px">Buscar</button>
+          <div id="catResults"></div>
+        </div>
+        <div class="grid2">
+          <label class="f"><span id="subjectLbl">Pokémon</span><input class="input" name="subject" required maxlength="80"></label>
+          <label class="f">Set / producto<input class="input" name="setName" required maxlength="80"></label>
+          <label class="f">Año<input class="input" name="year" inputmode="numeric" maxlength="4"></label>
+          <label class="f">Número<input class="input" name="number" maxlength="20" placeholder="199/165"></label>
+          <label class="f" style="grid-column:1/-1">Variante / paralelo<input class="input" name="variant" maxlength="60" placeholder="Holo, Silver Prizm…"></label>
+        </div>
+        <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:12px">
+          <legend style="font-size:14px;font-weight:500;margin-bottom:8px">¿Está graduada?</legend>
+          <div class="seg" id="gradedSeg"><label class="on"><input type="radio" name="graded" value="false" checked>No (raw)</label><label><input type="radio" name="graded" value="true">Sí, en slab</label></div>
+          <div id="gradeBox"></div>
+        </fieldset>
+        <h2 class="display" style="font-size:18px;margin:8px 0 0">3. Precio y ubicación</h2>
+        <div id="estBox"></div>
+        <div class="grid2">
+          <label class="f">Precio (USD)<input class="input" name="price" type="number" min="1" step="0.01" inputmode="decimal" required></label>
+          <label class="f">Barrio / zona<select class="select" name="location">${locOptions}</select></label>
+        </div>
+        <p id="verdict" class="small" style="margin:0"></p>
+        <p class="xs muted" style="margin:0">Solo mostramos el barrio, nunca tu dirección.</p>
+        <label class="f">Título<input class="input" name="title" required maxlength="80"></label>
+        <label class="f">Descripción<textarea class="textarea" name="description" rows="4" maxlength="1000" placeholder="Estado, detalles, dónde puedes entregarla…"></textarea></label>
+        <div id="sellMsg"></div>
+        <button class="btn primary block" id="publishBtn">Publicar gratis</button>
+      </section>
+    </form></div>`;
+
+  const form = $("#sellForm");
+  const val = (n) => form.elements[n]?.value?.trim() ?? "";
+  const set = (n, v) => { if (form.elements[n]) form.elements[n].value = v ?? ""; };
+
+  function renderGrade() {
+    $("#gradeBox").innerHTML = st.graded
+      ? `<div class="grid2"><label class="f">Empresa<select class="select" name="company">${GRADERS.map((g) => `<option>${g}</option>`).join("")}</select></label><label class="f">Nota<input class="input" name="grade" type="number" min="1" max="10" step="0.5" required></label></div>`
+      : `<label class="f">Condición<select class="select" name="condition">${CONDITIONS.map((c) => `<option value="${c.code}">${c.label} (${c.code}): ${c.hint}</option>`).join("")}</select></label>`;
+    form.elements.condition?.addEventListener("change", renderEstimate);
+    renderEstimate();
+  }
+  function currentEstimate() {
+    if (!st.picked || val("category") !== "pokemon") return null;
+    return estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), condition: st.graded ? null : val("condition") || "NM", grading: st.graded ? { company: val("company"), grade: Number(val("grade")) } : null });
+  }
+  function renderEstimate() {
+    const est = currentEstimate();
+    $("#estBox").innerHTML = est
+      ? `<div class="panel holo-border small"><p style="margin:0;font-weight:600">Precio estimado: ${fmtEstimate(est.low)} – ${fmtEstimate(est.high)}</p><p class="xs muted" style="margin:4px 0 0">${est.basis.map(esc).join(" · ")}. Es una referencia, no una garantía.</p></div>`
+      : st.picked && st.graded ? `<p class="notice soft" style="margin:0">Para cartas graduadas estimamos solo con ventas locales; todavía no hay suficientes.</p>` : "";
+    const p = Number(val("price")), v = p > 0 ? priceVerdict(p, est) : null;
+    $("#verdict").innerHTML = v === "alto" ? `<span style="color:var(--warn)">Tu precio está por encima del rango estimado. Puede tardar más en venderse.</span>` : v === "buen-precio" ? `<span style="color:var(--good)">Tu precio está por debajo del rango. Se va a vender rápido.</span>` : "";
+  }
+
+  $("#photos").addEventListener("change", async (e) => {
+    const picked = [...e.target.files].slice(0, 4);
+    if (!picked.length) return;
+    $("#thumbs").innerHTML = `<span class="xs muted"><span class="spinner"></span> Preparando fotos…</span>`;
+    st.files = await Promise.all(picked.map(compressImage));
+    st.previews.forEach((u) => URL.revokeObjectURL(u));
+    st.previews = st.files.map((f) => URL.createObjectURL(f));
+    const drop = $("#drop");
+    drop.querySelector("img")?.remove();
+    const im = document.createElement("img"); im.src = st.previews[0]; im.alt = "Vista previa"; drop.appendChild(im);
+    $("#thumbs").innerHTML = st.previews.length > 1 ? st.previews.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}">`).join("") : "";
+  });
+  $("#category").addEventListener("change", () => {
+    const pk = val("category") === "pokemon";
+    $("#catalogBox").style.display = pk ? "" : "none";
+    $("#subjectLbl").textContent = pk ? "Pokémon" : "Jugador";
+    form.elements.setName.placeholder = pk ? "151" : "Panini Prizm";
+    if (!pk) st.picked = null;
+    renderEstimate();
+  });
+  $("#gradedSeg").addEventListener("change", (e) => {
+    st.graded = e.target.value === "true";
+    $("#gradedSeg").querySelectorAll("label").forEach((l) => l.classList.toggle("on", l.querySelector("input").checked));
+    renderGrade();
+  });
+  ["price", "variant"].forEach((n) => form.elements[n].addEventListener("input", renderEstimate));
+  form.addEventListener("change", (e) => { if (e.target.name === "company" || e.target.name === "grade") renderEstimate(); });
+
+  async function doCatalogSearch() {
+    const name = $("#catName").value.trim();
+    if (name.length < 2) { $("#catResults").innerHTML = `<p class="xs muted">Escribe el nombre de la carta.</p>`; return; }
+    $("#catResults").innerHTML = `<p class="xs muted"><span class="spinner"></span> Buscando…</p>`;
+    st.catalog = await catalogSearch(name, $("#catNum").value);
+    $("#catResults").innerHTML = st.catalog.length
+      ? `<p class="xs muted" style="margin:10px 0 0">Toca tu carta:</p><div class="results">${st.catalog.map((c, i) => `<button type="button" data-i="${i}"><img src="${esc(c.images.small)}" alt="${esc(c.name)}" loading="lazy"><span>${esc(c.set.name)} · ${esc(c.number)}</span></button>`).join("")}</div>`
+      : `<p class="xs muted">No la encontramos (el catálogo a veces falla; intenta de nuevo) o llena los datos a mano.</p>`;
+    $("#catResults").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+      const c = st.catalog[Number(b.dataset.i)];
+      st.picked = c;
+      $("#catResults").querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      set("subject", c.name); set("setName", c.set.name); set("year", c.set.releaseDate?.slice(0, 4)); set("number", `${c.number}/${c.set.printedTotal}`); set("variant", c.rarity ?? "");
+      if (!val("title")) set("title", `${c.name} ${c.number}/${c.set.printedTotal} · ${c.set.name}`.slice(0, 80));
+      renderEstimate();
+    }));
+  }
+  $("#catBtn").addEventListener("click", doCatalogSearch);
+  [$("#catName"), $("#catNum")].forEach((i) => i.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doCatalogSearch(); } }));
+  renderGrade();
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = $("#sellMsg"), btn = $("#publishBtn");
+    const fail = (t) => { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(t)}</p>`; btn.disabled = false; btn.textContent = "Publicar gratis"; };
+    const price = Number(val("price")), year = val("year") ? Number(val("year")) : null, grade = st.graded ? Number(val("grade")) : null;
+    if (!st.files.length) return fail("Agrega al menos una foto real de la carta.");
+    if (val("subject").length < 2) return fail("Falta el nombre del Pokémon o jugador.");
+    if (!val("setName")) return fail("Falta el set o producto.");
+    if (year != null && !(Number.isInteger(year) && year >= 1990 && year <= 2030)) return fail("Año no válido.");
+    if (st.graded && !(grade >= 1 && grade <= 10)) return fail("La nota de graduación debe estar entre 1 y 10.");
+    if (!(price > 0 && price <= 100000)) return fail("Escribe un precio válido.");
+    if (val("title").length < 5) return fail("El título es muy corto.");
+    for (const f of st.files) if (f.size > 3 * 1024 * 1024) return fail("Una de las fotos es muy pesada (máx. 3 MB).");
+
+    btn.disabled = true; btn.textContent = "Publicando…"; msg.innerHTML = "";
+    const uid = session.user.id, id = crypto.randomUUID(), loc = FLAT_LOCATIONS[Number(val("location"))];
+    const catalogId = val("category") === "pokemon" && st.picked ? st.picked.id : null;
+    const gradingKey = st.graded ? `${val("company")}${grade}` : "raw";
+    let comps = [];
+    if (catalogId) {
+      const { data } = await sb.from("sales").select("price_cents, sold_at").eq("catalog_id", catalogId).eq("grading_key", gradingKey).order("sold_at", { ascending: false }).limit(50);
+      comps = (data ?? []).map((s) => ({ priceUsd: s.price_cents / 100, soldAt: s.sold_at }));
+    }
+    const estimate = catalogId ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), localComps: comps, condition: st.graded ? null : val("condition"), grading: st.graded ? { company: val("company"), grade } : null }) : null;
+
+    const { error } = await sb.from("listings").insert({
+      id, seller_id: uid, category: val("category"), title: val("title"), description: val("description") || null,
+      subject: val("subject"), set_name: val("setName"), year, number: val("number") || null, variant: val("variant") || null,
+      condition: st.graded ? null : val("condition"), grading_company: st.graded ? val("company") : null, grade,
+      price_cents: Math.round(price * 100), province: loc.province, district: loc.district, neighborhood: loc.neighborhood,
+      catalog_id: catalogId, estimate,
+    });
+    if (error) { console.error(error); return fail("No pudimos guardar el anuncio. Intenta de nuevo."); }
+    const paths = [];
+    for (const [i, f] of st.files.entries()) {
+      const ext = { "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg";
+      const path = `${uid}/${id}/${i}.${ext}`;
+      const up = await sb.storage.from("listing-photos").upload(path, f, { contentType: f.type || "image/jpeg" });
+      if (up.error) {
+        console.error(up.error);
+        if (paths.length) await sb.storage.from("listing-photos").remove(paths);
+        await sb.from("listings").delete().eq("id", id);
+        return fail("No pudimos subir las fotos. Intenta de nuevo.");
+      }
+      paths.push(path);
+    }
+    const pr = await sb.from("listing_photos").insert(paths.map((storage_path, position) => ({ listing_id: id, storage_path, position })));
+    if (pr.error) console.error(pr.error);
+    go(`/carta/${id}`);
+  });
+}
+
+// ============================================================= boot
+document.querySelectorAll(".brand-name, #brand").forEach((n) => (n.textContent = CONFIG.APP_NAME));
+$("#topSearch").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#qTop").value.trim(); go(q ? `/?q=${encodeURIComponent(q)}` : "/"); });
+window.addEventListener("hashchange", route);
+async function loadProfileName() {
+  profileName = null;
+  if (!session) return;
+  const { data } = await sb.from("profiles").select("display_name").eq("id", session.user.id).maybeSingle();
+  profileName = data?.display_name ?? null;
+  renderNav();
+}
+(async () => {
+  if (sb) {
+    session = (await sb.auth.getSession()).data.session;
+    sb.auth.onAuthStateChange((_evt, s) => {
+      const changed = (s?.user.id ?? null) !== (session?.user.id ?? null);
+      session = s;
+      if (changed) { loadProfileName(); route(); }
+    });
+    loadProfileName();
+  }
+  route();
+})();
+</script>
+</body>
+</html>
