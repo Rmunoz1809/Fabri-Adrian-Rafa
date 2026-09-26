@@ -793,8 +793,10 @@ const SNAP = (market, variant = "holofoil") => ({ market, low: null, mid: null, 
 const DEMO_REFS = { "sv3pt5-199": SNAP(347.46), "sv8-238": SNAP(286.77), "swsh7-215": SNAP(2299.94), "sv3pt5-151": SNAP(6.56), "sv2-254": SNAP(10.54) };
 const DEMO_COMPS = {
   "sv3pt5-199|PSA10": [780, 820, 750, 800].map((p, i) => ({ priceUsd: p, soldAt: `2026-0${8 + (i > 1 ? 1 : 0)}-1${i}` })),
-  "nba-wemby-prizm-136|raw": [18, 22, 20].map((p, i) => ({ priceUsd: p, soldAt: `2026-09-0${i + 1}` })),
 };
+// Real, public-domain NBA/NFL card scans kept in the repo (sources in img/gate/CREDITS.md).
+// holo.html is served from the repo root; export/holo.html sits one level down.
+const CARD_SCANS = location.pathname.includes("/export/") ? "../img/gate/" : "img/gate/";
 const DEMO = [
   ["l-001", "Charizard ex SIR 199/165 · 151", "Sacada de sobre y directo a sleeve + toploader. Centrado muy bueno.", "pokemon", "Charizard ex", "151", 2023, "199/165", "Special Illustration Rare", "sv3pt5-199", "NM", null, 335, [img("sv3pt5", "199")], ["Panamá", "Panamá", "Costa del Este"], "tienda", true, "2026-09-24T15:00:00Z"],
   ["l-002", "Charizard ex SIR 199/165 · PSA 10", "Slab PSA 10, certificado verificable en psacard.com.", "pokemon", "Charizard ex", "151", 2023, "199/165", "Special Illustration Rare", "sv3pt5-199", null, { company: "PSA", grade: 10 }, 760, [img("sv3pt5", "199")], ["Panamá", "Panamá", "San Francisco"], "ana", true, "2026-09-23T20:10:00Z"],
@@ -802,10 +804,10 @@ const DEMO = [
   ["l-004", "Pikachu ex SIR 238/191 · Surging Sparks", "Near mint. Entrego en Albrook o Multiplaza.", "pokemon", "Pikachu ex", "Surging Sparks", 2024, "238/191", "Special Illustration Rare", "sv8-238", "NM", null, 240, [img("sv8", "238")], ["Panamá", "Panamá", "Albrook"], "diego", true, "2026-09-25T02:30:00Z"],
   ["l-005", "Mew ex 151/165 · Double Rare", "Perfecta para mazo. También cambio por Iono.", "pokemon", "Mew ex", "151", 2023, "151/165", "Double Rare", "sv3pt5-151", "NM", null, 8, [img("sv3pt5", "151")], ["Chiriquí", "David", "Centro"], "diego", false, "2026-09-21T18:00:00Z"],
   ["l-006", "Iono 254/193 · Paldea Evolved", "Full art. Leve desgaste en borde.", "pokemon", "Iono", "Paldea Evolved", 2023, "254/193", "Ultra Rare", "sv2-254", "LP", null, 9, [img("sv2", "254")], ["Panamá Oeste", "Arraiján", "Costa Verde"], "ana", false, "2026-09-20T13:45:00Z"],
-  ["l-007", "Victor Wembanyama Prizm RC #136", "Rookie base de Prizm 2023-24. Esquinas filosas.", "nba", "Victor Wembanyama", "Panini Prizm", 2023, "#136", "Base RC", "nba-wemby-prizm-136", "NM", null, 19, [], ["Panamá", "Panamá", "El Cangrejo"], "kevin", false, "2026-09-24T22:00:00Z"],
-  ["l-008", "LeBron James Select Concourse · Silver", "Paralelo Silver Prizm. Sale en toploader con sleeve.", "nba", "LeBron James", "Panini Select", 2022, "#1", "Silver Prizm", null, "NM", null, 25, [], ["Panamá", "Panamá", "Condado del Rey"], "kevin", false, "2026-09-19T16:20:00Z"],
-  ["l-009", "C.J. Stroud Prizm RC · PSA 9", "Rookie graduado PSA 9. Cert verificable.", "nfl", "C.J. Stroud", "Panini Prizm", 2023, "#339", "Base RC", null, null, { company: "PSA", grade: 9 }, 65, [], ["Panamá", "San Miguelito", "Villa Lucre"], "kevin", true, "2026-09-18T11:00:00Z"],
-  ["l-010", "Patrick Mahomes Donruss Optic · Holo", "Paralelo Holo. Buen estado, leve descentrado.", "nfl", "Patrick Mahomes", "Donruss Optic", 2022, "#50", "Holo", null, "LP", null, 14, [], ["Veraguas", "Santiago", "Centro"], "diego", false, "2026-09-17T09:30:00Z"],
+  ["l-007", "George Mikan 1948 Bowman #69 RC", "La rookie de Mikan, primera gran estrella de la NBA. Desgaste en esquinas y bordes, colores vivos. Sin graduar.", "nba", "George Mikan", "Bowman", 1948, "#69", "Rookie Card", null, "MP", null, 6800, [`${CARD_SCANS}nba-george-mikan-1948-bowman.jpg`], ["Panamá", "Panamá", "El Cangrejo"], "kevin", false, "2026-09-24T22:00:00Z"],
+  ["l-008", "Wilt Chamberlain 1961 Fleer #8 RC", "Rookie de Wilt con los Philadelphia Warriors. Buen centrado, esquinas con desgaste leve.", "nba", "Wilt Chamberlain", "Fleer", 1961, "#8", "Rookie Card", null, "LP", null, 2400, [`${CARD_SCANS}nba-wilt-chamberlain-1961-fleer.jpg`], ["Panamá", "Panamá", "Condado del Rey"], "kevin", false, "2026-09-19T16:20:00Z"],
+  ["l-009", "Jim Brown 1960 Topps #23", "Jim Brown con los Cleveland Browns. Carta clásica de 1960 en buen estado para su edad.", "nfl", "Jim Brown", "Topps", 1960, "#23", "Base", null, "LP", null, 120, [`${CARD_SCANS}nfl-jim-brown-1960-topps.jpg`], ["Panamá", "San Miguelito", "Villa Lucre"], "kevin", true, "2026-09-18T11:00:00Z"],
+  ["l-010", "Otto Graham 1951 Bowman #2", "Otto Graham, quarterback de los Browns. Desgaste visible en bordes, sin dobleces.", "nfl", "Otto Graham", "Bowman", 1951, "#2", "Base", null, "MP", null, 95, [`${CARD_SCANS}nfl-otto-graham-1951-bowman.jpg`], ["Veraguas", "Santiago", "Centro"], "diego", false, "2026-09-17T09:30:00Z"],
 ].map(([id, title, description, category, subject, setName, year, number, variant, catalogId, condition, grading, priceUsd, photos, [province, district, neighborhood], sellerKey, protectedEligible, createdAt]) => {
   const key = catalogId ? `${catalogId}|${grading ? grading.company + grading.grade : "raw"}` : null;
   return {
@@ -2243,12 +2245,10 @@ const GATE_SPORTS = [
   "nba-bill-russell-1961-fleer", "nfl-ya-tittle-1959-topps", "nba-bud-palmer-1948-bowman", "nfl-mike-ditka-topps",
   "nba-bill-russell-takes-to-air-1961-fleer", "nfl-george-blanda-1954-bowman", "nba-larry-costello-1961-fleer", "nfl-dan-currie-1959-topps",
 ];
-// holo.html is served from the repo root; export/holo.html sits one level down.
-const GATE_IMG_BASE = location.pathname.includes("/export/") ? "../img/gate/" : "img/gate/";
 function gateBackground() {
   if ($("#gateBg")) return;
   const pokemon = (id) => `<div class="gc"><img src="https://images.pokemontcg.io/${id}.png" alt="" loading="eager" decoding="async"></div>`;
-  const sports = (name) => `<div class="gc"><img src="${GATE_IMG_BASE}${name}.jpg" alt="" loading="eager" decoding="async"></div>`;
+  const sports = (name) => `<div class="gc"><img src="${CARD_SCANS}${name}.jpg" alt="" loading="eager" decoding="async"></div>`;
   const cols = [];
   for (let c = 0; c < 9; c++) {
     const cards = [];
