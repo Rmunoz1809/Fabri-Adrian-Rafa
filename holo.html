@@ -1444,7 +1444,8 @@ const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return
 async function route() {
   const { path, params } = parseHash();
   closeLayers();
-  window.scrollTo(0, 0);
+  if (keepScrollOnce) keepScrollOnce = false; // filter changes keep the user where they are
+  else window.scrollTo(0, 0);
   renderNav();
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
@@ -2160,9 +2161,10 @@ async function loadPriceChart(l) {
 // ============================================================= views
 const SORT_LABELS = { recientes: "Más recientes", "precio-asc": "Precio: menor a mayor", "precio-desc": "Precio: mayor a menor" };
 /** Navigates to a list URL; if it is the current one, just closes whatever overlay is open. */
-function goList(href) {
+let keepScrollOnce = false;
+function goList(href, { keepScroll = false } = {}) {
   if (href === (location.hash || "#/")) closeLayers();
-  else location.hash = href;
+  else { keepScrollOnce = keepScroll; location.hash = href; }
 }
 async function viewHome(app, params) {
   const f = filtersFrom(params);
@@ -2224,13 +2226,15 @@ async function viewHome(app, params) {
     $("#qHome").blur();
     goList(hrefWith(f, { q: q || undefined }));
   });
-  $("#filterForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
+  const applyFilters = () => {
+    const fd = new FormData($("#filterForm"));
     let min = String(fd.get("min") ?? "").trim(), max = String(fd.get("max") ?? "").trim();
     if (min && max && Number(min) > Number(max)) [min, max] = [max, min];
-    goList(hrefWith(f, { tipo: fd.get("tipo"), provincia: fd.get("provincia"), min, max }));
-  });
+    goList(hrefWith(f, { tipo: fd.get("tipo"), provincia: fd.get("provincia"), min, max }), { keepScroll: true });
+  };
+  $("#filterForm").addEventListener("submit", (e) => { e.preventDefault(); applyFilters(); });
+  // Type and province apply as soon as they change; prices apply on Enter or when the field loses focus.
+  $("#filterForm").addEventListener("change", (e) => { if (["tipo", "provincia", "min", "max"].includes(e.target.name)) applyFilters(); });
   $("#sortBtn").addEventListener("click", (e) => openMenu(e.currentTarget, Object.entries(SORT_LABELS).map(([k, label]) => ({
     label, checked: f.sort === k, onSelect: () => goList(hrefWith(f, { orden: k === "recientes" ? undefined : k })),
   }))));
