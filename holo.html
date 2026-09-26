@@ -338,9 +338,6 @@ dl.rows div.total dt { color: var(--fg); }
 .seller .nm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 600; }
 .verified { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--brand); }
 .verified .i { width: 14px; height: 14px; }
-.tips { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--fg-2); }
-.tips li { display: flex; gap: 10px; }
-.tips .i { width: 16px; height: 16px; margin-top: 1px; color: var(--brand); }
 .est-range { margin-top: 10px; font-size: 26px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .conf { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-2); }
 .conf::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--fg-3); }
@@ -2408,10 +2405,6 @@ async function viewDetail(app, id) {
           <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
           <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a></div></section>
         ${sellerPanel(l.seller)}
-        <section class="panel"><h2 class="ptitle">${ic("info")}Compra segura</h2>
-          <ul class="tips">
-            <li>${ic("check")}<span>Reúnete en un lugar público (mall o tienda aliada) y a la luz del día.</span></li><li>${ic("check")}<span>Revisa la carta con luz: textura, brillo holo, tipografía y reverso.</span></li>
-            <li>${ic("check")}<span>Si es graduada, verifica el número de certificado en la web de la empresa.</span></li><li>${ic("check")}<span>Nunca pagues por adelantado fuera de Compra Protegida.</span></li></ul></section>
         ${isOwner && ["active", "reserved"].includes(l.status) ? `<section class="panel"><h2 class="ptitle">${ic("tag")}¿Ya la vendiste?</h2>
           <p class="sub">Márcala como vendida para que deje de aparecer. Si nos dices el precio final, ayudas a que los precios estimados reflejen lo que se paga en Panamá.</p>
           <div class="row-input" style="margin-top:12px"><input class="input" id="soldPrice" type="number" min="1" step="0.01" inputmode="decimal" placeholder="Precio final (opcional)"><button type="button" class="btn primary" id="markSold">Marcar vendida</button></div></section>` : ""}
