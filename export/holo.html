@@ -1421,14 +1421,17 @@ async function route() {
   window.scrollTo(0, 0);
   renderNav();
   const app = $("#app");
-  const gated = !!sb && !session;
+  // Anyone can browse (so shared links open the card). Only the account and staff pages
+  // need a session; /vender and the contact buttons ask for it themselves.
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin");
+  const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
   void app.offsetWidth;
   app.classList.add("view-in");
   const busy = progress.start();
   try {
-    if (gated) return viewAuth(app, path === "/entrar" ? params.get("next") || "/" : location.hash.replace(/^#/, "") || "/");
+    if (needsLogin) return viewAuth(app, location.hash.replace(/^#/, "") || "/");
     if (path === "/" || path === "") return await viewHome(app, params);
     if (path.startsWith("/carta/")) return await viewDetail(app, safeDecode(path.slice(7)));
     if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)));
@@ -1947,6 +1950,12 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   const title = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2>`;
   const header = `<div class="phead">${title}${h.market.length + h.cardmarket.length + h.sales.length + (h.web?.length ?? 0) ? `<div class="ranges" role="group" aria-label="Periodo">${CHART_RANGES.map(([t, d, full]) => `<button type="button" data-d="${d}" class="${d === rangeDays ? "on" : ""}" aria-pressed="${d === rangeDays}" aria-label="${full}">${t}</button>`).join("")}</div>` : ""}</div>`;
   if (!h.market.length && !h.cardmarket.length && !h.sales.length && !h.web?.length) {
+    // Visitors without a session only get already-researched (cached) web prices.
+    if (sb && !session) {
+      box.innerHTML = `${header}<p class="sub" style="margin-top:8px">Entra a tu cuenta para ver el precio de mercado de esta carta.</p>
+        <a class="btn" style="margin-top:10px" href="#/entrar?next=${encodeURIComponent(`/carta/${l.id}`)}">Entrar para ver el precio</a>${priceSources(l, h)}`;
+      return;
+    }
     // Only when every source failed (network, service down): offer to try again.
     box.innerHTML = `${header}<p class="sub" style="margin-top:8px">No pudimos consultar las fuentes de precio en este momento.</p>
       ${h.retry ? `<button type="button" class="btn" data-retry style="margin-top:10px">Buscar el precio de nuevo</button>` : ""}${priceSources(l, h)}`;
@@ -2373,8 +2382,15 @@ async function viewDetail(app, id) {
     t.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(t); } });
   });
   setupShare(l);
-  $("#buyBtn")?.addEventListener("click", () => track("click_protegida", l.id));
-  $("#contactBtn")?.addEventListener("click", () => track("click_whatsapp", l.id));
+  const needAccount = (e) => {
+    if (session || !sb) return false;
+    e.preventDefault();
+    toast("Entra o crea tu cuenta para contactar al vendedor.");
+    go(`/entrar?next=${encodeURIComponent(`/carta/${l.id}`)}`);
+    return true;
+  };
+  $("#buyBtn")?.addEventListener("click", (e) => { if (!needAccount(e)) track("click_protegida", l.id); });
+  $("#contactBtn")?.addEventListener("click", (e) => { if (!needAccount(e)) track("click_whatsapp", l.id); });
   $("#shareWa")?.addEventListener("click", () => track("compartir", l.id));
   $("#markSold")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget, raw = $("#soldPrice").value.trim(), usd = raw ? Number(raw) : null;

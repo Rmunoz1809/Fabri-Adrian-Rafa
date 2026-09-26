@@ -163,14 +163,14 @@ Deno.serve(async (req) => {
 
   try {
     if (body.action === "price") {
-      // Each uncached quote runs paid web searches, and the card fields come from the
-      // client: without a session anyone could loop this on our Anthropic account.
-      // holo.html already requires sign-in to browse, so this costs users nothing.
-      if (!user) return json({ error: "Entra a tu cuenta para ver precios de mercado." }, 401);
-      if (!allow("price:all", 400) || !allow(`price:${user.id}`, 60)) {
+      // Cached quotes are served to anyone (holo.html can be browsed without an account).
+      // A cache miss runs paid web searches with client-provided card fields, so new
+      // research needs a session (checked inside price()) plus the daily budget.
+      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "anon";
+      if (!allow("price:all", 400) || !allow(user ? `price:${user.id}` : `price-ip:${ip}`, 60)) {
         return json({ error: "Demasiadas consultas de precio. Intenta en un rato." }, 429);
       }
-      return await price(body.card ?? {});
+      return await price(body.card ?? {}, user);
     }
 
     // Identification: only signed-in sellers.
@@ -223,7 +223,7 @@ async function identify(raw: NonNullable<Body["images"]>) {
 
 const str = (v: unknown, max = 80) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-async function price(card: Record<string, unknown>) {
+async function price(card: Record<string, unknown>, user: { id: string } | null) {
   const c = {
     category: ["pokemon", "nba", "nfl"].includes(str(card.category)) ? str(card.category) : "otra",
     subject: str(card.subject),
@@ -245,6 +245,8 @@ async function price(card: Record<string, unknown>) {
     const { data } = await db.from("market_quotes").select("quote, fetched_at").eq("quote_key", key).maybeSingle();
     if (data && Date.now() - Date.parse(data.fetched_at) < QUOTE_TTL_MS) return json({ quote: data.quote, cached: true });
   }
+
+  if (!user) return json({ error: "Entra a tu cuenta para ver precios de mercado.", login: true }, 401);
 
   // Hard daily budget for new web research, persisted in the database (the in-memory
   // allow() limits reset whenever the function cold-starts). Cached quotes above are
