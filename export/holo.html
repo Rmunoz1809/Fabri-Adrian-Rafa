@@ -46,6 +46,8 @@ header.top .row { display: flex; align-items: center; gap: 12px; height: 56px; }
 nav.links { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 14px; }
 nav.links a, nav.links button.link { padding: 8px 12px; border-radius: 999px; color: var(--ink-2); background: none; border: 0; cursor: pointer; }
 nav.links a:hover, nav.links button.link:hover { color: var(--ink); }
+nav.links .nav-me { max-width: 84px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 640px) { nav.links .nav-me { max-width: 160px; } }
 .hide-sm { display: none !important; } @media (min-width: 768px) { .hide-sm { display: inline-block !important; } }
 
 /* controls */
@@ -181,6 +183,24 @@ h1 { margin: 0; }
 .plegend span { display: inline-flex; align-items: center; gap: 6px; }
 details.pdata summary { cursor: pointer; font-size: 12px; color: var(--ink-2); margin-top: 10px; }
 details.pdata .tbl { max-height: 240px; overflow: auto; margin-top: 8px; }
+
+/* vendedor en la tarjeta y en el detalle */
+.tseller { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; font-size: 13px; }
+.tseller .who { display: flex; align-items: center; gap: 6px; min-width: 0; flex-basis: 100%; }
+.tseller .nm { font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tseller .b { font-size: 11px; padding: 2px 7px; }
+.tshop { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.tshop img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; background: var(--surface-2); display: block; }
+.tshop p { margin: 0; font-size: 12px; line-height: 1.35; color: var(--ink-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.seller-panel .shop-photo { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: var(--surface-2); }
+/* mi cuenta */
+.account { max-width: 560px; padding-top: 24px; }
+.acc-avatar { display: flex; align-items: center; gap: 16px; }
+.acc-pick, .acc-shop { cursor: pointer; display: block; }
+.acc-pick { flex-shrink: 0; }
+.acc-pick .av { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; font-family: var(--display); font-size: 30px; font-weight: 700; background: var(--surface-2); border: 2px solid var(--line); }
+.acc-shop .shp { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 14px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px; border: 2px dashed var(--line); background: var(--surface-2); color: var(--ink-2); font-size: 14px; font-weight: 500; margin-top: 6px; }
+.acc-shop img.shp { padding: 0; border-style: solid; }
 
 /* pantalla de entrada (sin sesión) */
 body.gate header.top, body.gate footer.bottom { display: none; }
@@ -358,8 +378,11 @@ function pickReferencePrice(card, hint) {
 // ============================================================= demo data
 // Example listings to show how the marketplace works. Clearly labeled; not for sale.
 const img = (set, num) => `https://images.pokemontcg.io/${set}/${num}_hires.png`;
+// Illustrated storefront for the demo shop (not a real store).
+const DEMO_SHOP_PHOTO = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360"><defs><linearGradient id="h" x1="0" x2="1"><stop offset="0" stop-color="#7cf3d5"/><stop offset=".35" stop-color="#8ab6ff"/><stop offset=".65" stop-color="#d59bff"/><stop offset="1" stop-color="#ffc98a"/></linearGradient><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b3350"/><stop offset="1" stop-color="#151827"/></linearGradient></defs><rect width="640" height="360" fill="#0d1020"/><rect y="300" width="640" height="60" fill="#23242b"/><rect x="40" y="40" width="560" height="260" fill="#e9e4da"/><rect x="60" y="54" width="520" height="46" rx="6" fill="#111"/><text x="320" y="86" font-family="Arial,sans-serif" font-size="26" font-weight="700" fill="url(#h)" text-anchor="middle">TIENDA DEMO TCG</text><g>${[0,1,2,3,4,5,6,7].map((i)=>`<path d="M${60+i*65} 108h65l-6 30h-53z" fill="${i%2?"#fff":"#7390ff"}"/>`).join("")}</g><rect x="70" y="150" width="300" height="150" fill="url(#g)"/><g>${[0,1,2,3,4].map((i)=>`<rect x="${88+i*56}" y="${170+(i%2)*10}" width="40" height="56" rx="4" fill="url(#h)" opacity=".9"/>`).join("")}${[0,1,2,3].map((i)=>`<rect x="${100+i*64}" y="244" width="46" height="34" rx="3" fill="#${["ffcb05","c8102e","1d428a","4fd19c"][i]}"/>`).join("")}</g><rect x="400" y="150" width="170" height="150" fill="#3a2a1c"/><rect x="412" y="162" width="146" height="84" fill="url(#g)"/><circle cx="545" cy="236" r="5" fill="#ffc98a"/><rect x="424" y="176" width="70" height="22" rx="4" fill="#4fd19c"/><text x="459" y="192" font-family="Arial,sans-serif" font-size="13" font-weight="700" fill="#0b0b0d" text-anchor="middle">ABIERTO</text></svg>`);
 const DEMO_SELLERS = {
-  tienda: { displayName: "Tienda Demo TCG", isShop: true, verified: true, rating: 4.9, salesCount: 214 },
+  tienda: { displayName: "Tienda Demo TCG", isShop: true, verified: true, rating: 4.9, salesCount: 214, shopPhotoUrl: DEMO_SHOP_PHOTO,
+    shopDescription: "Tienda física de Pokémon TCG y sports cards en Costa del Este. Singles, sellado y graduadas; puedes revisar las cartas en el local antes de comprar." },
   ana: { displayName: "Ana R.", isShop: false, verified: true, rating: 5, salesCount: 12 },
   diego: { displayName: "Diego M.", isShop: false, verified: false, rating: 4.6, salesCount: 5 },
   kevin: { displayName: "Kevin Sports Cards", isShop: false, verified: true, rating: 4.8, salesCount: 31 },
@@ -406,6 +429,13 @@ let profileName = null;
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
 const photoUrl = (path) => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
 
+const profilePhotoUrl = (path) => path ? `${CONFIG.SUPABASE_URL}/storage/v1/object/public/profile-photos/${path.split("/").map(encodeURIComponent).join("/")}` : null;
+function profileToSeller(id, prof) {
+  return {
+    id, displayName: prof?.display_name ?? "Vendedor", isShop: prof?.is_shop ?? false, verified: prof?.verified ?? false, rating: null, salesCount: 0,
+    avatarUrl: profilePhotoUrl(prof?.avatar_path), shopDescription: prof?.shop_description ?? "", shopPhotoUrl: profilePhotoUrl(prof?.shop_photo_path),
+  };
+}
 function rowToListing(r, prof) {
   return {
     id: r.id, title: r.title, description: r.description ?? "",
@@ -414,14 +444,16 @@ function rowToListing(r, prof) {
     priceUsd: r.price_cents / 100,
     photos: [...(r.listing_photos ?? [])].sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
     location: { province: r.province, district: r.district, neighborhood: r.neighborhood },
-    seller: { id: r.seller_id, displayName: prof?.display_name ?? "Vendedor", isShop: prof?.is_shop ?? false, verified: prof?.verified ?? false, rating: null, salesCount: 0 },
+    seller: profileToSeller(r.seller_id, prof),
     sellerId: r.seller_id, status: r.status, estimate: r.estimate, protectedEligible: r.protected_eligible, createdAt: r.created_at,
   };
 }
 async function withProfiles(rows) {
   if (!rows.length) return [];
   const ids = [...new Set(rows.map((r) => r.seller_id))];
-  const { data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids);
+  let { data, error } = await sb.from("public_profiles").select("id, display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path").in("id", ids);
+  // Until migration 0003 runs the shop columns don't exist; fall back to the basics.
+  if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids));
   const byId = new Map((data ?? []).map((p) => [p.id, p]));
   return rows.map((r) => rowToListing(r, byId.get(r.seller_id)));
 }
@@ -528,6 +560,7 @@ async function route() {
     if (path === "/protegida") return viewProtected(app);
     if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
     if (path === "/vender") return viewSell(app);
+    if (path === "/cuenta") return await viewAccount(app);
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Página no encontrada.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
   } catch (e) {
     console.error(e);
@@ -539,7 +572,7 @@ function renderNav() {
   const name = session ? esc(profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta") : null;
   $("#nav").innerHTML = `
     <a class="hide-sm" href="#/protegida">Compra Protegida</a>
-    ${session ? `<button class="link" id="signOut" title="Salir">${name} · Salir</button>` : `<a href="#/entrar">Entrar</a>`}
+    ${session ? `<a href="#/cuenta" title="Mi cuenta" class="nav-me">${name}</a><button class="link" id="signOut">Salir</button>` : `<a href="#/entrar">Entrar</a>`}
     <a class="btn primary" style="height:36px;padding:0 16px" href="#/vender">Vender</a>`;
   $("#signOut")?.addEventListener("click", async () => { await sb.auth.signOut(); go("/"); });
 }
@@ -551,6 +584,21 @@ function cardArt(l) {
   return `<div class="placeholder" role="img" aria-label="${esc(l.title)} (sin foto)" style="background:linear-gradient(150deg,${s[0]},${s[1]})">
     <span class="tag">${s[2]}</span>
     <div><p class="who">${esc(l.card.subject)}</p><p class="meta">${esc(l.card.year ?? "")} ${esc(l.card.setName)} ${esc(l.card.number ?? "")}</p><p class="note">Foto de ejemplo</p></div></div>`;
+}
+function sellerAvatar(s, size) {
+  const box = `width:${size}px;height:${size}px;border-radius:50%;flex-shrink:0`;
+  if (s.avatarUrl) return `<img src="${esc(s.avatarUrl)}" alt="" style="${box};object-fit:cover" loading="lazy">`;
+  return `<span class="display" aria-hidden="true" style="${box};background:var(--surface-2);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size * 0.42)}px">${esc(s.displayName.slice(0, 1).toUpperCase())}</span>`;
+}
+function sellerBadge(s) {
+  if (isVerifiedShop(s)) return shopBadge();
+  if (s.isShop) return `<span class="b neutral">Tienda</span>`;
+  return `<span class="b neutral">Particular</span>${s.verified ? `<span class="b prot">✓ Verificado</span>` : ""}`;
+}
+function tileSeller(s) {
+  const shop = s.isShop && (s.shopPhotoUrl || s.shopDescription);
+  return `<div class="tseller"><div class="who">${sellerAvatar(s, 22)}<span class="nm">${esc(s.displayName)}</span></div>${sellerBadge(s)}
+    ${shop ? `<div class="tshop">${s.shopPhotoUrl ? `<img src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}" loading="lazy">` : ""}${s.shopDescription ? `<p>${esc(s.shopDescription)}</p>` : ""}</div>` : ""}</div>`;
 }
 function conditionBadge(l) {
   if (l.grading) return `<span class="graded">${esc(l.grading.company)} ${esc(l.grading.grade)}</span>`;
@@ -567,8 +615,8 @@ function tile(l) {
     <div class="art card-ratio"><div class="inner">${cardArt(l)}</div>
       <div class="corner-l">${conditionBadge(l)}</div>${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
     <div class="body"><p class="title">${esc(l.title)}</p><p class="price">${formatUsd(toCents(l.priceUsd))}</p>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">${isVerifiedShop(l.seller) ? shopBadge() : ""}${verdictBadge(l)}${l.protectedEligible ? protectedBadge() : ""}</div>
-      <p class="loc">${esc(l.location.neighborhood)}, ${esc(l.location.district)}</p></div></a></li>`;
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${verdictBadge(l)}${l.protectedEligible ? protectedBadge() : ""}</div>
+      <p class="loc">${esc(l.location.neighborhood)}, ${esc(l.location.district)}</p>${tileSeller(l.seller)}</div></a></li>`;
 }
 function estimatePanel(est, price) {
   if (!est) return `<section class="panel"><h2>Precio estimado</h2><p class="small muted" style="margin:6px 0 0">Todavía no hay suficientes datos para estimar esta carta. Para cartas deportivas y graduadas usamos ventas reales en Panamá (mínimo 3).</p></section>`;
@@ -912,6 +960,20 @@ async function viewHome(app, params) {
     : `<div class="panel" style="margin-top:24px;text-align:center;border-style:dashed;padding:40px"><p style="margin:0;font-weight:500">No encontramos cartas con esos filtros.</p><p class="small muted">Prueba con otra búsqueda o <a href="#/" style="text-decoration:underline">ve todo</a>.</p></div>`;
 }
 
+function sellerPanel(s) {
+  const shop = s.isShop;
+  return `<section class="panel seller-panel" style="padding:0;overflow:hidden">
+    ${shop && s.shopPhotoUrl ? `<img class="shop-photo" src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}">` : ""}
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+      <p class="xs muted" style="margin:0;text-transform:uppercase;letter-spacing:.08em;font-weight:600">${shop ? "Vende esta tienda" : "Vendedor"}</p>
+      <div style="display:flex;align-items:center;gap:12px">${sellerAvatar(s, 48)}
+        <div style="min-width:0"><p style="margin:0;font-weight:600">${esc(s.displayName)}</p>
+        <p class="xs muted" style="margin:2px 0 0">${s.rating ? `★ ${s.rating.toFixed(1)} · ` : ""}${s.salesCount} ventas</p>
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${sellerBadge(s)}</div></div></div>
+      ${shop && s.shopDescription ? `<p class="small" style="margin:0;white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
+      ${shop && s.verified ? `<p class="notice good" style="margin:0;font-size:13px">✓ Tienda verificada: ${esc(CONFIG.APP_NAME)} visitó el local y confirmó que existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft" style="margin:0;font-size:13px">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
+    </div></section>`;
+}
 async function viewDetail(app, id) {
   app.innerHTML = `<p class="muted small" style="margin-top:24px"><span class="spinner"></span> Cargando…</p>`;
   const l = DEMO.find((d) => d.id === id) ?? (isUuid(id) ? await fetchRealListing(id) : null);
@@ -954,10 +1016,7 @@ async function viewDetail(app, id) {
           <div><dt>${l.grading ? "Graduación" : "Condición"}</dt><dd>${l.grading ? `${esc(l.grading.company)} ${esc(l.grading.grade)}` : cond ? `${cond.label} (${cond.code})` : "—"}</dd></div>
           ${l.grading?.cert ? `<div><dt>Certificado</dt><dd>${esc(l.grading.cert)}</dd></div>` : ""}
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
-        <section class="panel" style="display:flex;align-items:center;gap:12px">
-          <div class="display" style="width:44px;height:44px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-weight:700">${esc(l.seller.displayName.slice(0, 1))}</div>
-          <div><p style="margin:0;font-weight:500;display:flex;flex-wrap:wrap;gap:6px;align-items:center">${esc(l.seller.displayName)} ${isVerifiedShop(l.seller) ? shopBadge() : `<span class="xs muted">Particular</span>${l.seller.verified ? ` <span class="xs" style="color:var(--accent)">✓ Verificado</span>` : ""}`}</p>
-          <p class="xs muted" style="margin:0">${l.seller.rating ? `★ ${l.seller.rating.toFixed(1)} · ` : ""}${l.seller.salesCount} ventas</p></div></section>
+        ${sellerPanel(l.seller)}
         <section class="panel" style="background:var(--surface-2);border:0"><h2>Compra segura</h2>
           <ul class="small muted" style="padding:0;list-style:none;margin:8px 0 0;display:grid;gap:4px">
           <li>• Reúnete en un lugar público (mall o tienda aliada) y a la luz del día.</li><li>• Revisa la carta con luz: textura, brillo holo, tipografía y reverso.</li>
@@ -1321,6 +1380,98 @@ function viewSell(app) {
     const act = await sb.from("listings").update({ status: "active" }).eq("id", id).select("id");
     if (act.error || !act.data?.length) return abort(act.error ?? "activate: 0 rows", dbMessage(act.error, "No pudimos publicar el anuncio. Intenta de nuevo."));
     go(`/carta/${id}`);
+  });
+}
+
+// ============================================================= account
+const PROFILE_COLS = "display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path";
+async function viewAccount(app) {
+  setTitle("Mi cuenta");
+  if (!sb || !session) return go("/entrar?next=/cuenta");
+  app.innerHTML = `<p class="muted small" style="margin-top:24px"><span class="spinner"></span> Cargando…</p>`;
+  const uid = session.user.id;
+  const { data: prof, error } = await sb.from("profiles").select(PROFILE_COLS).eq("id", uid).maybeSingle();
+  if (error || !prof) {
+    console.error(error);
+    app.innerHTML = `<p class="notice bad" style="margin-top:24px">No pudimos cargar tu perfil. ${error?.code === "42703" ? "Falta aplicar la migración 0003 en Supabase." : "Recarga la página."}</p>`;
+    return;
+  }
+  const st = { avatar: null, shopPhoto: null };
+  const shopCta = waLink("Hola, tengo una tienda de cartas y quiero verificarla en Holo.");
+  const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
+  app.innerHTML = `<div class="account"><h1 class="display" style="font-size:30px">Mi cuenta</h1>
+    <p class="muted" style="margin:4px 0 0">Así te ven los compradores en tus anuncios.</p>
+    <form id="accForm" class="col" style="margin-top:24px" novalidate>
+      <section class="panel col">
+        <h2>Perfil</h2>
+        <div class="acc-avatar"><label class="acc-pick" title="Cambiar foto de perfil">${pic(profilePhotoUrl(prof.avatar_path), "av", esc(prof.display_name.slice(0, 1).toUpperCase()))}
+          <input type="file" id="avatarIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
+          <div><p style="margin:0;font-weight:600">Foto de perfil</p><p class="xs muted" style="margin:2px 0 0">Tu cara o el logo de tu tienda. Toca la foto para cambiarla.</p></div></div>
+        <label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" value="${esc(prof.display_name)}"></label>
+      </section>
+      ${prof.is_shop ? "" : `<section class="panel"><h2>¿Tienes una tienda?</h2><p class="small muted" style="margin:6px 0 0">Las cuentas de tienda muestran la descripción y la foto del local en cada anuncio. ${shopCta ? `<a href="${esc(shopCta)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">Escríbenos para activarla</a>` : "Muy pronto podrás pedirla."}</p></section>`}
+      ${prof.is_shop ? `<section class="panel col">
+        <div class="phead"><h2>Tu tienda</h2>${sellerBadge({ isShop: true, verified: prof.verified })}</div>
+        <label class="f">Describe tu tienda<textarea class="textarea" name="shopDescription" rows="4" maxlength="280" placeholder="Qué vendes, dónde queda el local, horario…">${esc(prof.shop_description ?? "")}</textarea><span class="xs muted" id="descCount"></span></label>
+        <div class="f" style="font-size:14px;font-weight:500">Foto del local
+          <label class="acc-shop" title="Cambiar foto del local">${pic(profilePhotoUrl(prof.shop_photo_path), "shp", "📷 Sube una foto de la fachada o del mostrador")}
+            <input type="file" id="shopIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
+          <span class="xs muted" style="font-weight:400">Una foto real del local da confianza: la gente ve que existes.</span></div>
+        ${prof.verified ? `<p class="notice good" style="margin:0">✓ Tu tienda está verificada.</p>`
+          : `<p class="notice soft" style="margin:0"><b style="color:var(--ink)">¿Quieres el sello “Tienda verificada”?</b> Sube la foto del local y ${shopCta ? `<a href="${esc(shopCta)}" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600">escríbenos</a>` : "escríbenos"}: revisamos que la tienda exista y lo activamos.</p>`}
+      </section>` : ""}
+      <div id="accMsg"></div>
+      <button class="btn primary block" id="accBtn">Guardar cambios</button>
+    </form></div>`;
+
+  const form = $("#accForm"), desc = form.shopDescription;
+  const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
+  if (desc) { desc.addEventListener("input", count); count(); }
+  const preview = (input, key, cls) => input.addEventListener("change", () => {
+    const f = input.files[0]; if (!f) return;
+    st[key] = f;
+    const holder = input.parentElement.querySelector(`.${cls}`);
+    const img = document.createElement("img"); img.className = cls; img.alt = ""; img.src = URL.createObjectURL(f);
+    holder.replaceWith(img);
+  });
+  preview($("#avatarIn"), "avatar", "av");
+  if (prof.is_shop) preview($("#shopIn"), "shopPhoto", "shp");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#accBtn"), msg = $("#accMsg");
+    const say = (cls, t) => (msg.innerHTML = `<p class="notice ${cls}" style="margin:0">${esc(t)}</p>`);
+    const displayName = form.displayName.value.trim();
+    if (displayName.length < 2) return say("bad", "El nombre debe tener al menos 2 caracteres.");
+    btn.disabled = true; btn.textContent = "Guardando…"; msg.innerHTML = "";
+    const uploaded = [];
+    const upload = async (file, kind) => {
+      const f = await compressImage(file);
+      const ext = { "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg";
+      const path = `${uid}/${kind}-${Date.now()}.${ext}`;
+      const up = await sb.storage.from("profile-photos").upload(path, f, { contentType: f.type || "image/jpeg", cacheControl: "31536000", upsert: false });
+      if (up.error) throw up.error;
+      uploaded.push(path);
+      return path;
+    };
+    try {
+      const patch = { display_name: displayName };
+      if (prof.is_shop) patch.shop_description = desc.value.trim() || null;
+      if (st.avatar) patch.avatar_path = await upload(st.avatar, "avatar");
+      if (st.shopPhoto) patch.shop_photo_path = await upload(st.shopPhoto, "local");
+      const res = await sb.from("profiles").update(patch).eq("id", uid).select(PROFILE_COLS).single();
+      if (res.error) throw res.error;
+      // Replaced photos are no longer referenced anywhere: remove them.
+      const old = [st.avatar && prof.avatar_path, st.shopPhoto && prof.shop_photo_path].filter(Boolean);
+      if (old.length) sb.storage.from("profile-photos").remove(old);
+      Object.assign(prof, res.data); st.avatar = st.shopPhoto = null;
+      profileName = prof.display_name; renderNav();
+      say("good", "Listo, tu perfil quedó guardado.");
+    } catch (err) {
+      console.error(err);
+      if (uploaded.length) sb.storage.from("profile-photos").remove(uploaded);
+      say("bad", err?.statusCode === "413" || /size/i.test(err?.message ?? "") ? "La foto es muy pesada (máximo 5 MB)." : "No pudimos guardar los cambios. Revisa tu conexión e intenta de nuevo.");
+    } finally { btn.disabled = false; btn.textContent = "Guardar cambios"; }
   });
 }
 
