@@ -1496,7 +1496,7 @@ const shopBadge = () => `<span class="b shop">${ic("store")}Tienda verificada</s
 /** Price vs. the estimate's middle value, Collectr-style: arrow + amount + percent. */
 function marketDelta(l) {
   const est = l.estimate;
-  if (!(est?.mid > 0)) return `<p class="delta" title="Todavía no hay datos suficientes para estimar su valor">Sin referencia</p>`;
+  if (!(est?.mid > 0)) return "";
   const diff = l.priceUsd - est.mid, pct = Math.abs(diff / est.mid) * 100;
   const tone = { "buen-precio": "good", "en-rango": "neutral", alto: "warn" }[priceVerdict(l.priceUsd, est)] ?? "neutral";
   if (pct < 0.5) return `<p class="delta ${tone}"><span>En el valor estimado</span></p>`;
@@ -1516,7 +1516,7 @@ function tile(l, i = 0) {
 }
 const skeletonGrid = (n) => `<ul class="grid" aria-hidden="true">${Array.from({ length: n }, () => `<li><div class="pcard sk-card"><div class="sk card-ratio"></div><div class="sk" style="height:16px;width:85%;margin-top:12px"></div><div class="sk" style="height:12px;width:55%;margin-top:8px"></div><div class="sk" style="height:20px;width:40%;margin-top:18px"></div></div></li>`).join("")}</ul><p class="sr-only" role="status">Cargando cartas…</p>`;
 function estimatePanel(est, price) {
-  if (!est) return `<section class="panel"><h2 class="ptitle">${ic("tag")}Precio estimado</h2><p class="sub">Todavía no hay suficientes datos para estimar esta carta. Para cartas deportivas y graduadas usamos ventas reales en Panamá (mínimo 3).</p></section>`;
+  if (!est) return ""; // the market value panel researches the price for these cards
   const span = est.high - est.low, pad = span * 0.35 || est.mid * 0.2, min = Math.max(0, est.low - pad), max = est.high + pad;
   const at = (v) => Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100));
   const pct = (v) => `${at(v)}%`;
@@ -1539,7 +1539,7 @@ function estimatePanel(est, price) {
 // la guía de precios oficial de Cardmarket. Encima va el precio de hoy de TCGdex
 // y, si existen, las ventas registradas en Panamá. La tabla price_snapshots de
 // Supabase (supabase/price_snapshots.sql) es opcional (CONFIG.PRICE_SNAPSHOTS).
-const CHART_COLORS = { market: "#2dd4bf", cardmarket: "#a78bfa", sales: "#f5a524" };
+const CHART_COLORS = { market: "#2dd4bf", cardmarket: "#a78bfa", sales: "#f5a524", web: "#60a5fa" };
 const DAY_MS = 86400000;
 const CHART_RANGES = [["1M", 30, "30 días"], ["3M", 90, "90 días"], ["1A", 365, "1 año"], ["Todo", Infinity, "Todo el historial"]];
 const isoDay = (d) => d.toISOString().slice(0, 10);
@@ -1625,7 +1625,7 @@ async function fetchPriceHistory(l) {
   const { catalogId, category } = l.card;
   const factor = l.grading ? 1 : CONDITION_FACTOR[l.condition] ?? 1;
   const store = storedPrices();
-  const h = { market: [], cardmarket: [], sales: [], factor, fx: null, productId: null, cmUpdated: null, updated: store.actualizado ?? null, weekly: false, liveMarket: false, liveCm: false };
+  const h = { market: [], cardmarket: [], sales: [], web: [], quote: null, quoteTried: false, factor, fx: null, productId: null, cmUpdated: null, updated: store.actualizado ?? null, weekly: false, liveMarket: false, liveCm: false };
   if (catalogId && !l.grading && category === "pokemon") {
     const stored = store.cartas[catalogId];
     const [dbRows, dex, fx] = await Promise.all([
@@ -1679,7 +1679,59 @@ async function fetchPriceHistory(l) {
     const { data } = await sb.from("sales").select("price_cents, sold_at").eq("catalog_id", catalogId).eq("grading_key", gradingKey).gte("sold_at", since).order("sold_at").limit(500);
     h.sales = (data ?? []).map((r) => ({ t: Date.parse(r.sold_at), v: r.price_cents / 100 }));
   }
+  // The free catalogs have no price (graded cards, NBA/NFL, catalog down): research it on the web.
+  if (!h.market.length && !h.cardmarket.length && l.card.subject) {
+    h.quoteTried = true;
+    h.quote = await fetchMarketQuote(l).catch((e) => { console.warn("market quote", e); return null; });
+    if (h.quote) {
+      h.web = h.quote.sales.map((s) => ({ t: noonUtc(s.date), v: s.price, src: s.source, url: s.url })).sort((a, b) => a.t - b.t);
+      const today = noonUtc(isoDay(new Date()));
+      if (!h.web.length || h.web.at(-1).t < today) h.web.push({ t: today, v: h.quote.market_price, src: "valor aproximado", today: true });
+    }
+  }
   return h;
+}
+
+// Market price researched on the web by the Edge Function (action "price": Claude + web search over
+// eBay sold listings, PriceCharting, 130point, PSA…). Cached 24 h in Supabase and 12 h in this browser.
+const quotePromises = new Map();
+function quoteCard(l) {
+  const c = l.card;
+  return {
+    category: c.category, subject: c.subject ?? "", set_name: c.setName ?? "", year: c.year ?? "", number: c.number ?? "", variant: c.variant ?? "",
+    grading_company: l.grading?.company ?? "", grade: l.grading?.grade ?? "", condition: l.grading ? "" : l.condition ?? "NM",
+  };
+}
+function fetchMarketQuote(l) {
+  if (!CONFIG.IDENTIFY_FUNCTION) return Promise.resolve(null);
+  const card = quoteCard(l), key = `holo-quote:${JSON.stringify(card).toLowerCase()}`;
+  try {
+    const kept = JSON.parse(localStorage.getItem(key) ?? "null");
+    if (kept?.market_price > 0 && Date.now() - Date.parse(kept.fetched_at) < 12 * 3600000) return Promise.resolve(kept);
+  } catch { /* storage unavailable */ }
+  if (!quotePromises.has(key)) {
+    const p = (async () => {
+      const s = sb ? (await sb.auth.getSession()).data.session : null;
+      const res = await withTimeout(fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${CONFIG.IDENTIFY_FUNCTION}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", apikey: CONFIG.SUPABASE_KEY, Authorization: `Bearer ${s?.access_token ?? CONFIG.SUPABASE_KEY}` },
+        body: JSON.stringify({ action: "price", card }),
+      }), 120000);
+      if (!res.ok) throw new Error(`price ${res.status} ${await res.text().catch(() => "")}`);
+      const q = (await res.json()).quote;
+      if (!(q?.market_price > 0)) throw new Error("price: empty quote");
+      try { localStorage.setItem(key, JSON.stringify(q)); } catch { /* storage unavailable */ }
+      return q;
+    })();
+    quotePromises.set(key, p);
+    p.catch(() => quotePromises.delete(key));
+  }
+  return quotePromises.get(key);
+}
+/** A listing estimate (same shape as estimatePrice) from a web quote. */
+function estimateFromQuote(q) {
+  if (!(q?.market_price > 0)) return null;
+  return { low: round2(q.low), mid: round2(q.market_price), high: round2(q.high), currency: "USD", confidence: q.sales.length >= 5 ? "media" : "baja", basis: [q.basis || "Ventas recientes encontradas en internet"], source: "web", updatedAt: q.fetched_at };
 }
 
 function niceTicks(lo, hi, n = 4) {
@@ -1693,7 +1745,7 @@ function niceTicks(lo, hi, n = 4) {
 
 /** Links to the public sources so buyers can check the price themselves. */
 function priceSources(l, h) {
-  const links = [];
+  const links = (h?.quote?.sources ?? []).slice(0, 4).map((s) => [s.url, s.name]);
   if (h?.productId) links.push([`https://www.tcgplayer.com/product/${h.productId}`, "TCGplayer"]);
   if (h?.cardmarket?.length) links.push([`https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(l.card.subject)}`, "Cardmarket"]);
   const q = [l.card.year, l.card.subject, l.card.setName, l.card.number, l.grading ? `${l.grading.company} ${l.grading.grade}` : ""].filter(Boolean).join(" ");
@@ -1746,29 +1798,31 @@ function revealChart(rect, width) {
 function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   const price = l.priceUsd, now = Date.now();
   const title = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2>`;
-  const header = `<div class="phead">${title}${h.market.length + h.cardmarket.length + h.sales.length ? `<div class="ranges" role="group" aria-label="Periodo">${CHART_RANGES.map(([t, d, full]) => `<button type="button" data-d="${d}" class="${d === rangeDays ? "on" : ""}" aria-pressed="${d === rangeDays}" aria-label="${full}">${t}</button>`).join("")}</div>` : ""}</div>`;
-  if (!h.market.length && !h.cardmarket.length && !h.sales.length) {
-    box.innerHTML = `${header}<p class="sub" style="margin-top:8px">${l.card.category === "pokemon" && !l.grading
-      ? "Todavía no tenemos historial de precios para esta carta."
-      : "Todavía no hay historial para esta carta. Para cartas deportivas y graduadas lo armamos con las ventas registradas en Panamá; cuando haya ventas, aparecerán aquí."}</p>${priceSources(l, h)}`;
+  const header = `<div class="phead">${title}${h.market.length + h.cardmarket.length + h.sales.length + (h.web?.length ?? 0) ? `<div class="ranges" role="group" aria-label="Periodo">${CHART_RANGES.map(([t, d, full]) => `<button type="button" data-d="${d}" class="${d === rangeDays ? "on" : ""}" aria-pressed="${d === rangeDays}" aria-label="${full}">${t}</button>`).join("")}</div>` : ""}</div>`;
+  if (!h.market.length && !h.cardmarket.length && !h.sales.length && !h.web?.length) {
+    // Only when every source failed (network, service down): offer to try again.
+    box.innerHTML = `${header}<p class="sub" style="margin-top:8px">No pudimos consultar las fuentes de precio en este momento.</p>
+      ${h.retry ? `<button type="button" class="btn" data-retry style="margin-top:10px">Buscar el precio de nuevo</button>` : ""}${priceSources(l, h)}`;
+    box.querySelector("[data-retry]")?.addEventListener("click", () => h.retry());
     return;
   }
   const from = rangeDays === Infinity ? -Infinity : now - rangeDays * DAY_MS;
   const market = h.market.filter((p) => p.t >= from), cmk = h.cardmarket.filter((p) => p.t >= from), sales = h.sales.filter((p) => p.t >= from);
+  const web = (h.web ?? []).filter((p) => p.t >= from), webSales = web.filter((p) => !p.today);
   // Texto del periodo elegido: "en el último año", "desde el 8 feb 2024"…
   // Si la serie empieza bastante después del inicio del periodo, se nombra su fecha real.
   const since = (pts) => (rangeDays === Infinity || pts[0].t - from > 14 * DAY_MS ? `desde el ${fmtDay(pts[0].t, true)}` : rangeDays === 365 ? "en el último año" : `en los últimos ${rangeDays} días`);
   const move = (pts) => { const r = pts.at(-1).v / pts[0].v - 1, p = Math.round(Math.abs(r) * 100); return p < 1 ? "se mantuvo estable" : `${r > 0 ? "subió" : "bajó"} ${p}% (de ${fmtEstimate(pts[0].v)} a ${fmtEstimate(pts.at(-1).v)})`; };
 
   // Headline: how this listing compares with the value today, and how the value moved in the selected period.
-  const current = h.market.at(-1) ?? h.cardmarket.at(-1);
+  const current = h.market.at(-1) ?? h.cardmarket.at(-1) ?? (h.quote ? { t: now, v: h.quote.market_price } : null);
   let head = "";
   if (current) {
     const d = ((price ?? current.v) - current.v) / current.v, pct = Math.round(Math.abs(d) * 100);
     const rel = pct < 3 ? "en línea con el valor de mercado" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} del valor de mercado`;
     const when = isoDay(new Date(current.t)) === isoDay(new Date()) ? "hoy" : `al ${fmtDay(current.t)}`;
-    head = `<div class="headline"><p><span class="val">${fmtEstimate(current.v)}</span><span class="lbl">valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})</span></p>
-      <p>${price != null ? `${esc(l.priceLabel ?? "Este anuncio")} (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.` : ""}${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}</p></div>`;
+    head = `<div class="headline"><p><span class="val">${fmtEstimate(current.v)}</span><span class="lbl">${h.market.length || h.cardmarket.length ? `valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})` : "valor aproximado hoy, según ventas recientes"}</span></p>
+      <p>${price != null ? `${esc(l.priceLabel ?? "Este anuncio")} (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.` : ""}${h.quote && !h.market.length && !h.cardmarket.length ? ` Rango habitual: ${fmtEstimate(h.quote.low)} – ${fmtEstimate(h.quote.high)}.` : ""}${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}${webSales.length >= 2 ? ` En ventas recientes, ${since(webSales)} el precio ${move(webSales)}.` : ""}</p></div>`;
   } else {
     const recent = h.sales.filter((p) => p.t >= now - 180 * DAY_MS).map((p) => p.v);
     const med = median(recent.length ? recent : h.sales.map((p) => p.v));
@@ -1784,17 +1838,18 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   if (h.market.some((p) => p.carried) || h.cardmarket.some((p) => p.carried)) notes.push("Las semanas sin dato nuevo repiten el último valor conocido (tramo plano).");
   if (h.factor !== 1) notes.push(`Precios ajustados a condición ${l.condition} (×${h.factor}).`);
   if (h.sales.length) notes.push("Ventas en Panamá: ventas registradas en la plataforma.");
-  const updated = h.updated ? `<p class="xs muted" style="margin-top:4px">Actualizado automáticamente cada semana · última actualización ${fmtDay(Date.parse(h.updated), true)}</p>` : "";
+  if (h.quote) notes.push(`${h.quote.basis ? `${h.quote.basis}. ` : ""}Ventas públicas encontradas en internet (eBay, PriceCharting y otras) el ${fmtDay(Date.parse(h.quote.fetched_at), true)}; revisa los enlaces.`.replace(/\.\. /g, ". "));
+  const updated = h.updated && (h.market.length || h.cardmarket.length) ? `<p class="xs muted" style="margin-top:4px">Actualizado automáticamente cada semana · última actualización ${fmtDay(Date.parse(h.updated), true)}</p>` : "";
   const typeLabel = (p, base) => `${base}${p.carried ? " (sin dato nuevo: se repite el anterior)" : ""}`;
 
   box.innerHTML = `${header}${head}
-    ${market.length || cmk.length || sales.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin-top:14px">No hay datos en este periodo. Prueba con uno más largo.</p>`}
-    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}${price != null ? `<span><i class="k" style="height:0;border-top:2px dashed var(--fg)"></i>${esc(l.priceLabel ?? "Este anuncio")}</span>` : ""}</div>
+    ${market.length || cmk.length || sales.length || web.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin-top:14px">No hay datos en este periodo. Prueba con uno más largo.</p>`}
+    <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}${h.web?.length ? `<span><i class="k" style="background:${CHART_COLORS.web}"></i>Ventas recientes (internet)</span>` : ""}${price != null ? `<span><i class="k" style="height:0;border-top:2px dashed var(--fg)"></i>${esc(l.priceLabel ?? "Este anuncio")}</span>` : ""}</div>
     <p class="pnotes">${notes.map(esc).join(" ")} Es una referencia, no una garantía.</p>
     ${updated}
     ${priceSources(l, h)}
     <details class="pdata"><summary>Ver datos en tabla${ic("chevronDown")}</summary><div class="tbl"><table class="fees"><thead><tr><th>Fecha</th><th>Tipo</th><th>Precio</th></tr></thead><tbody>${
-      [...market.map((p) => ({ ...p, k: typeLabel(p, "TCGplayer · precio de mercado") })), ...cmk.map((p) => ({ ...p, k: typeLabel(p, `Cardmarket · ${p.k}`) })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" }))].sort((a, b) => b.t - a.t)
+      [...market.map((p) => ({ ...p, k: typeLabel(p, "TCGplayer · precio de mercado") })), ...cmk.map((p) => ({ ...p, k: typeLabel(p, `Cardmarket · ${p.k}`) })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" })), ...web.map((p) => ({ ...p, k: p.today ? "Valor aproximado hoy" : `Venta · ${p.src}` }))].sort((a, b) => b.t - a.t)
         .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${esc(p.k)}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
   box.querySelectorAll(".ranges button").forEach((b) => b.addEventListener("click", () => { if (Number(b.dataset.d) !== rangeDays) setRange(Number(b.dataset.d)); }));
   const wrap = box.querySelector(".pchart");
@@ -1802,7 +1857,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
 
   // Geometry
   const W = Math.max(260, Math.round(wrap.clientWidth)), H = 240, m = { l: 46, r: 10, t: 16, b: 26 };
-  const pts = [...market, ...cmk, ...sales];
+  const pts = [...market, ...cmk, ...sales, ...web];
   let xMin = Math.min(...pts.map((p) => p.t));
   if (now - xMin < 7 * DAY_MS) xMin = now - 7 * DAY_MS;
   const xMax = now;
@@ -1815,6 +1870,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   const spansYear = new Date(xMin).getFullYear() !== new Date(xMax).getFullYear();
   const line = monotonePath(market.map((p) => [X(p.t), Y(p.v)]));
   const cmLine = monotonePath(cmk.map((p) => [X(p.t), Y(p.v)]));
+  const webLine = monotonePath(web.map((p) => [X(p.t), Y(p.v)]));
   const last = market.at(-1), base = H - m.b;
   const area = market.length > 1 ? `${line}L${X(last.t).toFixed(1)},${base}L${X(market[0].t).toFixed(1)},${base}Z` : "";
   const dot = (p, color, r = 4) => `<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="${r}" fill="${color}" stroke="var(--card)" stroke-width="2"/>`;
@@ -1836,6 +1892,8 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
       ${cmk.length > 1 ? `<path d="${cmLine}" fill="none" stroke="${CHART_COLORS.cardmarket}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
       ${(cmk.length > 12 ? cmk.slice(-1) : cmk).map((p) => dot(p, CHART_COLORS.cardmarket)).join("")}
       ${sales.map((p) => dot(p, CHART_COLORS.sales, 4.5)).join("")}
+      ${web.length > 1 ? `<path d="${webLine}" fill="none" stroke="${CHART_COLORS.web}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+      ${web.map((p) => (p.today ? `<circle class="ping" cx="${X(p.t)}" cy="${Y(p.v)}" r="4.5" fill="${CHART_COLORS.web}" opacity=".75"/>${dot(p, CHART_COLORS.web, 4.5)}` : dot(p, CHART_COLORS.web, 3))).join("")}
       ${last ? `<circle class="ping" cx="${X(last.t)}" cy="${Y(last.v)}" r="4.5" fill="${CHART_COLORS.market}" opacity=".75"/>${dot(last, CHART_COLORS.market, 4.5)}` : ""}
     </g>
     <g class="cross" style="display:none"><line y1="${m.t}" y2="${base}" stroke="#525252" stroke-width="1"/><circle r="5.5" fill="var(--card)" stroke="var(--fg)" stroke-width="2"/></g>
@@ -1844,9 +1902,11 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
 
   // Hover / keyboard layer: snap to the nearest date that has data.
   const byDay = new Map();
-  for (const p of market) byDay.set(isoDay(new Date(p.t)), { t: p.t, market: p.v, marketCarried: p.carried, cm: null, sales: [] });
-  for (const p of cmk) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? { t: p.t, market: null, cm: null, sales: [] }; s.cm = p; byDay.set(k, s); }
-  for (const p of sales) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? { t: p.t, market: null, cm: null, sales: [] }; s.sales.push(p.v); byDay.set(k, s); }
+  const blank = (t) => ({ t, market: null, cm: null, sales: [], web: [] });
+  for (const p of market) byDay.set(isoDay(new Date(p.t)), { ...blank(p.t), market: p.v, marketCarried: p.carried });
+  for (const p of cmk) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? blank(p.t); s.cm = p; byDay.set(k, s); }
+  for (const p of sales) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? blank(p.t); s.sales.push(p.v); byDay.set(k, s); }
+  for (const p of web) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? blank(p.t); s.web.push(p); byDay.set(k, s); }
   const stops = [...byDay.values()].sort((a, b) => a.t - b.t);
   const svg = wrap.querySelector("svg"), tip = wrap.querySelector(".ptip"), cross = svg.querySelector(".cross");
   let idx = stops.length - 1;
@@ -1858,7 +1918,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   };
   const show = (i) => {
     idx = Math.max(0, Math.min(stops.length - 1, i));
-    const s = stops[idx], x = X(s.t), y = Y(s.market ?? s.cm?.v ?? s.sales[0]);
+    const s = stops[idx], x = X(s.t), y = Y(s.market ?? s.cm?.v ?? s.sales[0] ?? s.web[0].v);
     cross.style.display = "";
     cross.querySelector("line").setAttribute("x1", x); cross.querySelector("line").setAttribute("x2", x);
     cross.querySelector("circle").setAttribute("cx", x); cross.querySelector("circle").setAttribute("cy", y);
@@ -1868,7 +1928,8 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
     if (s.market != null) tip.append(row(CHART_COLORS.market, formatUsd(toCents(s.market)), `TCGplayer${s.marketCarried ? again : ""}`));
     if (s.cm) tip.append(row(CHART_COLORS.cardmarket, formatUsd(toCents(s.cm.v)), `Cardmarket · ${s.cm.k}${s.cm.carried ? again : ""}`));
     for (const v of s.sales) tip.append(row(CHART_COLORS.sales, formatUsd(toCents(v)), "venta en Panamá", true));
-    const ref = s.market ?? s.cm?.v ?? s.sales[0], diff = Math.round(((price - ref) / ref) * 100);
+    for (const p of s.web) tip.append(row(CHART_COLORS.web, formatUsd(toCents(p.v)), p.today ? "valor aproximado hoy" : `venta · ${p.src}`, true));
+    const ref = s.market ?? s.cm?.v ?? s.sales[0] ?? s.web[0]?.v, diff = Math.round(((price - ref) / ref) * 100);
     if (price != null) tip.append(row("var(--fg)", formatUsd(toCents(price)), `${(l.priceLabel ?? "Este anuncio").toLowerCase()} (${diff > 0 ? "+" : ""}${diff}%)`));
     const first = tip.style.display !== "block";
     tip.style.display = "block";
@@ -1896,10 +1957,11 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
 async function loadPriceChart(l) {
   const box = $("#priceChart");
   if (!box) return;
-  const h = await fetchPriceHistory(l).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], factor: 1 }; });
+  const h = await fetchPriceHistory(l).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], web: [], factor: 1 }; });
   if (!box.isConnected) return;
-  // Con historial semanal largo se abre en "1 año"; si no, en 90 días.
-  let range = h.weekly ? 365 : 90, width = box.clientWidth;
+  h.retry = () => { box.innerHTML = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:20px 0"><span class="spinner"></span>Buscando el precio en ventas recientes…</p>`; loadPriceChart(l); };
+  // Con historial semanal largo se abre en "1 año"; si no, en 90 días (o todo, si son ventas encontradas en internet).
+  let range = h.weekly ? 365 : h.web?.length ? Infinity : 90, width = box.clientWidth;
   const draw = (animate) => renderPriceChart(box, l, h, range, (r) => { range = r; draw(true); }, animate);
   draw(true);
   const ro = new ResizeObserver(() => {
@@ -2067,7 +2129,7 @@ async function viewDetail(app, id) {
           <a href="${esc(l.verificationPhoto)}" target="_blank" rel="noopener"><img src="${esc(l.verificationPhoto)}" alt="Foto de verificación de la carta" loading="lazy"></a></section>` : ""}
       </div>
       <div class="dmain">
-        <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Cargando historial…</p></section>
+        <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
         ${estimatePanel(l.estimate, l.priceUsd)}
         <section class="panel"><h2 class="ptitle">${ic("text")}Descripción</h2><p class="desc">${esc(l.description) || '<span class="muted">Sin descripción.</span>'}</p>
           <dl class="facts"><div><dt>Categoría</dt><dd>${esc(categoryName(l.card.category))}</dd></div>
@@ -2778,14 +2840,16 @@ function viewSell(app) {
     renderEstimate();
   }
   function currentEstimate() {
-    if (!st.picked || val("category") !== "pokemon") return null;
-    return estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), condition: st.graded ? null : val("condition") || "NM", grading: st.graded ? { company: val("company"), grade: Number(val("grade")) } : null });
+    const fromCatalog = st.picked && val("category") === "pokemon"
+      ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), condition: st.graded ? null : val("condition") || "NM", grading: st.graded ? { company: val("company"), grade: Number(val("grade")) } : null })
+      : null;
+    return fromCatalog ?? estimateFromQuote(st.hist?.quote); // graded, NBA/NFL: price researched on the web
   }
   function renderEstimate() {
     const est = currentEstimate();
     $("#estBox").innerHTML = est
       ? `<div class="panel accent small"><p class="ptitle" style="font-size:15px">${ic("tag")}Precio estimado: ${fmtEstimate(est.low)} – ${fmtEstimate(est.high)}</p><p class="xs muted" style="margin-top:6px">${est.basis.map(esc).join(" · ")}. Es una referencia, no una garantía.</p></div>`
-      : st.picked && st.graded ? `<p class="notice soft">Para cartas graduadas estimamos solo con ventas locales; todavía no hay suficientes.</p>` : "";
+      : "";
     const p = Number(val("price")), v = p > 0 ? priceVerdict(p, est) : null;
     $("#verdict").innerHTML = v === "alto" ? `<span style="color:var(--warn)">Tu precio está por encima del rango estimado. Puede tardar más en venderse.</span>` : v === "buen-precio" ? `<span style="color:var(--up)">Tu precio está por debajo del rango. Se va a vender rápido.</span>` : "";
   }
@@ -2826,6 +2890,12 @@ function viewSell(app) {
     loadSellChart();
   });
   form.elements.variant.addEventListener("input", renderEstimate);
+  // Cards typed by hand (NBA/NFL, or a Pokémon not picked from the catalog): price them once the details settle.
+  let detailsTimer = null;
+  form.addEventListener("change", (e) => {
+    if (st.picked || !["subject", "setName", "year", "number", "variant"].includes(e.target.name)) return;
+    clearTimeout(detailsTimer); detailsTimer = setTimeout(loadSellChart, 1500);
+  });
   form.elements.price.addEventListener("input", () => { renderEstimate(); drawSellChart(); });
   form.addEventListener("change", (e) => { if (e.target.name === "company" || e.target.name === "grade") { renderEstimate(); loadSellChart(); } });
 
@@ -2857,11 +2927,12 @@ function viewSell(app) {
       fillDescription(describeCard(null, ai));
       renderEstimate();
     }
-    if (ai?.is_graded && ai.grading_company && ai.grade) {
+    const graded = !!(ai?.is_graded && ai.grading_company && ai.grade);
+    if (graded) {
       const r = form.querySelector('#gradedSeg input[value="true"]'); r.checked = true; r.dispatchEvent(new Event("change", { bubbles: true }));
       set("company", ai.grading_company); set("grade", ai.grade); set("cert", ai.cert_number ?? "");
       renderEstimate(); loadSellChart();
-    }
+    } else if (res.kind !== "pokemon") loadSellChart();
     box.innerHTML = ""; // the filled-in form is the result
   }
   function setCategory(cat) {
@@ -2895,9 +2966,11 @@ function viewSell(app) {
 
   // ----- market value chart for the selected card
   const sellListing = () => {
-    const c = st.picked, price = Number(val("price"));
+    const c = val("category") === "pokemon" ? st.picked : null, price = Number(val("price"));
     return {
-      card: { category: "pokemon", subject: c.name, setName: c.set.name, year: c.set.releaseDate?.slice(0, 4), number: val("number"), variant: val("variant"), catalogId: c.id, dexId: c.dexId },
+      card: c
+        ? { category: "pokemon", subject: c.name, setName: c.set.name, year: c.set.releaseDate?.slice(0, 4), number: val("number"), variant: val("variant"), catalogId: c.id, dexId: c.dexId }
+        : { category: val("category"), subject: val("subject"), setName: val("setName"), year: val("year"), number: val("number"), variant: val("variant"), catalogId: null },
       condition: st.graded ? null : val("condition") || "NM",
       grading: st.graded && val("company") && Number(val("grade")) ? { company: val("company"), grade: Number(val("grade")) } : null,
       priceUsd: price > 0 ? price : null, priceLabel: "Tu precio", isDemo: false,
@@ -2906,14 +2979,17 @@ function viewSell(app) {
   let chartRo = null;
   async function loadSellChart() {
     const box = $("#sellChart");
-    if (!st.picked || val("category") !== "pokemon") { box.hidden = true; st.hist = null; renderPriceHint(); return; }
+    const picked = st.picked && val("category") === "pokemon";
+    if (!picked && !(val("subject").length >= 2 && val("setName"))) { box.hidden = true; st.hist = null; renderEstimate(); renderPriceHint(); return; }
     const run = ++st.chartRun, c = st.picked;
     box.hidden = false;
     box.innerHTML = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:20px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p>`;
-    const h = await fetchPriceHistory(sellListing()).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], factor: 1 }; });
+    const h = await fetchPriceHistory(sellListing()).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], web: [], factor: 1 }; });
     if (run !== st.chartRun || st.picked !== c || !box.isConnected) return;
-    st.hist = h; st.range = h.weekly ? 365 : 90;
+    h.retry = loadSellChart;
+    st.hist = h; st.range = h.weekly ? 365 : h.web?.length ? Infinity : 90;
     drawSellChart(true);
+    renderEstimate();
     renderPriceHint();
     if (!chartRo) {
       let width = box.clientWidth;
@@ -2923,7 +2999,7 @@ function viewSell(app) {
   }
   function drawSellChart(animate = false) {
     const box = $("#sellChart");
-    if (!st.hist || !st.picked || box.hidden) return;
+    if (!st.hist || box.hidden) return;
     renderPriceChart(box, sellListing(), st.hist, st.range, (r) => { st.range = r; drawSellChart(true); }, animate);
   }
 
@@ -2976,7 +3052,8 @@ function viewSell(app) {
       const { data } = await sb.from("sales").select("price_cents, sold_at").eq("catalog_id", catalogId).eq("grading_key", gradingKey).order("sold_at", { ascending: false }).limit(50);
       comps = (data ?? []).map((s) => ({ priceUsd: s.price_cents / 100, soldAt: s.sold_at }));
     }
-    const estimate = catalogId ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), localComps: comps, condition: st.graded ? null : val("condition"), grading: st.graded ? { company: val("company"), grade } : null }) : null;
+    const estimate = (catalogId ? estimatePrice({ reference: st.graded ? null : pickReferencePrice(st.picked, val("variant")), localComps: comps, condition: st.graded ? null : val("condition"), grading: st.graded ? { company: val("company"), grade } : null }) : null)
+      ?? estimateFromQuote(st.hist?.quote); // graded, NBA/NFL: the price researched on the web
 
     // El anuncio nace como borrador (invisible al público) y sólo pasa a "active" cuando
     // las fotos ya están en Storage y registradas. Así nunca se publica un anuncio a medias.

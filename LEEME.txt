@@ -36,6 +36,13 @@ precio (USD) aparece el valor aproximado de la carta y la gráfica de valor
 Cardmarket desde el 16/09/2026; el historial largo de TCGplayer se agrega el
 lunes siguiente a su publicación.
 
+PRECIO DE CARTAS GRADUADAS, NBA Y NFL
+Cuando TCGplayer/Cardmarket no tienen la carta, la misma Edge Function busca
+el precio en internet (ventas completadas en eBay, PriceCharting, 130point,
+PSA…) y la página muestra valor aproximado, rango, ventas con fecha, gráfica
+y enlaces a cada fuente. Se guarda 24 horas en la tabla market_quotes: correr
+supabase/migrations/0008_market_quotes.sql en el SQL Editor de Supabase.
+
 QUÉ NO INCLUYE ESTE ARCHIVO
 - Contacto por WhatsApp: se activa al poner el número en CONFIG.WHATSAPP
   (al inicio del <script> dentro de holo.html).
