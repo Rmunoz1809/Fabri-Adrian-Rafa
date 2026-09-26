@@ -106,6 +106,10 @@ const QUOTE_TTL_MS = 24 * 3_600_000;
 
 // Best-effort abuse limits per function instance: each call costs money.
 const calls = new Map<string, number[]>();
+// Max new web price researches per 24 h across all users (each one is several paid
+// web searches). Override with the PRICE_DAILY_MAX secret.
+const PRICE_DAILY_MAX = Number(Deno.env.get("PRICE_DAILY_MAX") ?? "") || 100;
+
 function allow(key: string, perHour: number): boolean {
   const now = Date.now();
   const recent = (calls.get(key) ?? []).filter((t) => now - t < 3_600_000);
@@ -159,9 +163,11 @@ Deno.serve(async (req) => {
 
   try {
     if (body.action === "price") {
-      // Prices are shown to every visitor of a listing, so they do not need a session.
-      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "anon";
-      if (!allow("price:all", 400) || !allow(user ? `price:${user.id}` : `price-ip:${ip}`, user ? 60 : 20)) {
+      // Each uncached quote runs paid web searches, and the card fields come from the
+      // client: without a session anyone could loop this on our Anthropic account.
+      // holo.html already requires sign-in to browse, so this costs users nothing.
+      if (!user) return json({ error: "Entra a tu cuenta para ver precios de mercado." }, 401);
+      if (!allow("price:all", 400) || !allow(`price:${user.id}`, 60)) {
         return json({ error: "Demasiadas consultas de precio. Intenta en un rato." }, 429);
       }
       return await price(body.card ?? {});
@@ -238,6 +244,17 @@ async function price(card: Record<string, unknown>) {
   if (db) {
     const { data } = await db.from("market_quotes").select("quote, fetched_at").eq("quote_key", key).maybeSingle();
     if (data && Date.now() - Date.parse(data.fetched_at) < QUOTE_TTL_MS) return json({ quote: data.quote, cached: true });
+  }
+
+  // Hard daily budget for new web research, persisted in the database (the in-memory
+  // allow() limits reset whenever the function cold-starts). Cached quotes above are
+  // still served. Fails closed: no database, no paid research.
+  if (!db) return json({ error: "El servicio de precios no está disponible ahora." }, 503);
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { count, error: countErr } = await db.from("market_quotes").select("quote_key", { count: "exact", head: true }).gte("fetched_at", since);
+  if (countErr || (count ?? 0) >= PRICE_DAILY_MAX) {
+    if (countErr) console.error("price budget check failed", countErr);
+    return json({ error: "Llegamos al límite diario de consultas de precio. Intenta mañana." }, 429);
   }
 
   const description = [

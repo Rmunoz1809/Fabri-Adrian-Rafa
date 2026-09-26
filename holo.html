@@ -430,6 +430,12 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .daily > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
 .daily span { width: 100%; max-width: 28px; min-height: 2px; background: var(--brand, var(--accent)); border-radius: 4px 4px 0 0; }
 .daily em { font-style: normal; font-size: 10px; color: var(--ink-2); }
+/* Narrow phones (iPhone SE, 320 px): let long buttons and the seller switch wrap instead of overflowing. */
+@media (max-width: 380px) {
+  .cta .btn { max-width: 100%; height: auto; min-height: 44px; padding-top: 8px; padding-bottom: 8px; white-space: normal; text-align: center; }
+  .seller-seg { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); }
+  .seller-seg a { min-width: 0; padding: 4px 8px; font-size: 13px; white-space: normal; }
+}
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; } .share-row .btn { flex: 1 1 130px; min-width: 0; }
 .verif img { width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; background: var(--surface-2); margin-top: 10px; }
 .verif-up img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; margin-top: 10px; background: var(--surface-2); }
@@ -1745,12 +1751,13 @@ function niceTicks(lo, hi, n = 4) {
 
 /** Links to the public sources so buyers can check the price themselves. */
 function priceSources(l, h) {
-  const links = (h?.quote?.sources ?? []).slice(0, 4).map((s) => [s.url, s.name]);
+  // Source names/URLs come from web research (untrusted pages): only http(s) links, and the name is escaped below.
+  const links = (h?.quote?.sources ?? []).filter((s) => /^https?:\/\//i.test(s?.url ?? "")).slice(0, 4).map((s) => [s.url, s.name]);
   if (h?.productId) links.push([`https://www.tcgplayer.com/product/${h.productId}`, "TCGplayer"]);
   if (h?.cardmarket?.length) links.push([`https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(l.card.subject)}`, "Cardmarket"]);
   const q = [l.card.year, l.card.subject, l.card.setName, l.card.number, l.grading ? `${l.grading.company} ${l.grading.grade}` : ""].filter(Boolean).join(" ");
   links.push([`https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&LH_Sold=1&LH_Complete=1`, "Ventas completadas en eBay"]);
-  return `<p class="psources"><span class="muted">Verifica la fuente:</span>${links.map(([u, t]) => `<a class="link" href="${esc(u)}" target="_blank" rel="noopener">${t}${ic("external")}</a>`).join("")}</p>`;
+  return `<p class="psources"><span class="muted">Verifica la fuente:</span>${links.map(([u, t]) => `<a class="link" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(t)}${ic("external")}</a>`).join("")}</p>`;
 }
 
 /** Monotone cubic path through points sorted by x (d3.curveMonotoneX), as Recharts draws "monotone". */
