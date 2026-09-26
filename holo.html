@@ -184,11 +184,37 @@ body.gate header.top, body.gate footer.bottom { display: none; }
 .gate-hero .logo { font-size: 24px; margin-bottom: 28px; }
 .gate-hero h1 { font-size: clamp(36px, 6vw, 56px); line-height: 1.02; }
 .gate-hero p { max-width: 460px; }
-.gate-cards { display: flex; margin-top: 32px; }
-.gate-cards span { width: 72px; aspect-ratio: 63 / 88; border-radius: 10px; background: var(--holo); border: 3px solid #000; margin-right: -18px; box-shadow: 0 10px 30px rgb(0 0 0 / .6); }
-.gate-cards span:nth-child(1) { transform: rotate(-10deg); } .gate-cards span:nth-child(2) { transform: rotate(-2deg) translateY(-8px); opacity: .85; } .gate-cards span:nth-child(3) { transform: rotate(7deg); opacity: .7; }
 .gate-form { width: 100%; max-width: 448px; }
 @media (min-width: 900px) { .gate-form { justify-self: end; } }
+.gate-wrap { position: relative; z-index: 1; }
+.gate-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
+.gate-pills span { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; font-size: 14px; font-weight: 600; background: rgb(17 17 19 / .7); border: 1px solid rgb(255 255 255 / .12); backdrop-filter: blur(8px); }
+.gate-pills i { width: 8px; height: 8px; border-radius: 50%; }
+.gate-glass { margin-top: 24px; padding: 24px; border-radius: 24px; border: 1.5px solid transparent; background: linear-gradient(rgb(17 17 19 / .82), rgb(17 17 19 / .82)) padding-box, var(--holo) border-box; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 30px 80px -20px rgb(0 0 0 / .9), 0 0 60px -20px rgb(138 182 255 / .35); }
+.gate-glass .input { background: rgb(0 0 0 / .45); }
+.gate-hero h1, .gate-hero p { text-shadow: 0 2px 24px rgb(0 0 0 / .9); }
+.gate-hero p.muted { color: #cfcbc3; }
+/* fondo animado de cartas: Pokémon + NBA + NFL */
+body:not(.gate) .gate-bg { display: none; }
+.gate-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: #000; }
+.gate-bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 70% 60% at 50% 50%, rgb(0 0 0 / .55), rgb(0 0 0 / .88)), linear-gradient(180deg, rgb(0 0 0 / .6), transparent 25%, transparent 75%, rgb(0 0 0 / .8)); }
+.gate-cols { position: absolute; left: 50%; top: 50%; width: 170vmax; height: 170vmax; display: flex; justify-content: center; gap: 18px; transform: translate(-50%, -50%) rotate(-14deg); opacity: .78; }
+.gate-col { flex: 0 0 150px; display: flex; flex-direction: column; gap: 18px; animation: gate-up 70s linear infinite; }
+.gate-col:nth-child(even) { animation-name: gate-down; animation-duration: 85s; }
+.gate-col:nth-child(3n) { animation-duration: 60s; }
+@keyframes gate-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes gate-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
+.gc { position: relative; flex-shrink: 0; width: 150px; aspect-ratio: 63 / 88; border-radius: 9px; overflow: hidden; box-shadow: 0 14px 30px rgb(0 0 0 / .7); background: var(--surface-2); }
+.gc img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gc.sport { color: #fff; padding: 10px; display: flex; flex-direction: column; border: 5px solid rgb(255 255 255 / .9); }
+.gc.sport::before { content: ""; position: absolute; inset: 0; background: linear-gradient(125deg, transparent 30%, rgb(255 255 255 / .28) 45%, transparent 60%), repeating-linear-gradient(90deg, rgb(255 255 255 / .05) 0 2px, transparent 2px 14px); mix-blend-mode: screen; }
+.gc.sport .lg { align-self: flex-start; position: relative; background: rgb(0 0 0 / .35); border-radius: 4px; padding: 2px 6px; font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.gc.sport svg { position: relative; flex: 1; width: 100%; min-height: 0; filter: drop-shadow(0 6px 8px rgb(0 0 0 / .45)); }
+.gc.sport .nm { position: relative; font-family: var(--display); font-weight: 700; font-size: 14px; line-height: 1.05; text-transform: uppercase; background: rgb(0 0 0 / .4); margin: 0 -10px -10px; padding: 7px 10px; }
+.gc.sport .nm small { display: block; font-family: var(--sans); font-size: 9px; font-weight: 600; letter-spacing: .08em; opacity: .75; margin-top: 2px; }
+@media (max-width: 640px) { .gate-col, .gc { flex-basis: 110px; width: 110px; } .gc.sport .nm { font-size: 11px; } .gate-cols { opacity: .5; } }
+.gate-form > h2, .gate-form > p { text-shadow: 0 2px 20px rgb(0 0 0 / .95); }
+@media (prefers-reduced-motion: reduce) { .gate-col { animation: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tile { transition: none; } .spinner { animation-duration: 3s; } }
 </style>
@@ -934,10 +960,42 @@ function viewProtected(app) {
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:40px"><a class="btn primary" href="#/">Ver cartas</a><a class="btn" href="#/vender">Vender una carta</a></div></div>`;
 }
 
+// Animated card wall behind the sign-in screen. Pokémon use real card scans;
+// NBA/NFL cards are illustrated (no player photos: we don't hold image rights).
+const GATE_POKEMON = ["base1/4", "sv3pt5/199", "swsh7/215", "sv8/238", "base1/2", "swsh7/218", "sv4pt5/234", "base1/58", "sv3pt5/200", "swsh11/186", "base1/15", "sv6/211", "sv2/203", "swsh12pt5/160", "sv3pt5/202", "sv2/254"];
+const GATE_ATHLETES = [
+  ["nba", "Victor Wembanyama", "Prizm RC", "#1d428a", "#c8102e"], ["nfl", "Patrick Mahomes", "Donruss Optic", "#9d1c2c", "#f2b632"],
+  ["nba", "LeBron James", "Select", "#552583", "#fdb927"], ["nfl", "C.J. Stroud", "Prizm RC", "#03202f", "#a71930"],
+  ["nba", "Stephen Curry", "Prizm Silver", "#1d428a", "#ffc72c"], ["nfl", "Josh Allen", "Mosaic", "#00338d", "#c60c30"],
+  ["nba", "Luka Dončić", "Optic Holo", "#00538c", "#8a9bb0"], ["nfl", "Justin Jefferson", "Prizm", "#4f2683", "#ffc62f"],
+  ["nba", "Giannis Antetokounmpo", "Mosaic", "#00471b", "#c9b98a"], ["nfl", "Lamar Jackson", "Select", "#241773", "#9e7c0c"],
+];
+const ATHLETE_SVG = {
+  nba: `<svg viewBox="0 0 100 110" aria-hidden="true"><path d="M70 4h26v3H70z" fill="#fff" opacity=".7"/><path d="M73 7l4 12h12l4-12" stroke="#fff" stroke-width="1.5" fill="none" opacity=".6"/><circle cx="66" cy="10" r="7" fill="#f58426"/><path d="M59 10h14M66 3v14" stroke="#000" stroke-width="1" opacity=".5"/><g stroke="#fff" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M47 38 57 26 63 16" stroke-width="7"/><path d="M45 40 33 46 28 38" stroke-width="7"/><path d="M47 36 42 64" stroke-width="16"/><path d="M42 64 56 78 50 98" stroke-width="9"/><path d="M42 64 30 80 36 100" stroke-width="9"/></g><circle cx="50" cy="26" r="8" fill="#fff"/></svg>`,
+  nfl: `<svg viewBox="0 0 100 110" aria-hidden="true"><ellipse cx="24" cy="12" rx="9" ry="5.5" transform="rotate(-35 24 12)" fill="#8b4a1f"/><path d="M20 12l8-3" stroke="#fff" stroke-width="1.2"/><g stroke="#fff" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M46 38 34 30 28 18" stroke-width="7"/><path d="M54 40 66 46 72 38" stroke-width="7"/><path d="M50 36 52 64" stroke-width="18"/><path d="M52 64 40 82 34 102" stroke-width="9"/><path d="M52 64 62 84 70 100" stroke-width="9"/></g><circle cx="50" cy="24" r="10" fill="#fff"/><path d="M52 26h9M55 22v8" stroke="#000" stroke-width="1.6" opacity=".55"/></svg>`,
+};
+function gateBackground() {
+  if ($("#gateBg")) return;
+  const pokemon = (id) => `<div class="gc"><img src="https://images.pokemontcg.io/${id}.png" alt="" loading="eager" decoding="async"></div>`;
+  const athlete = ([lg, name, set, a, b]) => `<div class="gc sport" style="background:linear-gradient(160deg, ${a}, ${b})"><span class="lg">${lg.toUpperCase()}</span>${ATHLETE_SVG[lg]}<p class="nm">${esc(name)}<small>${esc(set)}</small></p></div>`;
+  const cols = [];
+  for (let c = 0; c < 9; c++) {
+    const cards = [];
+    for (let r = 0; r < 6; r++) {
+      const i = c * 6 + r;
+      cards.push(i % 3 === 1 ? athlete(GATE_ATHLETES[(c * 2 + r) % GATE_ATHLETES.length]) : pokemon(GATE_POKEMON[(c * 5 + r) % GATE_POKEMON.length]));
+    }
+    const run = cards.join("");
+    cols.push(`<div class="gate-col">${run}${run}</div>`); // doubled for a seamless loop
+  }
+  document.body.insertAdjacentHTML("afterbegin", `<div class="gate-bg" id="gateBg" aria-hidden="true"><div class="gate-cols">${cols.join("")}</div></div>`);
+}
+
 function viewAuth(app, next) {
   setTitle("Entrar");
   if (session) return go(next);
   if (!sb) { app.innerHTML = `<p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p>`; return; }
+  gateBackground();
   let mode = "entrar";
   const render = () => {
     const up = mode === "registro";
@@ -946,11 +1004,11 @@ function viewAuth(app, next) {
         <div class="logo"><i aria-hidden="true"></i><span>${esc(CONFIG.APP_NAME)}</span></div>
         <h1 class="display">Cartas coleccionables en <span class="holo-text">Panamá</span>.</h1>
         <p class="muted" style="font-size:17px;margin:16px 0 0">Compra y vende Pokémon, NBA y NFL con precio estimado y Compra Protegida.</p>
-        <div class="gate-cards" aria-hidden="true"><span></span><span></span><span></span></div>
+        <div class="gate-pills"><span><i style="background:#ffcb05"></i>Pokémon</span><span><i style="background:#c8102e"></i>NBA</span><span><i style="background:#4fd19c"></i>NFL</span></div>
       </section>
       <div class="gate-form">
       <h2 class="display" style="font-size:28px;margin:0">${up ? "Crea tu cuenta" : "Bienvenido"}</h2><p class="muted" style="margin:4px 0 0">${up ? "Es gratis y toma un minuto." : "Entra para ver y publicar cartas."}</p>
-      <div class="panel" style="margin-top:24px;padding:24px;border-radius:24px">
+      <div class="gate-glass">
         <div class="tabs"><button type="button" data-m="entrar" class="${!up ? "on" : ""}">Entrar</button><button type="button" data-m="registro" class="${up ? "on" : ""}">Crear cuenta</button></div>
         <form id="authForm" style="display:flex;flex-direction:column;gap:12px;margin-top:20px">
           ${up ? `<label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
