@@ -31,3 +31,36 @@ configuración (nombre, Supabase, WhatsApp) está en el objeto CONFIG al
 principio del <script>. La clave de Supabase que aparece ahí es la
 "publishable": es pública por diseño y la seguridad la ponen las reglas de la
 base de datos (RLS). No agregues claves secretas a este archivo.
+
+GRÁFICA DE VALOR EN EL MERCADO
+Cada carta Pokémon muestra cómo cambió su valor semana a semana, comparado con
+el precio del anuncio y con las ventas registradas en Panamá (botones 30 días /
+90 días / 1 año / Todo). Todos los
+puntos son precios reales tomados de fuentes públicas; no se usa IA.
+
+Fuentes:
+- TCGplayer (EE.UU.): tcgcsv.com, copia pública diaria de los precios de
+  TCGplayer (precio de mercado, bajo y medio). El histórico desde febrero de
+  2024 sale del archivo diario de tcgcsv guardado sin modificar en
+  github.com/landonrroy/pokefolio-data.
+- Cardmarket (Europa): la guía de precios oficial que Cardmarket publica para
+  descargar (promedios de ventas de 1, 7 y 30 días, tendencia y mínimo). Los
+  días anteriores salen de github.com/ZyzyThePizi/pokemon-price-data (copia
+  diaria de esa guía, desde el 16/09/2026). Se convierte a USD con la tasa del
+  Banco Central Europeo de cada fecha (api.frankfurter.dev).
+- De respaldo, si alguna falla: TCGdex y pokemontcg.io. Si una fuente no da
+  dato nuevo en la semana, se repite el último valor conocido (tramo plano,
+  marcado como repetido).
+- En la página, el último punto es el precio de hoy según TCGdex.
+
+Actualización automática: el GitHub Action .github/workflows/precios.yml corre
+cada lunes a las 10:00 UTC. Ejecuta scripts/actualizar-precios.mjs, que toma
+las cartas de los anuncios activos (Supabase) y de los ejemplos, guarda un
+punto por semana en data/precios.json y lo copia dentro de holo.html (entre
+<!-- PRECIOS:INICIO --> y <!-- PRECIOS:FIN -->), así el archivo funciona solo,
+sin servidor. Las cartas nuevas reciben su histórico completo la primera vez.
+Para forzar una actualización: pestaña Actions ▸ "Precios semanales" ▸ Run
+workflow. Para probarlo en tu computadora: node scripts/actualizar-precios.mjs
+
+supabase/price_snapshots.sql es opcional: sólo agrega un precio diario si lo
+corres en Supabase y pones PRICE_SNAPSHOTS: true en CONFIG. No hace falta.

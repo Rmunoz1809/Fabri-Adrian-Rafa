@@ -1,0 +1,44 @@
+# Actualiza el historial semanal de precios (data/precios.json y el bloque
+# incrustado en holo.html). Sin IA y sin pasos manuales: corre solo cada lunes.
+name: Precios semanales
+
+on:
+  schedule:
+    - cron: "0 10 * * 1" # lunes 10:00 UTC (5:00 en Panamá)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: precios
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Descargar precios y actualizar el historial
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/actualizar-precios.mjs
+
+      - name: Guardar cambios
+        run: |
+          git config user.name "holo-precios[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/precios.json holo.html export/holo.html
+          if git diff --cached --quiet; then
+            echo "Sin cambios."
+            exit 0
+          fi
+          git commit -m "Precios semanales: actualización automática $(date -u +%Y-%m-%d)"
+          git pull --rebase
+          git push

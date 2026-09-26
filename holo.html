@@ -204,6 +204,9 @@ body.gate header.top, body.gate footer.bottom { display: none; }
 <main id="app" class="wrap" style="flex:1"></main>
 <footer class="bottom"><div class="wrap"><p style="margin:0">© 2026 <span class="brand-name">Holo</span> · Hecho en Panamá 🇵🇦 · Precios en USD</p><p style="margin:0">Los precios estimados son referencias, no garantías ni tasaciones oficiales.</p></div></footer>
 
+<!-- PRECIOS:INICIO -->
+<script id="precios-data" type="application/json">{"version":1,"cartas":{}}</script>
+<!-- PRECIOS:FIN -->
 <script>
 "use strict";
 // ============================================================= configuration
@@ -216,6 +219,9 @@ const CONFIG = {
   WHATSAPP: "", // platform WhatsApp, international format without "+", e.g. "5076XXXXXXX"
   SHOW_DEMO_LISTINGS: true,
   CATALOG_API: "https://api.pokemontcg.io/v2",
+  // Opcional: poner true sólo si se corrió supabase/price_snapshots.sql (suma un precio diario
+  // guardado por la base de datos). El historial semanal incrustado no lo necesita.
+  PRICE_SNAPSHOTS: false,
 };
 
 // ============================================================= catalog
@@ -527,17 +533,31 @@ function estimatePanel(est, price) {
 }
 
 // ============================================================= price history
-// Market value over time: one TCGplayer snapshot per day, stored by the database
-// (supabase/price_snapshots.sql), plus sales recorded in Panama.
+// Valor en el tiempo. La base es el historial semanal incrustado en este mismo
+// archivo (<script id="precios-data">), que un GitHub Action actualiza cada lunes
+// con scripts/actualizar-precios.mjs: TCGplayer vía tcgcsv.com (desde feb 2024) y
+// la guía de precios oficial de Cardmarket. Encima va el precio de hoy de TCGdex
+// y, si existen, las ventas registradas en Panamá. La tabla price_snapshots de
+// Supabase (supabase/price_snapshots.sql) es opcional (CONFIG.PRICE_SNAPSHOTS).
 const CHART_COLORS = { market: "#6d86f5", cardmarket: "#2f9e8f", sales: "#c9823d" };
 const DAY_MS = 86400000;
-const CHART_RANGES = [["30 días", 30], ["90 días", 90], ["1 año", 365]];
+const CHART_RANGES = [["30 días", 30], ["90 días", 90], ["1 año", 365], ["Todo", Infinity]];
 const isoDay = (d) => d.toISOString().slice(0, 10);
 const noonUtc = (day) => Date.parse(`${day}T12:00:00Z`);
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
 const fmtDay = (t, year) => new Intl.DateTimeFormat("es-PA", year ? { day: "numeric", month: "short", year: "numeric" } : { day: "numeric", month: "short" }).format(t);
 const fmtAxis = (v) => (v >= 1000 ? `$${+(v / 1000).toFixed(1)}k` : `$${+v.toFixed(v < 10 ? 2 : 0)}`);
 const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a.length ? quantile(a, 0.5) : null; };
+
+let preciosData = null;
+/** Historial semanal incrustado (vacío si el bloque falta o está dañado). */
+function storedPrices() {
+  if (!preciosData) {
+    try { preciosData = JSON.parse($("#precios-data")?.textContent || "{}"); } catch { preciosData = {}; }
+    preciosData.cartas ??= {};
+  }
+  return preciosData;
+}
 
 const TCGDEX_API = "https://api.tcgdex.net/v2/en";
 /** pokemontcg.io ids (sv3pt5-199) → TCGdex ids (sv03.5-199). */
@@ -550,15 +570,23 @@ let eurUsdPromise = null;
 const eurUsd = () => (eurUsdPromise ??= withTimeout(fetch("https://api.frankfurter.dev/v1/latest?from=EUR&to=USD"), 8000)
   .then((r) => r.json()).then((j) => ({ rate: j.rates.USD, date: j.date })).catch(() => null));
 
+/** Agrega un punto al final de la serie si es de un día posterior al último (o lo reemplaza si es el mismo día). */
+function appendLatest(series, p) {
+  const last = series.at(-1);
+  if (!last || isoDay(new Date(p.t)) > isoDay(new Date(last.t))) series.push(p);
+  else if (isoDay(new Date(p.t)) === isoDay(new Date(last.t))) series[series.length - 1] = p;
+}
+
 async function fetchPriceHistory(l) {
   const { catalogId, category } = l.card;
   const factor = l.grading ? 1 : CONDITION_FACTOR[l.condition] ?? 1;
-  const h = { market: [], cardmarket: [], sales: [], factor, fx: null, productId: null, cmUpdated: null };
+  const store = storedPrices();
+  const h = { market: [], cardmarket: [], sales: [], factor, fx: null, productId: null, cmUpdated: null, updated: store.actualizado ?? null, weekly: false, liveMarket: false, liveCm: false };
   if (catalogId && !l.grading && category === "pokemon") {
+    const stored = store.cartas[catalogId];
     const [dbRows, dex, fx] = await Promise.all([
       (async () => {
-        if (!sb) return [];
-        // Asks the database to store today's price if it doesn't have it yet (it fetches the price itself).
+        if (!sb || !CONFIG.PRICE_SNAPSHOTS) return [];
         await withTimeout(sb.rpc("snapshot_price", { p_catalog_id: catalogId }), 6000).catch(() => {});
         const { data } = await sb.from("price_snapshots").select("variant, market_cents, captured_on").eq("catalog_id", catalogId).order("captured_on").limit(1500);
         return data ?? [];
@@ -566,25 +594,33 @@ async function fetchPriceHistory(l) {
       withTimeout(fetch(`${TCGDEX_API}/cards/${encodeURIComponent(tcgdexId(catalogId))}`), 8000).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       eurUsd(),
     ]);
-    // TCGplayer (EE.UU.): daily history stored by the database + today's market price.
-    const key = dbRows.length ? pickVariantKey([...new Set(dbRows.map((r) => r.variant))], l.card.variant) : null;
-    h.market = dbRows.filter((r) => r.variant === key).map((r) => ({ t: noonUtc(r.captured_on), v: round2((r.market_cents / 100) * factor), k: "precio de mercado" }));
+    // TCGplayer (EE.UU.): un precio de mercado por semana + el de hoy.
+    const tpStored = stored?.series?.tcgplayer ?? {};
+    const key = pickVariantKey(Object.keys(tpStored), l.card.variant);
+    h.market = (tpStored[key] ?? []).filter((p) => p.market > 0)
+      .map((p) => ({ t: noonUtc(p.d), v: round2(p.market * factor), k: "precio de mercado", carried: !!p.carried, src: p.fuente }));
+    h.productId = stored?.tcgplayer?.productId ?? null;
+    const dbKey = dbRows.length ? pickVariantKey([...new Set(dbRows.map((r) => r.variant))], key ?? l.card.variant) : null;
+    for (const r of dbRows.filter((r) => r.variant === dbKey)) appendLatest(h.market, { t: noonUtc(r.captured_on), v: round2((r.market_cents / 100) * factor), k: "precio de mercado", src: "supabase" });
     const tp = dex?.pricing?.tcgplayer;
     if (tp) {
       const tkey = pickVariantKey(Object.keys(tp).filter((k) => typeof tp[k] === "object" && tp[k]), key ?? l.card.variant);
       const v = tp[tkey]?.marketPrice ?? tp[tkey]?.midPrice;
-      h.productId = tp[tkey]?.productId ?? null;
-      const today = isoDay(new Date(tp.updated ?? Date.now()));
-      if (v > 0 && !h.market.some((p) => isoDay(new Date(p.t)) === today)) h.market.push({ t: noonUtc(today), v: round2(v * factor), k: "precio de mercado" });
+      h.productId ??= tp[tkey]?.productId ?? null;
+      if (v > 0) { appendLatest(h.market, { t: noonUtc(isoDay(new Date(tp.updated ?? Date.now()))), v: round2(v * factor), k: "precio de mercado", src: "tcgdex" }); h.liveMarket = h.market.at(-1).src === "tcgdex"; }
     }
-    // Cardmarket (Europa): rolling averages of real sales, converted with the ECB rate.
+    // Cardmarket (Europa): promedio de ventas reales de los últimos 7 días, en USD con la tasa del BCE de cada fecha.
+    const cmValue = (p) => (p.avg7 > 0 ? [p.avg7, "promedio de ventas, últimos 7 días"] : p.trend > 0 ? [p.trend, "precio de tendencia"] : [null]);
+    h.cardmarket = (stored?.series?.cardmarket ?? []).filter((p) => p.eurUsd && cmValue(p)[0])
+      .map((p) => { const [eur, k] = cmValue(p); return { t: noonUtc(p.d), v: round2(eur * p.eurUsd * factor), k, carried: !!p.carried, src: p.fuente, rate: p.eurUsd }; });
     const cm = dex?.pricing?.cardmarket;
-    if (cm && fx) {
-      const upd = Date.parse(cm.updated), usd = (eur) => round2(eur * fx.rate * factor);
-      h.fx = fx; h.cmUpdated = upd;
-      h.cardmarket = [[cm.avg30, 15, "promedio de ventas, últimos 30 días"], [cm.avg7, 3.5, "promedio de ventas, últimos 7 días"], [cm.avg1, 1, "promedio de ventas del último día"], [cm.trend, 0, "precio de tendencia"]]
-        .filter(([v]) => v > 0).map(([v, back, k]) => ({ t: upd - back * DAY_MS, v: usd(v), k }));
+    if (cm && fx && cmValue(cm)[0]) {
+      const [eur, k] = cmValue(cm);
+      h.fx = fx; h.cmUpdated = Date.parse(cm.updated);
+      appendLatest(h.cardmarket, { t: noonUtc(isoDay(new Date(h.cmUpdated))), v: round2(eur * fx.rate * factor), k, src: "tcgdex", rate: fx.rate });
+      h.liveCm = h.cardmarket.at(-1).src === "tcgdex";
     }
+    h.weekly = h.market.length > 4 || h.cardmarket.length > 4;
   }
   if (sb && catalogId && !l.isDemo) {
     const gradingKey = l.grading ? `${l.grading.company}${l.grading.grade}` : "raw";
@@ -605,7 +641,6 @@ function niceTicks(lo, hi, n = 4) {
 }
 
 /** Links to the public sources so buyers can check the price themselves. */
-/** Links to the public sources so buyers can check the price themselves. */
 function priceSources(l, h) {
   const links = [];
   if (h?.productId) links.push([`https://www.tcgplayer.com/product/${h.productId}`, "TCGplayer"]);
@@ -623,10 +658,14 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
       : "Todavía no hay historial para esta carta. Para cartas deportivas y graduadas lo armamos con las ventas registradas en Panamá; cuando haya ventas, aparecerán aquí."}</p>${priceSources(l, h)}`;
     return;
   }
-  const from = now - rangeDays * DAY_MS;
+  const from = rangeDays === Infinity ? -Infinity : now - rangeDays * DAY_MS;
   const market = h.market.filter((p) => p.t >= from), cmk = h.cardmarket.filter((p) => p.t >= from), sales = h.sales.filter((p) => p.t >= from);
+  // Texto del periodo elegido: "en el último año", "desde el 8 feb 2024"…
+  // Si la serie empieza bastante después del inicio del periodo, se nombra su fecha real.
+  const since = (pts) => (rangeDays === Infinity || pts[0].t - from > 14 * DAY_MS ? `desde el ${fmtDay(pts[0].t, true)}` : rangeDays === 365 ? "en el último año" : `en los últimos ${rangeDays} días`);
+  const move = (pts) => { const r = pts.at(-1).v / pts[0].v - 1, p = Math.round(Math.abs(r) * 100); return p < 1 ? "se mantuvo estable" : `${r > 0 ? "subió" : "bajó"} ${p}% (de ${fmtEstimate(pts[0].v)} a ${fmtEstimate(pts.at(-1).v)})`; };
 
-  // Headline: how this listing compares with the value today.
+  // Headline: how this listing compares with the value today, and how the value moved in the selected period.
   const current = h.market.at(-1) ?? h.cardmarket.at(-1);
   let head = "";
   if (current) {
@@ -634,7 +673,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
     const rel = pct < 3 ? "en línea con el valor de mercado" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} del valor de mercado`;
     const when = isoDay(new Date(current.t)) === isoDay(new Date()) ? "hoy" : `al ${fmtDay(current.t)}`;
     head = `<p style="margin:8px 0 0"><span class="display" style="font-size:24px;font-weight:700">${fmtEstimate(current.v)}</span> <span class="small muted">valor de mercado ${when} (${h.market.length ? "TCGplayer" : "Cardmarket"})</span></p>
-      <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.${market.length >= 2 ? ` En ${rangeDays === 365 ? "el último año" : `los últimos ${rangeDays} días`} el valor ${market.at(-1).v >= market[0].v ? "subió" : "bajó"} ${Math.round(Math.abs(market.at(-1).v / market[0].v - 1) * 100)}%.` : ""}${h.cardmarket.length >= 2 ? ` En Europa (Cardmarket) el promedio de ventas pasó de ${fmtEstimate(h.cardmarket[0].v)} (últimos 30 días) a ${fmtEstimate(h.cardmarket.at(-1).v)} (tendencia actual): ${h.cardmarket.at(-1).v >= h.cardmarket[0].v ? "+" : "−"}${Math.round(Math.abs(h.cardmarket.at(-1).v / h.cardmarket[0].v - 1) * 100)}%.` : ""}</p>`;
+      <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${rel}</strong>.${market.length >= 2 ? ` En TCGplayer, ${since(market)} el valor ${move(market)}.` : ""}${cmk.length >= 2 ? ` En Europa (Cardmarket), ${since(cmk)} el promedio de ventas ${move(cmk)}.` : ""}</p>`;
   } else {
     const recent = h.sales.filter((p) => p.t >= now - 180 * DAY_MS).map((p) => p.v);
     const med = median(recent.length ? recent : h.sales.map((p) => p.v));
@@ -643,20 +682,25 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
       <p class="small" style="margin:4px 0 0">Este anuncio (${formatUsd(toCents(price))}) está <strong>${pct < 3 ? "en línea con las ventas recientes" : `${pct}% ${d > 0 ? "por encima" : "por debajo"} de las ventas recientes`}</strong>.</p>`;
   }
   const notes = [];
-  if (h.market.length) notes.push("TCGplayer (EE.UU.): precio de mercado, un registro por día.");
-  if (h.cardmarket.length) notes.push(`Cardmarket (Europa): promedios de ventas reales, actualizados el ${fmtDay(h.cmUpdated, true)}, convertidos de EUR a USD con la tasa del Banco Central Europeo (1 € = $${h.fx.rate}).`);
+  const weeklyTp = h.market.filter((p) => p.src !== "tcgdex" && p.src !== "supabase");
+  if (weeklyTp.length) notes.push(`TCGplayer (EE.UU.): precio de mercado, un registro por semana desde el ${fmtDay(weeklyTp[0].t, true)}, de tcgcsv.com (copia pública de los precios de TCGplayer)${h.liveMarket ? "; el último punto es el precio de hoy según TCGdex" : ""}.`);
+  else if (h.market.length) notes.push("TCGplayer (EE.UU.): precio de mercado de hoy según TCGdex. El historial semanal de esta carta empieza con la próxima actualización automática.");
+  if (h.cardmarket.length) notes.push(`Cardmarket (Europa): promedio de ventas reales de los últimos 7 días, de la guía de precios oficial de Cardmarket${h.liveCm ? " (el último punto, vía TCGdex)" : ""}, convertido de EUR a USD con la tasa del Banco Central Europeo de cada fecha${h.fx ? ` (hoy 1 € = $${h.fx.rate})` : ""}.`);
+  if (h.market.some((p) => p.carried) || h.cardmarket.some((p) => p.carried)) notes.push("Las semanas sin dato nuevo repiten el último valor conocido (tramo plano).");
   if (h.factor !== 1) notes.push(`Precios ajustados a condición ${l.condition} (×${h.factor}).`);
   if (h.sales.length) notes.push("Ventas en Panamá: ventas registradas en la plataforma.");
-  if (h.market.length === 1) notes.push("El historial diario de TCGplayer se guarda desde hoy.");
+  const updated = h.updated ? `<p class="xs muted" style="margin:4px 0 0">Actualizado automáticamente cada semana · última actualización ${fmtDay(Date.parse(h.updated), true)}</p>` : "";
+  const typeLabel = (p, base) => `${base}${p.carried ? " (sin dato nuevo: se repite el anterior)" : ""}`;
 
   box.innerHTML = `${header}${head}
     ${market.length || cmk.length || sales.length ? `<div class="pchart"></div>` : `<p class="notice soft small" style="margin:12px 0 0">No hay datos en este periodo. Prueba con uno más largo.</p>`}
     <div class="plegend">${h.market.length ? `<span><i class="k" style="background:${CHART_COLORS.market}"></i>TCGplayer (EE.UU.)</span>` : ""}${h.cardmarket.length ? `<span><i class="k" style="background:${CHART_COLORS.cardmarket}"></i>Cardmarket (Europa)</span>` : ""}${h.sales.length ? `<span><i class="k" style="width:8px;height:8px;border-radius:50%;background:${CHART_COLORS.sales}"></i>Ventas en Panamá</span>` : ""}<span><i class="k" style="height:0;border-top:2px dashed var(--ink)"></i>Este anuncio</span></div>
     <p class="xs muted" style="margin:8px 0 0">${notes.map(esc).join(" ")} Es una referencia, no una garantía.</p>
+    ${updated}
     ${priceSources(l, h)}
     <details class="pdata"><summary>Ver datos en tabla</summary><div class="tbl"><table class="fees"><thead><tr><th>Fecha</th><th>Tipo</th><th>Precio</th></tr></thead><tbody>${
-      [...market.map((p) => ({ ...p, k: "TCGplayer · precio de mercado" })), ...cmk.map((p) => ({ ...p, k: `Cardmarket · ${p.k}` })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" }))].sort((a, b) => b.t - a.t)
-        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${p.k}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
+      [...market.map((p) => ({ ...p, k: typeLabel(p, "TCGplayer · precio de mercado") })), ...cmk.map((p) => ({ ...p, k: typeLabel(p, `Cardmarket · ${p.k}`) })), ...sales.map((p) => ({ ...p, k: "Venta en Panamá" }))].sort((a, b) => b.t - a.t)
+        .map((p) => `<tr><td>${fmtDay(p.t, true)}</td><td>${esc(p.k)}</td><td>${formatUsd(toCents(p.v))}</td></tr>`).join("")}</tbody></table></div></details>`;
   box.querySelectorAll(".pranges button").forEach((b) => b.addEventListener("click", () => setRange(Number(b.dataset.d))));
   const wrap = box.querySelector(".pchart");
   if (!wrap) return;
@@ -685,14 +729,14 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
     ${market.length > 1 ? `<path d="${line}" fill="none" stroke="${CHART_COLORS.market}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
     ${last ? `<circle cx="${X(last.t)}" cy="${Y(last.v)}" r="4.5" fill="${CHART_COLORS.market}" stroke="var(--surface)" stroke-width="2"/>` : ""}
     ${cmk.length > 1 ? `<path d="${cmk.map((p, i) => `${i ? "L" : "M"}${X(p.t).toFixed(1)},${Y(p.v).toFixed(1)}`).join("")}" fill="none" stroke="${CHART_COLORS.cardmarket}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
-    ${cmk.map((p) => `<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4" fill="${CHART_COLORS.cardmarket}" stroke="var(--surface)" stroke-width="2"/>`).join("")}
+    ${(cmk.length > 12 ? cmk.slice(-1) : cmk).map((p) => `<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4" fill="${CHART_COLORS.cardmarket}" stroke="var(--surface)" stroke-width="2"/>`).join("")}
     ${sales.map((p) => `<circle cx="${X(p.t)}" cy="${Y(p.v)}" r="4.5" fill="${CHART_COLORS.sales}" stroke="var(--surface)" stroke-width="2"/>`).join("")}
     <g class="cross" style="display:none"><line y1="${m.t}" y2="${H - m.b}" stroke="var(--ink-2)" stroke-width="1"/><circle r="5.5" fill="none" stroke="var(--ink)" stroke-width="2"/></g>
   </svg><div class="ptip" role="status"></div>`;
 
   // Hover / keyboard layer: snap to the nearest date that has data.
   const byDay = new Map();
-  for (const p of market) byDay.set(isoDay(new Date(p.t)), { t: p.t, market: p.v, cm: null, sales: [] });
+  for (const p of market) byDay.set(isoDay(new Date(p.t)), { t: p.t, market: p.v, marketCarried: p.carried, cm: null, sales: [] });
   for (const p of cmk) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? { t: p.t, market: null, cm: null, sales: [] }; s.cm = p; byDay.set(k, s); }
   for (const p of sales) { const k = isoDay(new Date(p.t)); const s = byDay.get(k) ?? { t: p.t, market: null, cm: null, sales: [] }; s.sales.push(p.v); byDay.set(k, s); }
   const stops = [...byDay.values()].sort((a, b) => a.t - b.t);
@@ -712,8 +756,9 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
     cross.querySelector("circle").setAttribute("cx", x); cross.querySelector("circle").setAttribute("cy", y);
     const d = document.createElement("div"); d.className = "d"; d.textContent = fmtDay(s.t, true);
     tip.replaceChildren(d);
-    if (s.market != null) tip.append(row(CHART_COLORS.market, formatUsd(toCents(s.market)), "TCGplayer"));
-    if (s.cm) tip.append(row(CHART_COLORS.cardmarket, formatUsd(toCents(s.cm.v)), `Cardmarket · ${s.cm.k}`));
+    const again = " (sin dato nuevo, se repite)";
+    if (s.market != null) tip.append(row(CHART_COLORS.market, formatUsd(toCents(s.market)), `TCGplayer${s.marketCarried ? again : ""}`));
+    if (s.cm) tip.append(row(CHART_COLORS.cardmarket, formatUsd(toCents(s.cm.v)), `Cardmarket · ${s.cm.k}${s.cm.carried ? again : ""}`));
     for (const v of s.sales) tip.append(row(CHART_COLORS.sales, formatUsd(toCents(v)), "venta en Panamá", true));
     const ref = s.market ?? s.cm?.v ?? s.sales[0], diff = Math.round(((price - ref) / ref) * 100);
     tip.append(row("var(--ink)", formatUsd(toCents(price)), `este anuncio (${diff > 0 ? "+" : ""}${diff}%)`));
@@ -741,9 +786,10 @@ function renderPriceChart(box, l, h, rangeDays, setRange) {
 async function loadPriceChart(l) {
   const box = $("#priceChart");
   if (!box) return;
-  const h = await fetchPriceHistory(l).catch((e) => { console.error(e); return { market: [], sales: [], factor: 1 }; });
+  const h = await fetchPriceHistory(l).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], factor: 1 }; });
   if (!box.isConnected) return;
-  let range = 90, width = box.clientWidth;
+  // Con historial semanal largo se abre en "1 año"; si no, en 90 días.
+  let range = h.weekly ? 365 : 90, width = box.clientWidth;
   const draw = () => renderPriceChart(box, l, h, range, (r) => { range = r; draw(); });
   draw();
   const ro = new ResizeObserver(() => {
