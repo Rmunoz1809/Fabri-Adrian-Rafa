@@ -100,3 +100,34 @@ La app se ve bien y ya tiene lo difícil (catálogo, precio estimado, gráfica c
 | 5–6 | IA por foto en una Edge Function | Fabri + Claude |
 | 7 | Términos, captcha, correo; apagar los ejemplos | Los tres |
 | 8–14 | **Lanzamiento:** 2 o 3 tiendas cargan inventario + un torneo local + grupos de Facebook y WhatsApp. Revisar el embudo cada 2 días | Los tres |
+
+---
+
+## Revisión de calidad (2026-09-26, versión `fb9cd6f`)
+
+**Corregido en esta revisión:**
+- 🔴 **Costo sin límite en la investigación de precios** (`identificar-carta`, acción `price`). Funcionaba sin sesión y con nombres de carta enviados por el navegador, así que cualquiera podía repetir búsquedas web pagadas en bucle. Ahora exige sesión y tiene un tope de 100 investigaciones nuevas cada 24 h, guardado en la base de datos (`PRICE_DAILY_MAX`). Los precios ya investigados se siguen mostrando desde el caché.
+- 🔴 **Inyección de HTML** con los nombres de las fuentes de precio que vienen de la web. Ahora se limpian y solo se aceptan links `http(s)`.
+- 🟡 **Desborde horizontal en celulares de 320 px:** el botón del inicio y el selector Tiendas/Particulares.
+
+**Sin errores:** todas las rutas (inicio con filtros, detalle, vender, cuenta, admin, protegida, 404), sin errores de JavaScript. Tampoco se pudo inyectar código por la URL de búsqueda.
+
+**Pendiente de acción:**
+1. Correr `0008_market_quotes.sql` y **publicar la función `identificar-carta` nueva**. Mientras tanto, la página pide precios a la versión vieja y la gráfica de graduadas y deportivas muestra "reintentar".
+2. Poner un **límite de gasto en Anthropic**. La investigación de precios usa búsqueda web, que es más cara que identificar una foto: unos $0.05–0.15 por carta nueva [estimado].
+
+**Mejoras recomendadas (por impacto):**
+
+| # | Mejora | Por qué |
+|---|---|---|
+| 1 | **Permitir mirar sin cuenta** (pedir cuenta solo para publicar, contactar o comprar) | Hoy todo está detrás del login: el link que alguien comparte por WhatsApp abre la pantalla de entrada, no la carta. Esto frena justo la difusión que queremos al lanzar |
+| 2 | **Búsqueda sin acentos en anuncios reales** (extensión `unaccent`) | "pokemon" no encuentra "Pokémon" en anuncios reales (los de ejemplo sí) |
+| 3 | **Revisar el uso de precios de PriceCharting y eBay** | Sus términos restringen mostrar sus datos. Mostrarlos como referencia con link a la fuente reduce el riesgo, pero conviene revisarlo antes de crecer |
+| 4 | **Reseñas de vendedores** después de cada Compra Protegida liberada | La tabla `reviews` ya existe y da confianza a partir de las primeras ventas |
+| 5 | **"Busco…"** con avisos | Genera oferta a partir de la demanda y mide qué se busca en Panamá |
+| 6 | **Decidir el destino de la app Next.js (`src/`)** | Ya no se usa en producción y se está quedando desactualizada |
+
+**Orden:**
+- Hay dos migraciones `0002_*`. En adelante, revisar el último número antes de crear una nueva.
+- El commit de precios web menciona "migración 0007", pero el archivo es `0008`.
+- La tarea diaria de `price_snapshots.sql` (pg_cron) corre pero nadie la usa (`PRICE_SNAPSHOTS: false`): activarla o quitarla.
