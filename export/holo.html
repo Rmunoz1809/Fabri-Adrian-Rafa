@@ -455,6 +455,16 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
   .seller-seg { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); }
   .seller-seg a { min-width: 0; padding: 4px 8px; font-size: 13px; white-space: normal; }
 }
+.legal-page { max-width: 760px; }
+.legal-page h2 { font-size: 18px; margin: 28px 0 8px; }
+.legal-page p, .legal-page li { line-height: 1.6; }
+.legal-page ul, .legal-page ol { padding-left: 20px; }
+.legal-page mark.todo { background: var(--warn-bg); color: inherit; padding: 0 4px; border-radius: 4px; }
+.legal-toc ol { columns: 2; column-gap: 24px; font-size: 14px; padding-left: 18px; margin-top: 16px; }
+@media (max-width: 640px) { .legal-toc ol { columns: 1; } }
+label.accept { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+label.accept input { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; }
+label.accept a { text-decoration: underline; }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; } .share-row .btn { flex: 1 1 130px; min-width: 0; }
 .verif img { width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; background: var(--surface-2); margin-top: 10px; }
 .verif-up img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; margin-top: 10px; background: var(--surface-2); }
@@ -682,7 +692,7 @@ body:not(.gate) .gate-bg { display: none; }
 </header>
 <div class="mmenu" id="mobileMenu" hidden></div>
 <main id="app" class="app"></main>
-<footer class="bottom"><div class="wrap"><p>© 2026 <span class="brand-name">Holo</span> · Hecho en Panamá · Precios en USD</p><p>Los precios estimados son referencias, no garantías ni tasaciones oficiales.</p></div></footer>
+<footer class="bottom"><div class="wrap"><p>© 2026 <span class="brand-name">Holo</span> · Hecho en Panamá · Precios en USD</p><p>Los precios estimados son referencias, no garantías ni tasaciones oficiales.</p><p><a href="#/terminos">Términos y condiciones</a> · <a href="#/privacidad">Privacidad</a></p></div></footer>
 <ol class="toaster" id="toaster" aria-label="Notificaciones"></ol>
 
 <!-- PRECIOS:INICIO -->
@@ -707,6 +717,11 @@ const CONFIG = {
   // lives there as a secret, never in this file). If it is not deployed or fails, the page falls
   // back to reading the card's text in the browser (OCR) and matching it against the catalog.
   IDENTIFY_FUNCTION: "identificar-carta",
+  // Datos legales que aparecen en #/terminos y #/privacidad. Completar antes de abrir al público
+  // (mientras falten, las páginas muestran "[por completar]").
+  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "26 de septiembre de 2026" },
+  // Captcha (Cloudflare Turnstile). The site key is public. Empty = no captcha.
+  TURNSTILE_SITE_KEY: "",
 };
 
 // ============================================================= catalog
@@ -1449,6 +1464,8 @@ async function route() {
     if (path.startsWith("/carta/")) return await viewDetail(app, safeDecode(path.slice(7)));
     if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)), params);
     if (path === "/protegida") return viewProtected(app);
+    if (path === "/terminos") return viewTerms(app);
+    if (path === "/privacidad") return viewPrivacy(app);
     if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
     if (path === "/vender") return viewSell(app);
     // Account and staff pages render into a padded column.
@@ -2639,19 +2656,24 @@ function viewAuth(app, next) {
             ${up ? `<label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
             <label class="f">Correo<input class="input" name="email" type="email" required autocomplete="email" inputmode="email"></label>
             <label class="f">Contraseña<input class="input" name="password" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}"></label>
+            ${up ? `<label class="legal accept"><input type="checkbox" name="accept" required><span>Acepto los <a href="#/terminos" target="_blank" rel="noopener">Términos y condiciones</a> y la <a href="#/privacidad" target="_blank" rel="noopener">Política de privacidad</a>, incluido el tratamiento de mis datos según la Ley 81 de 2019. Nunca mostramos tu correo ni tu dirección.</span></label>` : ""}
+            <div id="captchaBox"></div>
             <div id="authMsg" aria-live="polite"></div>
             <button class="btn primary block" id="authBtn">${up ? "Crear cuenta" : "Entrar"}</button>
-            ${up ? `<p class="legal">Al crear tu cuenta aceptas que tratemos tus datos para operar el marketplace (Ley 81 de 2019). Nunca mostramos tu correo ni tu dirección.</p>` : ""}
           </form></div></div></div></div>`;
     app.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { if (b.dataset.m !== mode) { mode = b.dataset.m; render(); app.querySelector(`.tabs [data-m="${mode}"]`)?.focus(); } }));
+    const captcha = mountCaptcha($("#captchaBox"));
     $("#authForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target), btn = $("#authBtn"), msg = $("#authMsg");
+      const cap = await captcha, captchaToken = cap?.token() || undefined;
+      if (CONFIG.TURNSTILE_SITE_KEY && !captchaToken) { msg.innerHTML = `<p class="notice bad">Completa la verificación de seguridad.</p>`; return; }
       const email = String(fd.get("email")).trim().toLowerCase(), password = String(fd.get("password"));
       btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Un momento…`; msg.innerHTML = "";
       const res = await (mode === "registro"
-        ? sb.auth.signUp({ email, password, options: { data: { display_name: String(fd.get("displayName")).trim() } } })
-        : sb.auth.signInWithPassword({ email, password })).catch(() => ({ error: { code: "network" } }));
+        ? sb.auth.signUp({ email, password, options: { captchaToken, data: { display_name: String(fd.get("displayName")).trim(), terms_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString() } } })
+        : sb.auth.signInWithPassword({ email, password, options: { captchaToken } })).catch(() => ({ error: { code: "network" } }));
+      cap?.reset(); // Turnstile tokens are single-use
       if (!btn.isConnected) return;
       btn.disabled = false; btn.textContent = mode === "registro" ? "Crear cuenta" : "Entrar";
       if (res.error) {
@@ -3858,6 +3880,91 @@ async function adminSummary(body) {
       ${stat(orders.filter((o) => ["refunded", "cancelled"].includes(o.status)).length, "reembolsadas o canceladas")}
       ${stat(openReports ?? 0, "reportes por revisar")}
     </div>`;
+}
+
+// ============================================================= legal (#/terminos, #/privacidad)
+// Draft written for Panamá (Ley 81 de 2019 y D.E. 285 de 2021 sobre datos personales; Ley 45 de 2007
+// de protección al consumidor; Ley 51 de 2008 de comercio electrónico). Must be reviewed by a
+// Panamanian lawyer and CONFIG.LEGAL completed before opening to the public.
+const TERMS_VERSION = "2026-09-26";
+function legalVal(k) {
+  const v = CONFIG.LEGAL?.[k];
+  return v ? esc(v) : `<mark class="todo">[por completar]</mark>`;
+}
+function legalPage(app, title, intro, sections) {
+  setTitle(title);
+  app.innerHTML = `<div class="wrap page legal-page"><h1>${title}</h1>
+    <p class="lead">${intro}</p>
+    <p class="small muted">Última actualización: ${esc(CONFIG.LEGAL?.UPDATED ?? TERMS_VERSION)}</p>
+    <nav class="legal-toc" aria-label="Contenido"><ol>${sections.map(([h], i) => `<li><a href="#legal-${i + 1}" data-jump>${h}</a></li>`).join("")}</ol></nav>
+    ${sections.map(([h, body], i) => `<section id="legal-${i + 1}"><h2>${i + 1}. ${h}</h2>${body}</section>`).join("")}
+    <p class="small muted" style="margin-top:32px">¿Preguntas? Escríbenos a ${legalVal("EMAIL")}. Ver también: ${title.startsWith("Términos") ? `<a href="#/privacidad">Política de privacidad</a>` : `<a href="#/terminos">Términos y condiciones</a>`}.</p>
+  </div>`;
+  // In-page anchors would change the hash route; scroll instead.
+  app.querySelectorAll("[data-jump]").forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); document.querySelector(a.getAttribute("href"))?.scrollIntoView({ behavior: "smooth" }); }));
+}
+
+function viewTerms(app) {
+  const fee = `${FEES.rateBps / 100}% del precio de la carta, con un mínimo de ${formatUsd(FEES.minCents)} y un máximo de ${formatUsd(FEES.maxCents)}, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión`;
+  legalPage(app, "Términos y condiciones", `Estas reglas aplican a todas las personas que usan ${esc(CONFIG.APP_NAME)}. Al crear una cuenta o usar la plataforma aceptas estos términos.`, [
+    ["Quiénes somos", `<p>${esc(CONFIG.APP_NAME)} es una plataforma panameña para comprar y vender cartas coleccionables (Pokémon, NBA, NFL y otras). La opera ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Contacto: ${legalVal("EMAIL")}.</p>`],
+    ["Qué hace y qué no hace " + esc(CONFIG.APP_NAME), `<p>${esc(CONFIG.APP_NAME)} publica anuncios de vendedores y pone en contacto a compradores y vendedores. <b>No somos dueños de las cartas ni parte de la compraventa</b>, salvo cuando el comprador elige Compra Protegida (sección 6), en la que actuamos como intermediario de pago y verificación.</p>`],
+    ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
+    ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
+    ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
+    ["Compra Protegida", `<p>Es opcional y la elige el comprador. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más la comisión de protección: ${fee}.</li><li>Recibimos la carta del vendedor y la verificamos en persona: que sea original y que coincida con el anuncio (fotos, condición y graduación).</li><li>Entregamos la carta al comprador en un punto acordado.</li><li>Le pagamos al vendedor el precio de la carta cuando la entrega se completa.</li></ol><p><b>Reembolso:</b> si la carta no es original o no coincide con el anuncio, devolvemos al comprador todo lo pagado, incluida la comisión. Si la venta no se concreta por causa del vendedor, también devolvemos todo. La comisión no se reembolsa si el comprador desiste después de que la carta fue verificada y está lista para entregarse.</p><p>El vendedor recibe el 100% del precio publicado; la comisión la paga el comprador.</p>`],
+    ["Compras fuera de Compra Protegida", `<p>Si compras o vendes coordinando directamente con la otra persona, el trato, el pago y la entrega son responsabilidad de ustedes. ${esc(CONFIG.APP_NAME)} no garantiza esas operaciones. Te recomendamos reunirte en lugares públicos, revisar la carta antes de pagar y nunca pagar por adelantado.</p>`],
+    ["Conducta prohibida", `<ul><li>Estafas, suplantación de identidad o pedir pagos por adelantado fuera de Compra Protegida.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li></ul>`],
+    ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios o suspender cuentas. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
+    ["Marcas", `<p>Pokémon, NBA, NFL y los nombres de jugadores, equipos y fabricantes (Panini, Topps y otros) son marcas de sus dueños. ${esc(CONFIG.APP_NAME)} no está afiliado ni patrocinado por ellos. Las imágenes de catálogo se usan solo para identificar las cartas.</p>`],
+    ["Responsabilidad", `<p>Hacemos lo posible para que la plataforma funcione bien y sea segura, pero puede tener interrupciones o errores. En la medida que permita la ley, no respondemos por daños indirectos ni por operaciones entre usuarios fuera de Compra Protegida. Nada en estos términos limita los derechos que te da la Ley 45 de 2007 de protección al consumidor.</p>`],
+    ["Cambios", `<p>Podemos actualizar estos términos. Si el cambio es importante, te avisaremos en la plataforma. Seguir usándola después del aviso significa que aceptas la nueva versión.</p>`],
+    ["Ley aplicable", `<p>Estos términos se rigen por las leyes de la República de Panamá. Como consumidor, también puedes acudir a la Autoridad de Protección al Consumidor y Defensa de la Competencia (ACODECO).</p>`],
+  ]);
+}
+
+function viewPrivacy(app) {
+  legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
+    ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, y la referencia del pago.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. No guardamos tu IP ni datos de tu dispositivo.</li></ul>`],
+    ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Coordinar y verificar las Compras Protegidas.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
+    ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
+    ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
+    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>WhatsApp (Meta)</b>: solo si decides contactarnos por ahí.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
+    ["Cuánto tiempo los guardamos", `<p>Mientras tengas tu cuenta. Si la cierras, borramos tus datos en un plazo razonable, salvo lo que debamos conservar por obligaciones legales o contables (por ejemplo, registros de Compras Protegidas) o para resolver disputas.</p>`],
+    ["Tus derechos", `<p>Tienes derecho a <b>acceder</b> a tus datos, <b>rectificarlos</b>, <b>cancelarlos</b> (borrarlos), <b>oponerte</b> a su uso y pedir su <b>portabilidad</b>. Puedes cambiar tu nombre y fotos desde <a href="#/cuenta">Mi cuenta</a>; para lo demás escribe a ${legalVal("EMAIL")} y te respondemos en los plazos de la ley. Si no quedas conforme, puedes acudir a la Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI).</p>`],
+    ["Almacenamiento en tu navegador", `<p>Usamos el almacenamiento local de tu navegador para mantener tu sesión, el identificador anónimo de uso y una copia temporal de precios para que la página cargue más rápido. No usamos cookies de publicidad ni de terceros.</p>`],
+    ["Seguridad", `<p>Los datos viajan cifrados, el acceso está restringido por reglas de seguridad en la base de datos y solo el equipo autorizado puede ver la información de Compras Protegidas y reportes. Ningún sistema es 100% seguro; si ocurre un incidente que afecte tus datos, te avisaremos como indica la ley.</p>`],
+    ["Menores de edad", `<p>Si tienes menos de 18 años, usa ${esc(CONFIG.APP_NAME)} con permiso y supervisión de tu madre, padre o tutor.</p>`],
+    ["Cambios a esta política", `<p>Si cambiamos esta política de forma importante, te lo avisaremos en la plataforma antes de que aplique.</p>`],
+  ]);
+}
+
+// ------------------------------------------------------------- captcha (Cloudflare Turnstile)
+// Off until CONFIG.TURNSTILE_SITE_KEY is set. Supabase Auth verifies the token server-side once
+// "Captcha protection" is enabled in the dashboard with the matching secret key.
+let turnstileLoad = null;
+function loadTurnstile() {
+  turnstileLoad ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    s.async = true; s.onload = () => resolve(window.turnstile); s.onerror = () => { turnstileLoad = null; reject(new Error("turnstile load failed")); };
+    document.head.appendChild(s);
+  });
+  return turnstileLoad;
+}
+async function mountCaptcha(box) {
+  if (!CONFIG.TURNSTILE_SITE_KEY || !box) return null;
+  try {
+    const ts = await loadTurnstile();
+    if (!box.isConnected) return null;
+    const id = ts.render(box, { sitekey: CONFIG.TURNSTILE_SITE_KEY, language: "es", theme: "auto", appearance: "interaction-only" });
+    return { token: () => ts.getResponse(id) || "", reset: () => ts.reset(id) };
+  } catch (e) {
+    console.error(e);
+    box.innerHTML = `<p class="notice bad">No se pudo cargar la verificación. Recarga la página.</p>`;
+    return null;
+  }
 }
 
 // ============================================================= boot
