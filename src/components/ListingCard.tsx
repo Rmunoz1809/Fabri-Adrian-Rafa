@@ -4,7 +4,7 @@ import type { Listing } from "@/lib/types";
 import { CardArt } from "./CardArt";
 import { ConditionBadge, ProtectedBadge, VerdictBadge } from "./Badges";
 
-export function ListingCard({ listing, priority }: { listing: Listing; priority?: boolean }) {
+export function ListingCard({ listing, preload }: { listing: Listing; preload?: boolean }) {
   return (
     <Link
       href={`/carta/${listing.id}`}
@@ -12,7 +12,7 @@ export function ListingCard({ listing, priority }: { listing: Listing; priority?
     >
       <div className="card-ratio relative bg-surface-2 [container-type:inline-size]">
         <div className="absolute inset-[7%]">
-          <CardArt listing={listing} sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 46vw" priority={priority} />
+          <CardArt listing={listing} sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 46vw" preload={preload} />
         </div>
         <div className="absolute left-2 top-2 flex gap-1">
           <ConditionBadge listing={listing} />

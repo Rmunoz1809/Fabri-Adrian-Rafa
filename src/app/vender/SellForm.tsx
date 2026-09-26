@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
-import { CATEGORIES, CONDITIONS, GRADING_COMPANIES, LOCATIONS } from "@/lib/catalog";
+import { startTransition, useActionState, useMemo, useState, type FormEvent } from "react";
+import { CATEGORIES, CONDITIONS, LOCATIONS } from "@/lib/catalog";
 import { formatUsd, toCents } from "@/lib/fees";
 import { priceVerdict } from "@/lib/pricing/estimate";
 import type { PriceEstimate } from "@/lib/types";
@@ -31,15 +31,21 @@ export function SellForm() {
   const [year, setYear] = useState("");
   const [number, setNumber] = useState("");
   const [variant, setVariant] = useState("");
-  const [graded, setGraded] = useState(false);
-  const [company, setCompany] = useState("PSA");
-  const [grade, setGrade] = useState("");
   const [condition, setCondition] = useState("NM");
   const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [locIndex, setLocIndex] = useState(0);
 
   const [state, formAction, publishing] = useActionState<PublishState, FormData>(publishListing, null);
+
+  // The grade is read from the slab label in the photo and cannot be typed or changed (migration 0009
+  // enforces the same rule in the database).
+  const scanned = ai?.card;
+  const grading = scanned?.is_graded && scanned.grading_company && scanned.grade != null
+    ? { company: scanned.grading_company, grade: scanned.grade, cert: scanned.cert_number }
+    : null;
+  const slabUnread = Boolean(scanned?.is_graded && !grading);
 
   const priceNum = Number(price);
   const verdict = useMemo(
@@ -62,12 +68,15 @@ export function SellForm() {
     setScanError(null);
   }
 
-  // Photos live in state (not the file input) so a failed submit doesn't lose them:
-  // React resets uncontrolled form fields after every action.
-  function submit(fd: FormData) {
+  // onSubmit instead of <form action>: React resets a form after its action runs, which after a failed
+  // publish would silently snap selects back to their first option and empty the description.
+  // Photos live in state (not the file input) for the same reason.
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
     fd.delete("photos");
     files.forEach((f) => fd.append("photos", f));
-    return formAction(fd);
+    startTransition(() => formAction(fd));
   }
 
   async function scan() {
@@ -78,7 +87,7 @@ export function SellForm() {
       const body = new FormData();
       files.slice(0, 2).forEach((f) => body.append("photos", f));
       const res = await fetch("/api/recognize", { method: "POST", body });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "No se pudo identificar la carta.");
       const r = json as RecognizeResponse;
       setAi(r);
@@ -93,10 +102,7 @@ export function SellForm() {
       setYear(c.year?.toString() ?? "");
       setNumber(c.card_number ?? "");
       setVariant(c.variant ?? "");
-      setGraded(c.is_graded);
-      if (c.grading_company) setCompany(c.grading_company);
-      if (c.grade) setGrade(String(c.grade));
-      setTitle(c.title_es);
+      setTitle(c.title_es.slice(0, 80));
     } catch (e) {
       setScanError(e instanceof Error ? e.message : "Error inesperado.");
     } finally {
@@ -107,7 +113,7 @@ export function SellForm() {
   const loc = LOCATIONS.flatMap((l) => l.neighborhoods.map((n) => ({ ...l, neighborhood: n })));
 
   return (
-    <form action={submit} className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       {/* Step 1: photos + AI */}
       <section className="flex flex-col gap-3 lg:sticky lg:top-20 lg:self-start">
         <h2 className="font-display text-lg font-bold">1. Fotos</h2>
@@ -207,35 +213,33 @@ export function SellForm() {
         </div>
 
         <fieldset className="flex flex-col gap-3">
-          <legend className="text-sm font-medium">¿Está graduada?</legend>
-          <div className="grid grid-cols-2 gap-2">
-            {[false, true].map((g) => (
-              <label key={String(g)} className={`flex h-11 cursor-pointer items-center justify-center rounded-xl border text-sm font-medium ${graded === g ? "border-ink bg-ink text-bg" : "border-line bg-surface"}`}>
-                <input type="radio" name="graded" value={String(g)} checked={graded === g} onChange={() => setGraded(g)} className="sr-only" />
-                {g ? "Sí, en slab" : "No (raw)"}
-              </label>
-            ))}
-          </div>
-          {graded ? (
-            <div className="grid grid-cols-2 gap-3">
-              <label className={label}>
-                Empresa
-                <select name="company" value={company} onChange={(e) => setCompany(e.target.value)} className={field}>
-                  {GRADING_COMPANIES.map((c) => <option key={c}>{c}</option>)}
-                </select>
-              </label>
-              <label className={label}>
-                Nota
-                <input name="grade" required type="number" min={1} max={10} step={0.5} value={grade} onChange={(e) => setGrade(e.target.value)} className={field} />
-              </label>
+          <legend className="text-sm font-medium">Graduación</legend>
+          <input type="hidden" name="graded" value={String(Boolean(grading))} />
+          {grading ? (
+            <div className="rounded-2xl border border-line bg-surface p-4 text-sm">
+              <input type="hidden" name="company" value={grading.company} />
+              <input type="hidden" name="grade" value={grading.grade} />
+              <p className="font-semibold">
+                Graduada {grading.company} {grading.grade}{grading.cert ? ` · Certificado ${grading.cert}` : ""}
+              </p>
+              <p className="mt-1 text-xs text-ink-2">
+                Lo leímos de la etiqueta del slab en tu foto y no se puede cambiar a mano. Si está mal, sube una foto más clara de la etiqueta.
+              </p>
             </div>
           ) : (
-            <label className={label}>
-              Condición
-              <select name="condition" value={condition} onChange={(e) => setCondition(e.target.value)} className={field}>
-                {CONDITIONS.map((c) => <option key={c.code} value={c.code}>{c.label} ({c.code}): {c.hint}</option>)}
-              </select>
-            </label>
+            <>
+              <p className={`text-xs ${slabUnread ? "rounded-xl bg-warn-bg p-3 text-warn" : "text-ink-2"}`}>
+                {slabUnread
+                  ? "Vimos un slab pero no pudimos leer la empresa o la nota. Sube una foto de frente donde se lea la etiqueta."
+                  : "Si tu carta está en un slab (PSA, BGS, CGC, SGC, TAG), identifícala con una foto donde se lea la etiqueta: la empresa y la nota salen de ahí."}
+              </p>
+              <label className={label}>
+                Condición
+                <select name="condition" value={condition} onChange={(e) => setCondition(e.target.value)} className={field}>
+                  {CONDITIONS.map((c) => <option key={c.code} value={c.code}>{c.label} ({c.code}): {c.hint}</option>)}
+                </select>
+              </label>
+            </>
           )}
         </fieldset>
 
@@ -272,7 +276,7 @@ export function SellForm() {
         </label>
         <label className={label}>
           Descripción
-          <textarea name="description" rows={4} maxLength={1000} placeholder="Estado, detalles, dónde puedes entregarla…" className="w-full rounded-xl border border-line bg-surface p-3 text-base outline-none focus:border-accent sm:text-sm" />
+          <textarea name="description" rows={4} maxLength={1000} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Estado, detalles, dónde puedes entregarla…" className="w-full rounded-xl border border-line bg-surface p-3 text-base outline-none focus:border-accent sm:text-sm" />
         </label>
         <input type="hidden" name="province" value={loc[locIndex]?.province} />
         <input type="hidden" name="district" value={loc[locIndex]?.district} />
@@ -281,7 +285,8 @@ export function SellForm() {
 
         {state && "error" in state && <p className="rounded-xl bg-bad-bg p-3 text-sm text-bad">{state.error}</p>}
         {state && "message" in state && <p className="rounded-xl bg-good-bg p-3 text-sm text-good">{state.message}</p>}
-        <button disabled={publishing} className="h-12 rounded-xl bg-accent font-semibold text-accent-ink disabled:opacity-60">
+        {slabUnread && <p className="rounded-xl bg-warn-bg p-3 text-sm text-warn">Para publicar una carta graduada, la nota tiene que leerse en la foto del slab.</p>}
+        <button disabled={publishing || slabUnread} className="h-12 rounded-xl bg-accent font-semibold text-accent-ink disabled:opacity-60">
           {publishing ? "Publicando…" : "Publicar gratis"}
         </button>
       </section>

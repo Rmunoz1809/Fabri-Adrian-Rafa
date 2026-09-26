@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/safe-next";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { AuthForm } from "./AuthForm";
 
 export const metadata: Metadata = { title: "Entrar" };
 
 export default async function SignInPage({ searchParams }: PageProps<"/entrar">) {
-  const raw = (await searchParams).next;
-  const next = typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
+  const next = safeNext((await searchParams).next);
   if (await getCurrentUser()) redirect(next);
 
   return (

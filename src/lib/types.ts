@@ -48,7 +48,7 @@ export interface PriceEstimate {
   confidence: "alta" | "media" | "baja";
   /** Human-readable basis, shown next to the estimate. */
   basis: string[];
-  source: "tcgplayer" | "local" | "mixto";
+  source: "tcgplayer" | "local" | "mixto" | "web";
   updatedAt: string;
 }
 

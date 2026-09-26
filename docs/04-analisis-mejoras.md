@@ -131,3 +131,28 @@ La app se ve bien y ya tiene lo difícil (catálogo, precio estimado, gráfica c
 - Hay dos migraciones `0002_*`. En adelante, revisar el último número antes de crear una nueva.
 - El commit de precios web menciona "migración 0007", pero el archivo es `0008`.
 - La tarea diaria de `price_snapshots.sql` (pg_cron) corre pero nadie la usa (`PRICE_SNAPSHOTS: false`): activarla o quitarla.
+
+---
+
+## Revisión completa (2026-09-26, noche)
+
+Se revisó todo: `holo.html`, la app Next.js, las migraciones y la seguridad entre usuarios, la Edge Function de IA y el script de precios semanales. Se probó con una base Postgres + PostgREST local con el esquema real (131 pruebas de permisos) y en el navegador (visitante, vendedor, comprador y staff; 320, 390 y 1280 px; sin errores de JavaScript).
+
+**Corregido:**
+- 🔴 **Cualquiera sin cuenta podía modificar o borrar perfiles ajenos** (y con ellos todos sus anuncios), o marcarse "Tienda verificada", a través de la vista `public_profiles`. Migración 0010.
+- 🔴 Un vendedor podía reactivar un anuncio quitado por staff, reservar su propio anuncio, cambiar el precio durante una Compra Protegida, fijar su anuncio arriba con una fecha futura o inventar el estimado. Migración 0010.
+- 🔴 El vendedor podía leer el nombre y WhatsApp del comprador en las órdenes protegidas. Migración 0010.
+- 🔴 `data/precios.json` dañado (por ejemplo, un conflicto de git) vaciaba el historial y el robot lo subía.
+- 🔴 App Next.js: redirección abierta en el login, `/api/recognize` sin sesión (gasto sin límite) y cartas graduadas imposibles de publicar.
+- 🟡 Cartas NBA/NFL anteriores a 1990 no se podían publicar; búsqueda con acentos; ⌘K sin anuncios reales para visitantes; orden por precio solo entre los 60 más nuevos; desbordes en celulares de 320–390 px; imagen para compartir con la paleta vieja; errores al salir del formulario de venta antes de tiempo; captcha que fallaba si se enviaba muy rápido.
+
+**Pendiente de acción (los socios):**
+1. **Correr `supabase/migrations/0010_user_security.sql`** en el SQL Editor. Es lo más importante antes de abrir al público.
+2. **Volver a desplegar la función** `identificar-carta` (comando en `LEEME.txt`).
+3. Completar `CONFIG.LEGAL` y `CONFIG.WHATSAPP` en `holo.html`, y apagar `SHOW_DEMO_LISTINGS` al lanzar.
+4. Si se usa la app Next.js: agregar `SUPABASE_SERVICE_ROLE_KEY` (solo en el servidor) y `NEXT_PUBLIC_TURNSTILE_SITE_KEY`.
+
+**Riesgos que quedan (decisión de producto):**
+- La analítica (`events`) acepta registros de cualquiera: los números del embudo pueden inflarse a propósito.
+- El estimado guardado en cada anuncio lo calcula el navegador del vendedor; la migración 0010 limita cuánto se puede exagerar (máximo 3× el precio), pero no lo verifica contra la fuente.
+- Una misma lectura de slab (PSA 10) sirve para varios anuncios del mismo vendedor durante 24 horas.

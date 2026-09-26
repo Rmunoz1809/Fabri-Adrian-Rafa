@@ -3,10 +3,24 @@ import { NextResponse } from "next/server";
 import { recognizeCard, RecognitionError, type ImageMediaType } from "@/lib/ai/recognize";
 import { pickReferencePrice, searchPokemonCards } from "@/lib/pricing/pokemontcg";
 import { estimatePrice } from "@/lib/pricing/estimate";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser, isSupabaseConfigured } from "@/lib/supabase/server";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGES = 2;
 const ALLOWED: ImageMediaType[] = ["image/jpeg", "image/png", "image/webp"];
+const PER_HOUR = 30; // same limit as the Edge Function; every call costs money
+
+// Best-effort limit per server instance.
+const calls = new Map<string, number[]>();
+function allow(key: string): boolean {
+  const now = Date.now();
+  const recent = (calls.get(key) ?? []).filter((t) => now - t < 3_600_000);
+  if (recent.length >= PER_HOUR) return false;
+  recent.push(now);
+  calls.set(key, recent);
+  return true;
+}
 
 export async function POST(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -15,8 +29,24 @@ export async function POST(req: Request) {
       { status: 503 },
     );
   }
+  // Only signed-in sellers (without Supabase, the demo mode has no accounts to check).
+  const user = isSupabaseConfigured() ? await getCurrentUser() : null;
+  if (isSupabaseConfigured() && !user) {
+    return NextResponse.json({ error: "Entra a tu cuenta para identificar cartas." }, { status: 401 });
+  }
+  if (!allow(user?.id ?? "demo")) {
+    return NextResponse.json({ error: "Llegaste al límite de identificaciones por hora. Intenta más tarde." }, { status: 429 });
+  }
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_IMAGES * MAX_BYTES + 64 * 1024) {
+    return NextResponse.json({ error: "Cada foto debe pesar menos de 5 MB." }, { status: 413 });
+  }
 
-  const form = await req.formData();
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
+    return NextResponse.json({ error: "Solicitud no válida." }, { status: 400 });
+  }
   const files = form.getAll("photos").filter((f): f is File => f instanceof File).slice(0, MAX_IMAGES);
   if (files.length === 0) {
     return NextResponse.json({ error: "Sube al menos una foto." }, { status: 400 });
@@ -39,6 +69,17 @@ export async function POST(req: Request) {
 
   try {
     const card = await recognizeCard(images);
+
+    // The grade can only come from the slab in the photo: record it so the database accepts the graded
+    // listing (migration 0009), exactly like the Edge Function does for holo.html.
+    if (user && card.is_graded && card.grading_company && card.grade != null) {
+      const admin = createAdminClient();
+      const { error } = await admin?.from("grading_detections").insert({
+        user_id: user.id, grading_company: card.grading_company, grade: card.grade,
+        cert_number: card.cert_number?.trim().slice(0, 30) || null,
+      }) ?? { error: { message: "SUPABASE_SERVICE_ROLE_KEY is not set" } };
+      if (error) console.error("grading_detections insert failed:", error.message);
+    }
 
     // For Pokémon we can match the catalog and pull a reference price.
     let match = null;
@@ -76,6 +117,12 @@ export async function POST(req: Request) {
       console.error("anthropic error", err.status, err.message);
       return NextResponse.json({ error: "El servicio de IA falló. Intenta de nuevo." }, { status: 502 });
     }
-    throw err;
+    if (err instanceof Anthropic.AnthropicError) {
+      // messages.parse() could not validate the answer (e.g. a value outside the schema).
+      console.error("anthropic parse error", err.message);
+      return NextResponse.json({ error: "No se pudo leer la respuesta de la IA." }, { status: 422 });
+    }
+    console.error(err);
+    return NextResponse.json({ error: "Error inesperado. Intenta de nuevo." }, { status: 500 });
   }
 }

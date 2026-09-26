@@ -1,4 +1,5 @@
 import { estimatePrice } from "../pricing/estimate";
+import { searchTokens } from "../search";
 import type { Listing } from "../types";
 import { LOCAL_COMPS, REFERENCE_SNAPSHOTS, SEED_LISTINGS, SELLERS } from "./seed";
 
@@ -49,7 +50,8 @@ export function matchesFilters(l: Listing, f: ListingFilters): boolean {
     const hay = normalize(
       [l.title, l.card.subject, l.card.setName, l.card.variant, l.card.number, l.location.neighborhood, l.location.district, l.location.province].join(" "),
     );
-    if (!normalize(f.q).split(/\s+/).filter(Boolean).every((t) => hay.includes(t))) return false;
+    // Same words as the database search, so demo and real listings match alike.
+    if (!searchTokens(f.q).every((t) => hay.includes(t))) return false;
   }
   return true;
 }

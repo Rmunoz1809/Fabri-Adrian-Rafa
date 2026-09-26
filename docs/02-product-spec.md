@@ -48,8 +48,8 @@ La paga el **comprador**; publicar es gratis para el vendedor. Se configura en [
 
 | # | Función | En el MVP | Modelo / fuente | Costo estimado por uso |
 |---|---|---|---|---|
-| 1 | Reconocimiento por foto | ✅ | Claude Opus 5 (vision, effort bajo) | ~$0.01–0.03 [E] |
-| 2 | Precio estimado | ✅ | Pokémon: TCGplayer vía pokemontcg.io (gratis). Sports y graduadas: solo ventas locales (≥3) | $0 |
+| 1 | Reconocimiento por foto | ✅ | Claude Sonnet 5 (vision, effort bajo), en la Edge Function `identificar-carta` | ~$0.01–0.016 [E] |
+| 2 | Precio estimado | ✅ | Pokémon: TCGplayer y Cardmarket (tcgcsv, TCGdex y la guía oficial). Graduadas, NBA y NFL: PriceCharting / SportsCardsPro por grado, con cada venta enlazada; de respaldo, investigación web con Claude Sonnet 5. Más las ventas en Panamá | $0; la investigación web ~$0.05–0.15 por carta nueva al día [E] |
 | 3 | Revisión visual de condición | ✅ (en la misma llamada que el 1) | Claude | incluido |
 | 4 | Señales de réplica | ✅ (en la misma llamada que el 1) | Claude + precio anómalo | incluido |
 | 5 | Título en español | ✅ (en la misma llamada que el 1) | Claude | incluido |
@@ -58,7 +58,7 @@ La paga el **comprador**; publicar es gratis para el vendedor. Se configura en [
 
 **Cómo mantener bajo el costo:** una sola llamada por publicación cubre las funciones 1, 3, 4 y 5. Las respuestas de pokemontcg.io se cachean 12 horas. Límite de 2 fotos de 5 MB.
 
-**Regla de honestidad:** si no hay datos, **no se muestra estimado**. Nunca se inventa un precio para cartas deportivas.
+**Regla de honestidad:** nunca se inventa un precio. Cada valor sale de ventas o guías públicas y se muestra con el enlace a su fuente (ver `decisions.md`, 2026-09-26).
 
 ## Métricas
 

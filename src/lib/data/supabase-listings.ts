@@ -2,11 +2,15 @@ import "server-only";
 import { createClient, supabaseConfig } from "../supabase/server";
 import type { ConditionCode, GradingCompany, Listing, PriceEstimate, Seller } from "../types";
 import type { ListingFilters } from "./listings";
+import { searchFilter, searchTokens } from "../search";
 
-const SELECT = `id, seller_id, title, description, category, subject, set_name, year, number, variant,
+const BASE_SELECT = `id, seller_id, title, description, category, subject, set_name, year, number, variant,
   condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood,
-  status, protected_eligible, catalog_id, estimate, created_at,
-  listing_photos (storage_path, position)`;
+  status, protected_eligible, catalog_id, estimate, created_at`;
+// listing_photos.kind comes from migration 0006 ("card" | "verification"); until it runs, fall back.
+let photoKinds = true;
+const select = () => `${BASE_SELECT}, listing_photos (storage_path, position${photoKinds ? ", kind" : ""})`;
+const missingKind = (e: { code?: string; message?: string } | null) => photoKinds && e?.code === "42703" && /kind/.test(e.message ?? "");
 
 interface Row {
   id: string;
@@ -32,7 +36,7 @@ interface Row {
   catalog_id: string | null;
   estimate: PriceEstimate | null;
   created_at: string;
-  listing_photos: { storage_path: string; position: number }[];
+  listing_photos: { storage_path: string; position: number; kind?: "card" | "verification" }[];
 }
 
 interface ProfileRow {
@@ -45,7 +49,7 @@ interface ProfileRow {
 
 export function photoUrl(path: string): string {
   const cfg = supabaseConfig();
-  return `${cfg?.url}/storage/v1/object/public/listing-photos/${path}`;
+  return `${cfg?.url}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
 function toSeller(p: ProfileRow | undefined, id: string): Seller {
@@ -79,7 +83,8 @@ function toListing(r: Row, seller: Seller): Listing {
       ? { company: r.grading_company, grade: Number(r.grade), certNumber: r.cert_number ?? undefined }
       : null,
     priceUsd: r.price_cents / 100,
-    photos: [...r.listing_photos].sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
+    // The verification photo (card next to a handwritten note) is not part of the gallery.
+    photos: r.listing_photos.filter((p) => p.kind !== "verification").sort((a, b) => a.position - b.position).map((p) => photoUrl(p.storage_path)),
     location: { province: r.province, district: r.district, neighborhood: r.neighborhood },
     seller,
     status: r.status,
@@ -98,18 +103,9 @@ async function withSellers(rows: Row[]): Promise<Listing[]> {
   return rows.map((r) => toListing(r, toSeller(byId.get(r.seller_id), r.seller_id)));
 }
 
-// PostgREST filter syntax uses , ( ) and % specially; strip them from user input.
-function searchTokens(q: string): string[] {
-  return q
-    .replace(/[,()%*\\"'.:]/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 2)
-    .slice(0, 5);
-}
-
 export async function fetchListings(f: ListingFilters): Promise<Listing[]> {
   const supabase = await createClient();
-  let query = supabase.from("listings").select(SELECT).eq("status", "active").limit(60);
+  let query = supabase.from("listings").select(select()).eq("status", "active").limit(60);
   if (f.category) query = query.eq("category", f.category);
   if (f.graded === "graded") query = query.not("grading_company", "is", null);
   if (f.graded === "raw") query = query.is("grading_company", null);
@@ -117,23 +113,24 @@ export async function fetchListings(f: ListingFilters): Promise<Listing[]> {
   if (f.minPrice != null) query = query.gte("price_cents", Math.round(f.minPrice * 100));
   if (f.maxPrice != null) query = query.lte("price_cents", Math.round(f.maxPrice * 100));
   for (const t of searchTokens(f.q ?? "")) {
-    const cols = ["title", "subject", "set_name", "neighborhood", "district", "province"];
-    query = query.or(cols.map((c) => `${c}.ilike.%${t}%`).join(","));
+    query = query.or(searchFilter(t, ["title", "subject", "set_name", "variant", "number", "neighborhood", "district", "province"]));
   }
   if (f.sort === "precio-asc") query = query.order("price_cents", { ascending: true });
   else if (f.sort === "precio-desc") query = query.order("price_cents", { ascending: false });
   else query = query.order("created_at", { ascending: false });
 
   const { data, error } = await query;
+  if (missingKind(error)) { photoKinds = false; return fetchListings(f); }
   if (error) throw new Error(`listings query failed: ${error.message}`);
-  return withSellers((data ?? []) as Row[]);
+  return withSellers((data ?? []) as unknown as Row[]);
 }
 
 export async function fetchListing(id: string): Promise<Listing | null> {
   const supabase = await createClient();
-  const { data, error } = await supabase.from("listings").select(SELECT).eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("listings").select(select()).eq("id", id).maybeSingle();
+  if (missingKind(error)) { photoKinds = false; return fetchListing(id); }
   if (error) throw new Error(`listing query failed: ${error.message}`);
   if (!data) return null;
-  const [listing] = await withSellers([data as Row]);
+  const [listing] = await withSellers([data as unknown as Row]);
   return listing;
 }

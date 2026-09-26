@@ -10,11 +10,11 @@ const SPORT_STYLE: Record<string, { from: string; to: string; label: string }> =
 export function CardArt({
   listing,
   sizes,
-  priority,
+  preload,
 }: {
   listing: Pick<Listing, "photos" | "card" | "title">;
   sizes: string;
-  priority?: boolean;
+  preload?: boolean;
 }) {
   const photo = listing.photos[0];
   if (photo) {
@@ -24,7 +24,7 @@ export function CardArt({
         alt={listing.title}
         fill
         sizes={sizes}
-        priority={priority}
+        preload={preload}
         className="object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.25)]"
       />
     );

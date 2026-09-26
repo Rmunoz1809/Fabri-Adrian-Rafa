@@ -62,7 +62,7 @@ export default async function Home({ searchParams }: PageProps<"/">) {
         <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4">
           {listings.map((l, i) => (
             <li key={l.id} className="flex">
-              <ListingCard listing={l} priority={i < 4} />
+              <ListingCard listing={l} preload={i < 4} />
             </li>
           ))}
         </ul>

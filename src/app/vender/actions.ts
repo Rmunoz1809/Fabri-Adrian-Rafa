@@ -13,30 +13,34 @@ const MAX_PHOTOS = 4;
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024; // photos are compressed client-side first
 const PHOTO_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
-const optionalText = (max: number) =>
-  z.string().trim().max(max).optional().transform((v) => (v ? v : undefined));
+const optionalText = (max: number, name: string) =>
+  z.string().trim().max(max, `${name} puede tener hasta ${max} caracteres.`).optional().transform((v) => (v ? v : undefined));
+
+// Sports cards go back to the 1880s (1948 Bowman is in the demo listings); Pokémon starts in 1996.
+const MAX_YEAR = new Date().getFullYear() + 1;
 
 const ListingInput = z
   .object({
-    category: z.enum(CATEGORIES.map((c) => c.slug) as [string, ...string[]]),
-    subject: z.string().trim().min(2, "Falta el nombre del Pokémon o jugador.").max(80),
-    setName: z.string().trim().min(1, "Falta el set o producto.").max(80),
-    year: z.union([z.literal(""), z.coerce.number().int().min(1990).max(2030)]).optional()
+    category: z.enum(CATEGORIES.map((c) => c.slug) as [string, ...string[]], { message: "Elige una categoría." }),
+    subject: z.string().trim().min(2, "Falta el nombre del Pokémon o jugador.").max(80, "El nombre puede tener hasta 80 caracteres."),
+    setName: z.string().trim().min(1, "Falta el set o producto.").max(80, "El set puede tener hasta 80 caracteres."),
+    year: z.union([z.literal(""), z.coerce.number().int("Año no válido.").min(1880, "Año no válido.").max(MAX_YEAR, "Año no válido.")]).optional()
       .transform((v) => (v === "" ? undefined : v)),
-    number: optionalText(20),
-    variant: optionalText(60),
+    number: optionalText(20, "El número"),
+    variant: optionalText(60, "La variante"),
     graded: z.enum(["true", "false"]).transform((v) => v === "true"),
     company: z.enum(GRADING_COMPANIES).optional(),
-    grade: z.union([z.literal(""), z.coerce.number().min(1).max(10)]).optional()
+    grade: z.union([z.literal(""), z.coerce.number().min(1).max(10).multipleOf(0.5)]).optional()
       .transform((v) => (v === "" ? undefined : v)),
     condition: z.enum(CONDITIONS.map((c) => c.code) as [string, ...string[]]).optional(),
-    price: z.coerce.number({ message: "Precio no válido." }).positive("El precio debe ser mayor a 0.").max(100_000),
-    title: z.string().trim().min(5, "El título es muy corto.").max(80),
-    description: optionalText(1000),
+    // Same range as holo.html and the database (price_cents > 0 and <= 10,000,000).
+    price: z.coerce.number({ message: "Precio no válido." }).min(1, "Escribe un precio entre $1 y $100,000.").max(100_000, "Escribe un precio entre $1 y $100,000."),
+    title: z.string().trim().min(5, "El título es muy corto.").max(80, "El título puede tener hasta 80 caracteres."),
+    description: optionalText(1000, "La descripción"),
     province: z.string().min(1),
     district: z.string().min(1),
     neighborhood: z.string().min(1),
-    catalogId: optionalText(40),
+    catalogId: optionalText(40, "El id del catálogo"),
   })
   .refine((v) => (v.graded ? v.company && v.grade : v.condition), {
     message: "Indica la graduación o la condición de la carta.",
@@ -118,6 +122,12 @@ export async function publishListing(_prev: PublishState, form: FormData): Promi
   });
   if (insertError) {
     console.error("listing insert failed", insertError);
+    // Same messages as holo.html for the same database errors.
+    if (/grading_from_photo/.test(insertError.message ?? "")) {
+      return { error: "La graduación tiene que verse en la foto del slab. Identifica la carta con una foto donde se lea la etiqueta." };
+    }
+    if (insertError.code === "42501") return { error: "Tu sesión no tiene permiso para publicar. Sal y vuelve a entrar." };
+    if (insertError.code === "23514") return { error: "Algún dato no es válido (revisa precio, título, nota o condición)." };
     return { error: "No pudimos guardar el anuncio. Intenta de nuevo." };
   }
 
