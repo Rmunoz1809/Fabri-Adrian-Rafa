@@ -2000,7 +2000,7 @@ async function viewHome(app, params) {
       </nav>
       ${f.seller === "tiendas" ? `<div class="panel shop-note"><p style="font-weight:600">Tiendas con local o marca comprobados por ${esc(CONFIG.APP_NAME)}</p>
         <p class="small muted" style="margin-top:4px">Verificamos que la tienda existe y que vende cartas originales. Aun así, revisa cada carta antes de pagar o usa Compra Protegida.</p>
-        <p class="small" style="margin-top:8px">¿Tienes una tienda? <a class="link" href="#/cuenta" style="font-weight:600">Pide tu verificación</a></p></div>` : ""}
+        <p class="small" style="margin-top:8px">¿Tienes una tienda? <a class="link" href="#/cuenta?tienda=1" style="font-weight:600">Pide tu verificación</a></p></div>` : ""}
       ${f.seller === "particulares" ? `<p class="notice soft" style="margin-top:12px">Coleccionistas que venden sus propias cartas. Pide fotos reales del frente y el reverso, y para cartas de valor usa Compra Protegida.</p>` : ""}
       <div class="toolbar">
         <nav class="chips" aria-label="Categorías">
@@ -3120,7 +3120,8 @@ function viewSell(app) {
 
 // ============================================================= account
 // Shop verification request (reviewed by staff in #/admin?tab=tiendas).
-async function renderShopRequest(uid) {
+// The form stays hidden until the user says they have a shop.
+async function renderShopRequest(uid, open = false) {
   const box = $("#shopReqBody");
   if (!box) return;
   const { data: reqs, error } = await sb.from("shop_requests").select("status, shop_name, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1);
@@ -3130,13 +3131,20 @@ async function renderShopRequest(uid) {
     box.innerHTML = `<p class="notice soft" style="margin:0">Recibimos tu solicitud para <b style="color:var(--ink)">${esc(last.shop_name)}</b>. La revisamos en 1 a 2 días y te avisamos.</p>`;
     return;
   }
-  box.innerHTML = `${last?.status === "rejected" ? `<p class="notice warn" style="margin:0 0 12px">No pudimos verificar tu solicitud anterior. Revisa los datos y vuelve a enviarla.</p>` : ""}
+  const rejected = last?.status === "rejected" ? `<p class="notice warn" style="margin:0 0 12px">No pudimos verificar tu solicitud anterior. Revisa los datos y vuelve a enviarla.</p>` : "";
+  if (!open) {
+    box.innerHTML = `${rejected}<button type="button" class="btn block" id="srOpen">Sí, tengo una tienda</button>`;
+    $("#srOpen").addEventListener("click", () => { renderShopRequest(uid, true); });
+    return;
+  }
+  box.innerHTML = `${rejected}
     <div class="col" style="gap:10px">
       <label class="f">Nombre de la tienda<input class="input" id="srName" maxlength="80" required></label>
       <label class="f">Instagram o WhatsApp de la tienda<input class="input" id="srContact" maxlength="120" placeholder="@mitienda o 6XXX-XXXX"></label>
       <label class="f">¿Dónde queda?<input class="input" id="srLoc" maxlength="120" placeholder="Centro comercial, local, ciudad"></label>
       <div id="srMsg"></div>
       <button type="button" class="btn block" id="srSend">Pedir verificación de tienda</button></div>`;
+  $("#srName").focus();
   $("#srSend").addEventListener("click", async (e) => {
     const name = $("#srName").value.trim(), msg = $("#srMsg");
     if (name.length < 2) { msg.innerHTML = `<p class="notice bad" style="margin:0">Escribe el nombre de la tienda.</p>`; return; }
@@ -3195,7 +3203,7 @@ async function viewAccount(app) {
     const img = document.createElement("img"); img.className = cls; img.alt = ""; img.src = URL.createObjectURL(f);
     holder.replaceWith(img);
   });
-  if (!prof.is_shop) renderShopRequest(uid);
+  if (!prof.is_shop) renderShopRequest(uid, parseHash().params.get("tienda") === "1");
   preview($("#avatarIn"), "avatar", "av");
   if (prof.is_shop) preview($("#shopIn"), "shopPhoto", "shp");
 
