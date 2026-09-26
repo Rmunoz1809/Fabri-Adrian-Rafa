@@ -416,7 +416,16 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
 .tseller[data-seller]:not([data-seller=""]) { cursor: pointer; }
 .tseller[data-seller]:not([data-seller=""]):hover .nm { text-decoration: underline; text-underline-offset: 3px; }
 .seller-page .tseller { display: none; } /* every card on this page is from the same seller */
-.seller-hero { margin-top: 16px; }
+.seller-layout { display: grid; gap: 24px; margin-top: 16px; padding-bottom: 32px; }
+@media (min-width: 900px) {
+  .seller-layout { grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 32px; align-items: start; }
+  .seller-side { position: sticky; top: calc(var(--header-h) + 16px); }
+  .seller-cards .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.seller-link { border-radius: var(--radius-lg); margin: -8px; padding: 8px; transition: background .15s var(--ease); }
+.seller-link:hover { background: var(--muted); }
+.seller-link:hover .nm { text-decoration: underline; text-underline-offset: 3px; }
+.seller-link > .i { flex-shrink: 0; color: var(--fg-2); }
 .seller-hero .shop-photo { display: block; width: 100%; aspect-ratio: 16 / 9; max-height: 320px; object-fit: cover; background: var(--muted); }
 .sh-name { font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; overflow-wrap: anywhere; }
 .seller-panel .shop-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--muted); }
@@ -2230,10 +2239,10 @@ function sellerPanel(s) {
     ${shop && s.shopPhotoUrl ? `<img class="shop-photo" src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}">` : ""}
     <div class="sp-body">
       <p class="kicker">${shop ? "Vende esta tienda" : "Vendedor"}</p>
-      <div class="seller">${sellerAvatar(s, 44)}
-        <div style="min-width:0"><p class="nm">${s.id ? `<a class="link" href="#/vendedor/${encodeURIComponent(s.id)}">${esc(s.displayName)}</a>` : esc(s.displayName)}</p>
+      ${s.id ? `<a class="seller seller-link" href="#/vendedor/${encodeURIComponent(s.id)}" title="Ver el perfil de ${esc(s.displayName)}">` : `<div class="seller">`}${sellerAvatar(s, 44)}
+        <div style="min-width:0;flex:1"><p class="nm">${esc(s.displayName)}</p>
         <p class="xs muted">${s.rating ? `★ ${s.rating.toFixed(1)} · ` : ""}${s.salesCount} ${s.salesCount === 1 ? "venta" : "ventas"}</p>
-        <div class="tbadges" style="margin-top:6px">${sellerBadge(s)}</div></div></div>
+        <div class="tbadges" style="margin-top:6px">${sellerBadge(s)}</div></div>${s.id ? `${ic("chevronRight")}</a>` : "</div>"}
       ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
       ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} visitó el local y confirmó que existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
       ${s.id ? `<a class="btn block" href="#/vendedor/${encodeURIComponent(s.id)}">Ver ${shop ? "la tienda" : "perfil"} y sus cartas en venta ${ic("arrowRight")}</a>` : ""}
@@ -2271,6 +2280,7 @@ async function viewSeller(app, id) {
     since ? `En ${esc(CONFIG.APP_NAME)} desde ${new Date(since).toLocaleDateString("es-PA", { month: "long", year: "numeric" })}` : ""].filter(Boolean).join(" · ");
   app.innerHTML = `<div class="wrap seller-page">
     <nav class="crumbs" aria-label="Ruta" style="margin-top:20px"><a href="#/">Inicio</a>${ic("chevronRight")}<a href="#/?vendedor=${isVerifiedShop(s) ? "tiendas" : "particulares"}">${isVerifiedShop(s) ? "Tiendas verificadas" : "Particulares"}</a>${ic("chevronRight")}<span aria-current="page">${esc(s.displayName)}</span></nav>
+    <div class="seller-layout"><aside class="seller-side">
     <section class="panel flush seller-hero">
       ${shop && s.shopPhotoUrl ? `<img class="shop-photo" src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}">` : ""}
       <div class="sp-body">
@@ -2281,10 +2291,12 @@ async function viewSeller(app, id) {
         ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
         ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} visitó el local y confirmó que existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
         ${isMe ? `<a class="btn" href="#/cuenta">Editar mi perfil</a>` : ""}
-      </div></section>
-    <div class="rhead" style="margin-top:28px"><h2>Cartas en venta</h2><p class="small muted num">${count}</p></div>
+      </div></section></aside>
+    <section class="seller-cards" aria-labelledby="forSaleTitle">
+    <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num">${count}</p></div>
     ${listings.length ? `<ul class="grid live">${listings.map(tile).join("")}</ul>`
       : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "Todavía no tienes cartas en venta." : `${esc(s.displayName)} no tiene cartas en venta ahora.`}</p>${isMe ? `<a class="btn primary" style="margin-top:16px" href="#/vender">Publicar una carta</a>` : `<p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p>`}</div>`}
+    </section></div>
   </div>`;
 }
 async function viewDetail(app, id) {
