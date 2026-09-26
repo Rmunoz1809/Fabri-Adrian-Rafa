@@ -422,6 +422,10 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
   .seller-side { position: sticky; top: calc(var(--header-h) + 16px); }
   .seller-cards .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+.seller-chips { margin-bottom: 16px; }
+.seller-chips .chip { background: none; cursor: pointer; }
+.seller-chips .chip.on { background: var(--fg); }
+.chip-n { margin-left: 6px; font-size: 12px; font-weight: 600; opacity: .6; }
 .seller-link { border-radius: var(--radius-lg); margin: -8px; padding: 8px; transition: background .15s var(--ease); }
 .seller-link:hover { background: var(--muted); }
 .seller-link:hover .nm { text-decoration: underline; text-underline-offset: 3px; }
@@ -1443,7 +1447,7 @@ async function route() {
     if (needsLogin) return viewAuth(app, location.hash.replace(/^#/, "") || "/");
     if (path === "/" || path === "") return await viewHome(app, params);
     if (path.startsWith("/carta/")) return await viewDetail(app, safeDecode(path.slice(7)));
-    if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)));
+    if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)), params);
     if (path === "/protegida") return viewProtected(app);
     if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
     if (path === "/vender") return viewSell(app);
@@ -2250,7 +2254,7 @@ function sellerPanel(s) {
 }
 
 // Public seller page: who they are (shop or individual) and every card they have for sale.
-async function viewSeller(app, id) {
+async function viewSeller(app, id, params = new URLSearchParams()) {
   app.innerHTML = `<div class="wrap"><p class="loading"><span class="spinner"></span>Cargando perfil…</p></div>`;
   const placeholder = app.firstElementChild;
   let seller = null, listings = [], since = null;
@@ -2275,7 +2279,9 @@ async function viewSeller(app, id) {
   }
   const s = seller, shop = s.isShop, isMe = session?.user.id === id;
   setTitle(s.displayName);
-  const count = `${listings.length} ${listings.length === 1 ? "carta" : "cartas"}`;
+  let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null;
+  const inCat = (c) => listings.filter((l) => !c || l.card.category === c);
+  const chip = (slug, name) => `<button type="button" class="chip ${cat === slug ? "on" : ""}" data-cat="${slug ?? ""}"${cat === slug ? ' aria-pressed="true"' : ' aria-pressed="false"'}>${name}<span class="chip-n">${inCat(slug).length}</span></button>`;
   const meta = [s.rating ? `★ ${s.rating.toFixed(1)}` : "", `${s.salesCount} ${s.salesCount === 1 ? "venta" : "ventas"}`,
     since ? `En ${esc(CONFIG.APP_NAME)} desde ${new Date(since).toLocaleDateString("es-PA", { month: "long", year: "numeric" })}` : ""].filter(Boolean).join(" · ");
   app.innerHTML = `<div class="wrap seller-page">
@@ -2293,11 +2299,28 @@ async function viewSeller(app, id) {
         ${isMe ? `<a class="btn" href="#/cuenta">Editar mi perfil</a>` : ""}
       </div></section></aside>
     <section class="seller-cards" aria-labelledby="forSaleTitle">
-    <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num">${count}</p></div>
-    ${listings.length ? `<ul class="grid live">${listings.map(tile).join("")}</ul>`
-      : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "Todavía no tienes cartas en venta." : `${esc(s.displayName)} no tiene cartas en venta ahora.`}</p>${isMe ? `<a class="btn primary" style="margin-top:16px" href="#/vender">Publicar una carta</a>` : `<p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p>`}</div>`}
+    <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
+    <nav class="chips seller-chips" aria-label="Categorías">${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}</nav>
+    <div id="sellerList"></div>
     </section></div>
   </div>`;
+  const renderList = () => {
+    const list = inCat(cat);
+    $("#sellerCount").textContent = `${list.length} ${list.length === 1 ? "carta" : "cartas"}`;
+    $("#sellerList").innerHTML = list.length ? `<ul class="grid live">${list.map(tile).join("")}</ul>`
+      : !listings.length
+      ? `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "Todavía no tienes cartas en venta." : `${esc(s.displayName)} no tiene cartas en venta ahora.`}</p>${isMe ? `<a class="btn primary" style="margin-top:16px" href="#/vender">Publicar una carta</a>` : `<p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p>`}</div>`
+      : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "No tienes" : `${esc(s.displayName)} no tiene`} cartas de ${esc(categoryName(cat))} en venta.</p><button type="button" class="btn outline" style="margin-top:16px" data-cat="">Ver todas sus cartas</button></div>`;
+  };
+  renderList();
+  app.querySelector(".seller-cards").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-cat]");
+    if (!b) return;
+    cat = b.dataset.cat || null;
+    app.querySelectorAll(".seller-chips .chip").forEach((c) => { const on = (c.dataset.cat || null) === cat; c.classList.toggle("on", on); c.setAttribute("aria-pressed", String(on)); });
+    renderList();
+    history.replaceState(null, "", `#/vendedor/${encodeURIComponent(id)}${cat ? `?cat=${cat}` : ""}`);
+  });
 }
 async function viewDetail(app, id) {
   app.innerHTML = `<div class="wrap"><p class="loading"><span class="spinner"></span>Cargando carta…</p></div>`;
