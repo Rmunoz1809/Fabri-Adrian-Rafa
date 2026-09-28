@@ -521,6 +521,11 @@ details.report .i { width: 14px; height: 14px; }
 .admin-tabs a.on { color: var(--fg); border-bottom-color: var(--brand); }
 .admin-h { margin: 16px 0 0; font-size: 18px; }
 .admin-list { display: grid; gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.checkout { max-width: 560px; margin: 24px auto 48px; }
+.admin-list > li { min-width: 0; } /* long content (e.g. the claim form) must not widen the card */
+.claim-box input[type=file] { max-width: 100%; }
+.claim-photos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.claim-photos img { width: 88px; height: 88px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); }
 @media (min-width: 900px) { .admin-list { grid-template-columns: 1fr 1fr; } }
 .order-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .order-actions .btn { height: 36px; }
@@ -736,6 +741,11 @@ const CONFIG = {
   WHATSAPP: "", // platform WhatsApp, international format without "+", e.g. "5076XXXXXXX"
   PLAN_USD: 4, // Plan Coleccionista per month (scans: 3/day free, "sin límite" with the plan; enforced in the database, migration 0012)
   AUTH_CHECK_USD: 5, // "Revisión en tienda": a partner shop checks the card in person (migration 0011)
+  // Botón de Pago Yappy (migration 0014 + Edge Function yappy-pago). While ENABLED is false, buyers
+  // ask to buy by WhatsApp and staff create the order. Turn it on once Yappy Comercial is set up
+  // and a test payment went through. CDN for Yappy's test environment:
+  // https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js
+  YAPPY: { ENABLED: false, FUNCTION: "yappy-pago", CDN: "https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js" },
   SHOW_DEMO_LISTINGS: true,
   CATALOG_API: "https://api.pokemontcg.io/v2",
   // Opcional: poner true sólo si se corrió supabase/price_snapshots.sql (suma un precio diario
@@ -1313,7 +1323,7 @@ const sb = window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, C
 let session = null;
 let profileName = null;
 let isStaff = false;
-let pendingOffers = 0; // offers waiting for this user (seller: new offers; buyer: counteroffers)
+let pendingOffers = 0; // things waiting for this user: offers to answer and Compras Protegidas to deliver or confirm
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
 // ------------------------------------------------------------- analytics (migration 0007)
 // First-party funnel events. Visitors get a random id kept in their browser; no IP,
@@ -1518,7 +1528,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin");
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path.startsWith("/pagar/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -1536,6 +1546,7 @@ async function route() {
     if (path === "/privacidad") return viewPrivacy(app);
     if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
     if (path === "/vender") return viewSell(app);
+    if (path.startsWith("/pagar/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewCheckout(app.firstElementChild, safeDecode(path.slice(7))); }
     // Account and staff pages render into a padded column.
     if (path === "/cuenta" || path === "/admin") {
       app.innerHTML = `<div class="wrap"></div>`;
@@ -1561,7 +1572,7 @@ function renderNav() {
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   $("#navLinks").innerHTML = links(false);
   $("#nav").innerHTML = session
-    ? `<button type="button" class="acct lg-only" id="acctBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${pendingOffers ? `<span class="nbadge" title="Tienes ofertas por responder">${pendingOffers}</span>` : ""}${ic("chevronDown")}</button>
+    ? `<button type="button" class="acct lg-only" id="acctBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${pendingOffers ? `<span class="nbadge" title="Tienes cosas pendientes en Mi cuenta">${pendingOffers}</span>` : ""}${ic("chevronDown")}</button>
        <a class="btn primary sm lg-only" href="#/vender">${ic("plus")}Vender</a>`
     : sb ? `<a class="btn primary sm lg-only" href="#/entrar">Iniciar sesión</a>` : "";
   $("#mobileMenu").innerHTML = `<nav aria-label="Menú">${links(true, session ? [["cuenta", "#/cuenta", `Mi cuenta${pendingOffers ? ` (${pendingOffers})` : ""}`]] : [])}</nav>
@@ -1576,7 +1587,7 @@ function renderNav() {
   };
   $("#acctBtn")?.addEventListener("click", (e) => openMenu(e.currentTarget, [
     { heading: session.user.email ?? name },
-    { label: pendingOffers ? `Mi cuenta (${pendingOffers} ${pendingOffers === 1 ? "oferta" : "ofertas"})` : "Mi cuenta", icon: "user", href: "#/cuenta" },
+    { label: pendingOffers ? `Mi cuenta (${pendingOffers} ${pendingOffers === 1 ? "pendiente" : "pendientes"})` : "Mi cuenta", icon: "user", href: "#/cuenta" },
     { label: "Vender una carta", icon: "plus", href: "#/vender" },
     ...(isStaff ? [{ label: "Panel de staff", icon: "layout", href: "#/admin" }] : []),
     "sep",
@@ -2431,7 +2442,8 @@ async function viewDetail(app, id) {
   const quote = l.protectedEligible ? quoteProtected(price) : null;
   const ref = `ref ${l.id.slice(0, 8)}`;
   const contact = waLink(`Hola, me interesa "${l.title}" (${formatUsd(price)}, ${ref}).`);
-  const buy = quote ? waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.${session ? ` Mi código Holo: ${buyerCode()}.` : ""}`) : null;
+  const buy = !quote ? null : CONFIG.YAPPY.ENABLED ? `#/pagar/${encodeURIComponent(l.id)}`
+    : waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.${session ? ` Mi código Holo: ${buyerCode()}.` : ""}`);
   const cond = CONDITIONS.find((c) => c.code === l.condition);
   const isOwner = session && l.sellerId === session.user.id;
   const forSale = l.isDemo || l.status === "active";
@@ -2478,7 +2490,7 @@ async function viewDetail(app, id) {
           <p class="sub">Pagas a ${esc(CONFIG.APP_NAME)} y guardamos el dinero hasta que confirmes que recibiste la carta bien. Si no llega o no es lo anunciado, te devolvemos todo.</p>
           <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección (4%)</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
           <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
-          ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
+          ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}"${CONFIG.YAPPY.ENABLED ? "" : ` target="_blank" rel="noopener"`}>${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
         ${l.isDemo ? `<section class="panel"><h2 class="ptitle">${ic("tag")}Hacer oferta</h2>
           <p class="sub">En los anuncios reales puedes ofrecer desde ${formatUsd(minOfferCents(price))} (60% del precio). El vendedor acepta, rechaza o te contraoferta, y si se ponen de acuerdo compras con Compra Protegida a ese precio.</p>
           <div class="row-input" style="margin-top:12px"><input class="input" disabled placeholder="Tu oferta en $" aria-label="Tu oferta en dólares (ejemplo)"><button type="button" class="btn primary" disabled>Ofertar</button></div>
@@ -2602,9 +2614,14 @@ async function applySellerStats(sellers) {
 async function refreshOfferBadge() {
   if (!sb || !session) return;
   const me = session.user.id;
-  const { count, error } = await sb.from("offers").select("id", { count: "exact", head: true })
-    .or(`and(seller_id.eq.${me},status.eq.pending),and(buyer_id.eq.${me},status.eq.countered)`);
-  const n = error ? 0 : count ?? 0;
+  // Offers to answer, plus Compras Protegidas waiting for this user (deliver, or confirm receipt).
+  const [{ count, error }, orders] = await Promise.all([
+    sb.from("offers").select("id", { count: "exact", head: true })
+      .or(`and(seller_id.eq.${me},status.eq.pending),and(buyer_id.eq.${me},status.eq.countered)`),
+    ordersOn ? sb.rpc("my_orders") : { data: [] },
+  ]);
+  if (["PGRST202", "42883"].includes(orders.error?.code)) ordersOn = false; // migration 0014 not applied yet
+  const n = (error ? 0 : count ?? 0) + (orders.error ? 0 : (orders.data ?? []).filter(orderTask).length);
   if (n !== pendingOffers) { pendingOffers = n; renderNav(); }
 }
 const offerError = (e, min, max) => /out of range/.test(e?.message ?? "") ? `La oferta tiene que estar entre ${formatUsd(min)} y ${formatUsd(max)}.`
@@ -2633,11 +2650,12 @@ async function renderOffer(l, box) {
       <div class="share-row" style="margin-top:12px"><button type="button" class="btn primary" id="offerTake">Aceptar ${formatUsd(o.counter_cents)}</button><button type="button" class="btn outline" id="offerDecline">Rechazar</button></div>`;
   } else if (o?.status === "accepted") {
     const q = quoteProtected(o.amount_cents);
-    const buy = waLink(`Quiero comprar con Compra Protegida: "${l.title}" (ref ${l.id.slice(0, 8)}). Oferta aceptada: ${formatUsd(q.priceCents)}. Total ${formatUsd(q.buyerTotalCents)}. Mi código Holo: ${buyerCode()}.`);
+    const buy = CONFIG.YAPPY.ENABLED ? `#/pagar/${encodeURIComponent(l.id)}` // the checkout applies the accepted offer
+      : waLink(`Quiero comprar con Compra Protegida: "${l.title}" (ref ${l.id.slice(0, 8)}). Oferta aceptada: ${formatUsd(q.priceCents)}. Total ${formatUsd(q.buyerTotalCents)}. Mi código Holo: ${buyerCode()}.`);
     box.innerHTML = `<p class="notice good" style="margin:0">¡El vendedor aceptó tu oferta de <b>${formatUsd(o.amount_cents)}</b>!</p>
       <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(q.priceCents)}</dd></div><div><dt>Protección (4%)</dt><dd>${formatUsd(q.feeCents)}</dd></div>
       <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(q.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(q.buyerTotalCents)}</dd></div></dl>
-      ${buy ? `<a class="btn primary block" style="margin-top:12px" id="offerBuy" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido a este precio</a>` : `<p class="notice soft center" style="margin-top:12px">Compra Protegida disponible pronto.</p>`}`;
+      ${buy ? `<a class="btn primary block" style="margin-top:12px" id="offerBuy" href="${esc(buy)}"${CONFIG.YAPPY.ENABLED ? "" : ` target="_blank" rel="noopener"`}>${ic("shield")}Comprar protegido a este precio</a>` : `<p class="notice soft center" style="margin-top:12px">Compra Protegida disponible pronto.</p>`}`;
   } else {
     box.innerHTML = form("Ofertar", o?.status === "rejected" ? `Tu oferta de ${formatUsd(o.amount_cents)} no fue aceptada. Puedes ofrecer otro monto desde ${formatUsd(min)}.` : intro);
   }
@@ -2728,6 +2746,242 @@ async function renderActivity(uid, box) {
     toast("¡Gracias por tu reseña!");
     renderActivity(uid, box);
   }));
+}
+
+// Mi cuenta: my purchases and sales (migration 0014). The stage and the 3-day window come from the
+// database (my_orders), so the page and the payout rules can't disagree.
+let ordersOn = true;
+const BUYER_STAGE = {
+  awaiting_payment: ["Esperando pago", "prot"], paid: ["Pagada", "prot"], delivered: ["Entregada", "prot"],
+  claim: ["Reclamo en revisión", "warn"], ready: ["Completada", "good"], released: ["Completada", "good"],
+  refunded: ["Reembolsada", "warn"], cancelled: ["Cancelada", "neutral"],
+};
+const SELLER_STAGE = {
+  paid: ["Por entregar", "prot"], delivered: ["Entregada", "prot"], claim: ["Reclamo en revisión", "warn"],
+  ready: ["Lista para cobrar", "good"], released: ["Cobrada ✓", "good"], refunded: ["Reembolsada", "warn"], cancelled: ["Cancelada", "neutral"],
+};
+const fmtDeadline = (s) => new Date(s).toLocaleDateString("es-PA", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
+const orderError = (e) => /window closed/.test(e?.message ?? "") ? "El plazo de 3 días para reclamar ya terminó."
+  : /already open/.test(e?.message ?? "") ? "Ya tienes un reclamo abierto para esta compra."
+  : /reason length/.test(e?.message ?? "") ? "Cuéntanos qué pasó en al menos 10 letras."
+  : /not allowed|can't/.test(e?.message ?? "") ? "Esta compra cambió de estado. Recarga la página."
+  : "No pudimos guardar. Revisa tu conexión e intenta de nuevo.";
+const orderTask = (o) => (o.role === "seller" && o.stage === "paid") || (o.role === "buyer" && o.stage === "delivered");
+
+async function renderOrders(uid, box) {
+  if (!ordersOn || !sb) return;
+  const [res, pay] = await Promise.all([
+    sb.rpc("my_orders"),
+    sb.from("payout_accounts").select("yappy_phone, holder_name").eq("user_id", uid).maybeSingle(),
+  ]);
+  if (!box.isConnected) return;
+  if (res.error) { // migration 0014 not applied yet
+    if (["PGRST202", "42883"].includes(res.error.code)) ordersOn = false; else console.error(res.error);
+    box.innerHTML = ""; return;
+  }
+  const orders = res.data ?? [], payout = pay.error ? null : pay.data;
+  const link = (o) => `<a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Carta")}</a>`;
+  const buyerText = (o) => ({
+    awaiting_payment: o.hold_until && new Date(o.hold_until) > new Date()
+      ? `Tu pago está pendiente. <a class="link" href="#/pagar/${encodeURIComponent(o.listing_id)}">Terminar el pago</a>`
+      : `Paga como te indicó el equipo de ${esc(CONFIG.APP_NAME)}. Cuando confirmemos tu pago, lo verás aquí.`,
+    paid: `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. El vendedor te entrega la carta; el equipo de ${esc(CONFIG.APP_NAME)} coordina la entrega contigo.`,
+    delivered: `El vendedor marcó la carta como entregada. Revísala: tienes hasta el <b>${fmtDeadline(o.claim_deadline)}</b> para reportar un problema. Si todo está bien, confírmalo.`,
+    claim: `Recibimos tu reclamo y lo estamos revisando. Si corresponde, te devolvemos todo en un máximo de 5 días hábiles.`,
+    ready: o.claim_outcome === "rejected" ? `Revisamos tu reclamo y no correspondía un reembolso. Si tienes dudas, escríbenos.`
+      : o.buyer_confirmed_at ? "Confirmaste que recibiste la carta bien. ¡Gracias!" : "Pasaron los 3 días sin reclamos y la compra quedó cerrada.",
+    released: "Compra completada.",
+    refunded: `Te devolvimos ${formatUsd(o.amount_cents)}.`,
+    cancelled: "Esta compra se canceló.",
+  }[o.stage] ?? "");
+  const sellerText = (o) => ({
+    paid: `¡Vendiste esta carta por ${formatUsd(o.amount_cents)}! Entrégasela al comprador: el equipo de ${esc(CONFIG.APP_NAME)} te escribe para coordinar. Cuando la tenga en sus manos, márcala como entregada.`,
+    delivered: `Entregada. Si el comprador no reporta problemas, te pagamos ${formatUsd(o.amount_cents)} cuando termine su plazo para revisarla: ${fmtDeadline(o.claim_deadline)}`,
+    claim: "El comprador reportó un problema con la carta. Lo estamos revisando y te escribimos.",
+    ready: `Todo salió bien: te enviamos ${formatUsd(o.amount_cents)} por Yappy.${payout ? "" : " <b>Agrega abajo tu número de Yappy para poder pagarte.</b>"}`,
+    released: `Te pagamos ${formatUsd(o.amount_cents)}${o.released_at ? ` el ${new Date(o.released_at).toLocaleDateString("es-PA", { day: "numeric", month: "long" })}` : ""}.`,
+    refunded: "La compra se reembolsó al comprador.",
+    cancelled: "La compra se canceló.",
+  }[o.stage] ?? "");
+  const card = (o) => {
+    const [label, cls] = (o.role === "buyer" ? BUYER_STAGE : SELLER_STAGE)[o.stage] ?? [o.stage, "neutral"];
+    const buyerCan = o.role === "buyer" && ["paid", "delivered"].includes(o.stage);
+    return `<li class="panel" data-order="${o.id}"><div class="phead">${link(o)}<span class="b ${cls}">${label}</span></div>
+      <p class="small" style="margin:6px 0 0">${o.role === "buyer" ? buyerText(o) : sellerText(o)}</p>
+      ${buyerCan ? `<div class="order-actions"><button class="btn primary sm" data-ord="confirm">Ya recibí mi carta</button><button class="btn outline sm" data-ord="claim">Tengo un problema</button></div>` : ""}
+      ${o.role === "seller" && o.stage === "paid" ? `<div class="order-actions"><button class="btn primary sm" data-ord="delivered">Ya la entregué</button></div>` : ""}
+      <div class="claim-box"></div></li>`;
+  };
+  const buys = orders.filter((o) => o.role === "buyer"), sales = orders.filter((o) => o.role === "seller");
+  box.innerHTML = `${buys.length ? `<section class="panel col"><h2>Mis compras</h2><ul class="admin-list">${buys.map(card).join("")}</ul></section>` : ""}
+    ${sales.length ? `<section class="panel col"><h2>Mis ventas</h2><ul class="admin-list">${sales.map(card).join("")}</ul></section>` : ""}
+    ${pay.error ? "" : `<section class="panel col"><h2>Dónde te pagamos tus ventas</h2>
+      <p class="xs muted" style="margin:0">Cuando vendes una carta con Compra Protegida, te enviamos el dinero por Yappy a este número. Solo lo ve el equipo de ${esc(CONFIG.APP_NAME)}.</p>
+      <div class="row-input"><input class="input" id="payPhone" inputmode="numeric" maxlength="9" placeholder="Número de Yappy (6000-0000)" aria-label="Número de Yappy" value="${esc(payout?.yappy_phone ?? "")}"></div>
+      <div class="row-input"><input class="input" id="payName" maxlength="80" placeholder="Nombre del titular" aria-label="Nombre del titular de la cuenta Yappy" value="${esc(payout?.holder_name ?? "")}"><button type="button" class="btn" id="paySave" style="border-radius:12px">Guardar</button></div></section>`}`;
+
+  const act = async (li, fn, ok) => {
+    li.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const { error } = await sb.rpc(fn, { p_order: li.dataset.order });
+    if (!box.isConnected) return;
+    if (error) { li.querySelectorAll("button").forEach((b) => (b.disabled = false)); console.error(error); return toast(orderError(error), { type: "error" }); }
+    toast(ok);
+    refreshOfferBadge();
+    renderOrders(uid, box);
+  };
+  box.querySelectorAll("[data-ord]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), what = b.dataset.ord;
+    if (what === "confirm") {
+      if (await confirmDialog({ title: "¿Recibiste la carta bien?", body: "Al confirmar, le pagamos al vendedor y ya no se puede reclamar esta compra.", confirm: "Sí, todo bien" })) act(li, "buyer_confirm_received", "¡Listo! Gracias por confirmar.");
+    } else if (what === "delivered") {
+      if (await confirmDialog({ title: "¿Ya entregaste la carta?", body: "Márcala solo cuando el comprador la tenga en sus manos. Desde ese momento tiene 3 días para revisarla; después te pagamos.", confirm: "Sí, ya la entregué" })) act(li, "seller_mark_delivered", "Marcada como entregada.");
+    } else {
+      openClaim(uid, li, () => renderOrders(uid, box));
+    }
+  }));
+  $("#paySave")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    const phone = $("#payPhone").value.replace(/\D/g, ""), name = $("#payName").value.trim();
+    if (!/^6\d{7}$/.test(phone)) return toast("Escribe un número de celular de 8 dígitos que empiece con 6.", { type: "error" });
+    if (name.length < 2) return toast("Escribe el nombre del titular de la cuenta Yappy.", { type: "error" });
+    btn.disabled = true;
+    const { error } = await sb.from("payout_accounts").upsert({ user_id: uid, yappy_phone: phone, holder_name: name });
+    btn.disabled = false;
+    if (error) { console.error(error); return toast("No pudimos guardar tu número. Intenta de nuevo.", { type: "error" }); }
+    toast("Listo, ahí te pagaremos tus ventas.");
+  });
+}
+
+// "Tengo un problema": reason plus up to 4 photos in the private claim-photos bucket.
+function openClaim(uid, li, done) {
+  const box = li.querySelector(".claim-box");
+  if (box.innerHTML) { box.innerHTML = ""; return; }
+  box.innerHTML = `<div class="col" style="gap:8px;margin-top:12px">
+    <label class="f">¿Qué pasó?<textarea class="textarea cl-reason" rows="3" maxlength="1000" placeholder="Ej.: no me llegó, no es la carta de las fotos, llegó doblada…"></textarea></label>
+    <label class="f">Fotos de la carta como la recibiste (hasta 4)<input type="file" class="cl-photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+    <p class="xs muted" style="margin:0">Solo las ve el equipo de ${esc(CONFIG.APP_NAME)}. Guarda la carta como llegó mientras revisamos.</p>
+    <button type="button" class="btn danger sm cl-send">Enviar reclamo</button></div>`;
+  box.querySelector(".cl-reason").focus();
+  box.querySelector(".cl-send").addEventListener("click", async (e) => {
+    const btn = e.currentTarget, reason = box.querySelector(".cl-reason").value.trim(), files = [...box.querySelector(".cl-photos").files];
+    if (reason.length < 10) return toast("Cuéntanos qué pasó en al menos 10 letras.", { type: "error" });
+    if (files.length > 4) return toast("Puedes subir hasta 4 fotos.", { type: "error" });
+    btn.disabled = true; btn.textContent = "Enviando…";
+    const paths = [];
+    try {
+      for (const [i, f] of files.entries()) {
+        const img = await compressImage(f), ext = { "image/png": "png", "image/webp": "webp" }[img.type] ?? "jpg";
+        const path = `${uid}/${li.dataset.order}/${Date.now()}-${i}.${ext}`;
+        const up = await sb.storage.from("claim-photos").upload(path, img, { contentType: img.type || "image/jpeg", upsert: false });
+        if (up.error) throw up.error;
+        paths.push(path);
+      }
+      const { error } = await sb.rpc("buyer_open_claim", { p_order: li.dataset.order, p_reason: reason, p_photos: paths });
+      if (error) throw error;
+      toast("Recibimos tu reclamo. Lo revisamos y te escribimos.");
+      done();
+    } catch (err) {
+      console.error(err);
+      if (paths.length) sb.storage.from("claim-photos").remove(paths);
+      btn.disabled = false; btn.textContent = "Enviar reclamo";
+      toast(err?.statusCode === "413" || /size/i.test(err?.message ?? "") ? "Una foto es muy pesada (máximo 5 MB)." : orderError(err), { type: "error" });
+    }
+  });
+}
+
+// ============================================================= checkout (#/pagar/<listing id>)
+// Pays a Compra Protegida with the Botón de Pago Yappy. The order and its amounts come from the
+// database (start_checkout: listing price or the buyer's accepted offer, plus the fee); the
+// yappy-pago Edge Function talks to Yappy, and Yappy's payment notice marks the order paid.
+let yappyScript = null;
+function loadYappy() {
+  yappyScript ??= new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.type = "module"; s.src = CONFIG.YAPPY.CDN;
+    s.onload = () => customElements.whenDefined("btn-yappy").then(resolve);
+    s.onerror = () => { s.remove(); yappyScript = null; reject(new Error("yappy cdn")); };
+    document.head.append(s);
+  });
+  return withTimeout(yappyScript, 15000);
+}
+const checkoutError = (e) => /on hold/.test(e?.message ?? "") ? "Otra persona está pagando esta carta en este momento. Intenta de nuevo en unos minutos."
+  : /own listing/.test(e?.message ?? "") ? "Esta carta es tuya."
+  : /not available/.test(e?.message ?? "") ? "Esta carta ya no está disponible."
+  : /too many/.test(e?.message ?? "") ? "Hiciste demasiados intentos hoy. Escríbenos si necesitas ayuda."
+  : "No pudimos preparar tu compra. Revisa tu conexión e intenta de nuevo.";
+
+async function viewCheckout(app, listingId) {
+  setTitle("Pagar");
+  const back = `<a class="btn outline" href="#/carta/${encodeURIComponent(listingId)}">Volver a la carta</a>`;
+  if (!CONFIG.YAPPY.ENABLED || !sb || !isUuid(listingId)) {
+    app.innerHTML = `<div class="checkout"><p class="notice soft">El pago en línea se activa pronto. Por ahora, toca “Comprar protegido” en la carta y te atendemos por WhatsApp.</p>${back}</div>`;
+    return;
+  }
+  app.innerHTML = `<p class="loading"><span class="spinner"></span>Preparando tu compra…</p>`;
+  const holder = app.firstElementChild;
+  const [{ data: order, error }, { data: l }] = await Promise.all([
+    sb.rpc("start_checkout", { p_listing: listingId }),
+    sb.from("listings").select("title").eq("id", listingId).maybeSingle(),
+  ]);
+  if (!holder.isConnected) return;
+  if (error || !order) {
+    console.error(error);
+    app.innerHTML = `<div class="checkout"><p class="notice bad">${esc(checkoutError(error))}</p>${back}</div>`;
+    return;
+  }
+  const total = order.price_cents + order.fee_cents + order.itbms_cents;
+  app.innerHTML = `<div class="checkout col" style="gap:16px"><h1 class="display" style="font-size:30px">Pagar con Compra Protegida</h1>
+    <section class="panel"><p style="margin:0;font-weight:600">${esc(l?.title ?? "Carta")}</p>
+      <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(order.price_cents)}</dd></div><div><dt>Protección (4%)</dt><dd>${formatUsd(order.fee_cents)}</dd></div>
+      <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(order.itbms_cents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(total)}</dd></div></dl>
+      <p class="xs muted" style="margin:12px 0 0">Te guardamos la carta 15 minutos mientras pagas. ${esc(CONFIG.APP_NAME)} guarda tu dinero: el vendedor cobra cuando confirmas que recibiste la carta bien, o 3 días después de la entrega si no reportas nada.</p></section>
+    <section class="panel center" id="payBox"><p class="loading"><span class="spinner"></span>Cargando Yappy…</p></section>
+    <p class="xs muted" style="margin:0">Al pagar aceptas los <a class="link" href="#/terminos">Términos</a> de Compra Protegida.</p>
+    <div>${back}</div></div>`;
+  const box = $("#payBox");
+  try { await loadYappy(); } catch { if (box.isConnected) box.innerHTML = `<p class="notice bad" style="margin:0">No pudimos cargar Yappy. Revisa tu conexión y recarga la página.</p>`; return; }
+  if (!box.isConnected) return;
+  box.innerHTML = `<btn-yappy theme="blue" rounded="true"></btn-yappy><div id="payMsg" style="margin-top:12px"></div>`;
+  const btn = box.querySelector("btn-yappy"), msg = $("#payMsg");
+  const say = (cls, html) => (msg.innerHTML = `<p class="notice ${cls}" style="margin:0">${html}</p>`);
+  btn.addEventListener("eventClick", async () => {
+    msg.innerHTML = "";
+    btn.isButtonLoading = true;
+    try {
+      const s = (await sb.auth.getSession()).data.session;
+      if (!s) return say("bad", "Tu sesión se cerró. Entra de nuevo para pagar.");
+      // Renew the hold right before paying; if the order or its total changed, show the new one.
+      const again = await sb.rpc("start_checkout", { p_listing: listingId });
+      if (again.error) return say("bad", esc(checkoutError(again.error)));
+      const t2 = again.data.price_cents + again.data.fee_cents + again.data.itbms_cents;
+      if (again.data.id !== order.id || t2 !== total) { toast("El total de tu compra cambió. Revísalo antes de pagar."); return viewCheckout(app, listingId); }
+      const res = await withTimeout(fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${CONFIG.YAPPY.FUNCTION}`, {
+        method: "POST", headers: { "Content-Type": "application/json", apikey: CONFIG.SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` },
+        body: JSON.stringify({ order_id: order.id }),
+      }), 30000);
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || !out.transactionId) return say("bad", esc(out.error ?? "No pudimos iniciar el pago con Yappy. Intenta de nuevo."));
+      btn.eventPayment({ transactionId: out.transactionId, documentName: out.documentName, token: out.token });
+    } catch (e) {
+      console.error(e);
+      say("bad", "No pudimos conectar con Yappy. Intenta de nuevo.");
+    } finally { btn.isButtonLoading = false; }
+  });
+  btn.addEventListener("eventError", (e) => {
+    console.warn("yappy", e.detail);
+    say("bad", "El pago no se completó. Puedes intentarlo de nuevo. Si Yappy te descontó el dinero, no pagues otra vez: escríbenos.");
+  });
+  btn.addEventListener("eventSuccess", async () => {
+    say("good", `<span class="spinner"></span> ¡Pago hecho! Estamos confirmándolo con Yappy…`);
+    // The order turns "paid" when Yappy's notice reaches the Edge Function (usually seconds).
+    for (let i = 0; i < 40 && box.isConnected; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const { data } = await sb.rpc("my_orders");
+      const o = (data ?? []).find((x) => x.id === order.id);
+      if (o && o.stage !== "awaiting_payment") { toast("¡Pago confirmado! Sigue tu compra en Mi cuenta."); return go("/cuenta"); }
+    }
+    if (box.isConnected) say("good", `Tu pago está en proceso. Lo verás confirmado en <a class="link" href="#/cuenta">Mi cuenta</a> en unos minutos.`);
+  });
 }
 
 // Seller page: public reviews (verified purchases only).
@@ -2886,7 +3140,7 @@ function setupShare(l) {
 
 function viewProtected(app) {
   setTitle("Compra Protegida");
-  const steps = [["Pagas a " + CONFIG.APP_NAME, "Por Yappy o transferencia. Guardamos el dinero: el vendedor todavía no lo recibe."], ["El vendedor te entrega la carta", "En persona o por envío, directo a ti. Se ponen de acuerdo por WhatsApp."], ["Revisas tu carta", "Tienes 3 días para avisarnos si no llegó o si no es la de las fotos, la condición o la graduación anunciada."], ["El vendedor cobra", "Cuando nos confirmas que todo está bien, o solo a los 3 días si no hay reclamo. Si hay un problema, te devolvemos todo."]];
+  const steps = [["Pagas a " + CONFIG.APP_NAME, "Por Yappy o transferencia. Guardamos el dinero: el vendedor todavía no lo recibe."], ["El vendedor te entrega la carta", "En persona o por envío, directo a ti. Se ponen de acuerdo por WhatsApp."], ["Revisas tu carta", "Tienes 3 días desde la entrega para avisarnos desde Mi cuenta, con fotos, si no llegó o si no es la de las fotos, la condición o la graduación anunciada."], ["El vendedor cobra", "Cuando confirmas en Mi cuenta que todo está bien, o solo a los 3 días si no hay reclamo. Si hay un problema, te devolvemos todo."]];
   const rows = [10, 50, 150, 500, 1500].map((u) => quoteProtected(toCents(u)));
   app.innerHTML = `<div class="wrap page">
     <div style="max-width:760px">
@@ -3892,7 +4146,8 @@ async function viewAccount(app) {
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
   app.innerHTML = `<div class="account"><h1 class="display" style="font-size:30px">Mi cuenta</h1>
     <p class="muted" style="margin:4px 0 0">Así te ven los compradores en tus anuncios. <a class="link" href="#/vendedor/${encodeURIComponent(uid)}">Ver mi perfil público</a></p>
-    <div id="accActivity" class="col" style="margin-top:24px;gap:16px"></div>
+    <div id="accOrders" class="col" style="margin-top:24px;gap:16px"></div>
+    <div id="accActivity" class="col" style="margin-top:16px;gap:16px"></div>
     <form id="accForm" class="col" style="margin-top:24px" novalidate>
       <section class="panel col">
         <h2>Perfil</h2>
@@ -3916,6 +4171,7 @@ async function viewAccount(app) {
       <button class="btn primary block" id="accBtn">Guardar cambios</button>
     </form></div>`;
 
+  renderOrders(uid, $("#accOrders"));
   renderActivity(uid, $("#accActivity"));
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
@@ -3972,15 +4228,6 @@ async function viewAccount(app) {
 // ============================================================= staff panel (#/admin)
 // Everything here is also enforced by RLS: a non-staff user who opens #/admin just
 // gets empty lists and failed writes. The UI check is for convenience only.
-const ORDER_FLOW = {
-  awaiting_payment: { label: "Esperando pago", next: "paid", action: "Marcar pagada" },
-  paid: { label: "Pagada", next: "delivered", action: "El comprador recibió la carta" },
-  verifying: { label: "Verificando carta", next: "delivered", action: "El comprador recibió la carta" }, // old orders only
-  delivered: { label: "Entregada · 3 días para reclamar", next: "released", action: "Liberar pago al vendedor" },
-  released: { label: "Liberada ✓", next: null },
-  refunded: { label: "Reembolsada", next: null },
-  cancelled: { label: "Cancelada", next: null },
-};
 const PAID_STATES = ["paid", "verifying", "delivered", "released"];
 const LISTING_STATUS = { draft: "Borrador", active: "Activo", reserved: "Reservado", sold: "Vendido", removed: "Quitado" };
 const GOAL_ORDERS = 20;
@@ -4024,42 +4271,60 @@ async function profilesById(ids) {
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("es-PA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
 // ------------------------------------------------------------- orders
+// Every step goes through staff_order_action() (migration 0014): the order, the listing and the
+// sale record change together, and the database refuses a step out of order (e.g. paying the
+// seller while a claim is open or before the 3-day window ends).
+const STAFF_STAGE = {
+  awaiting_payment: ["Esperando pago", "prot"], paid: ["Pagada · por entregar", "prot"], delivered: ["Entregada · 3 días para reclamar", "prot"],
+  claim: ["Reclamo abierto", "warn"], ready: ["Lista para pagar al vendedor", "good"], released: ["Liberada ✓", "good"],
+  refunded: ["Reembolsada", "warn"], cancelled: ["Cancelada", "neutral"],
+};
+const STAFF_ACTIONS = { // stage → [action, label, style]
+  awaiting_payment: [["mark_paid", "Marcar pagada", "primary"], ["cancel", "Cancelar", "danger"]],
+  paid: [["mark_delivered", "Entregada (empiezan los 3 días)", "primary"], ["buyer_confirmed", "El comprador confirmó que está bien", ""], ["refund", "Reembolsar", "danger"]],
+  delivered: [["buyer_confirmed", "El comprador confirmó que está bien", ""], ["refund", "Reembolsar", "danger"]],
+  claim: [["refund", "Reembolsar al comprador", "danger"], ["reject_claim", "Rechazar reclamo", ""]],
+  ready: [["release", "Ya le pagué al vendedor", "primary"], ["refund", "Reembolsar", "danger"]],
+};
 async function adminOrders(body) {
-  const { data: orders, error } = await sb.from("protected_orders")
-    .select("id, listing_id, seller_id, buyer_contact, price_cents, fee_cents, itbms_cents, status, payment_ref, notes, created_at, updated_at")
-    .order("created_at", { ascending: false }).limit(200);
-  if (error) throw error;
-  const listingIds = [...new Set(orders.map((o) => o.listing_id))];
-  const { data: listings } = listingIds.length
-    ? await sb.from("listings").select("id, title, status, catalog_id, grading_company, grade, condition").in("id", listingIds)
-    : { data: [] };
-  const byListing = new Map((listings ?? []).map((l) => [l.id, l]));
-  const sellers = await profilesById(orders.map((o) => o.seller_id));
-  const open = orders.filter((o) => ORDER_FLOW[o.status]?.next);
-  const closed = orders.filter((o) => !ORDER_FLOW[o.status]?.next);
+  const { data: orders, error } = await sb.rpc("staff_orders");
+  if (error) {
+    if (["PGRST202", "42883"].includes(error.code)) { body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0014 en Supabase.</p>`; return; }
+    throw error;
+  }
+  const payNow = orders.filter((o) => o.stage === "ready");
+  const claims = orders.filter((o) => o.stage === "claim");
+  const open = orders.filter((o) => ["awaiting_payment", "paid", "delivered"].includes(o.stage));
+  const closed = orders.filter((o) => ["released", "refunded", "cancelled"].includes(o.stage));
 
   const card = (o) => {
-    const l = byListing.get(o.listing_id), f = ORDER_FLOW[o.status];
+    const [label, cls] = STAFF_STAGE[o.stage] ?? [o.stage, "neutral"];
     const total = o.price_cents + o.fee_cents + o.itbms_cents;
-    const canCancel = !["released", "refunded", "cancelled"].includes(o.status);
+    const alert = /ATENCIÓN/.test(o.notes ?? "");
     return `<li class="panel order" data-id="${o.id}">
-      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(l?.title ?? "Anuncio")}</a><span class="b ${o.status === "released" ? "good" : ["refunded", "cancelled"].includes(o.status) ? "warn" : "prot"}">${f?.label ?? o.status}</span></div>
+      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Anuncio")}</a><span class="b ${cls}">${label}</span></div>
+      ${alert ? `<p class="notice bad" style="margin:8px 0 0">${esc((o.notes ?? "").split("\n").filter((x) => /ATENCIÓN/.test(x)).join(" "))}</p>` : ""}
+      ${o.stage === "claim" ? `<div class="notice warn" style="margin:8px 0 0"><b>Reclamo del comprador</b> (${fmtDate(o.claimed_at)}):<br>${esc(o.claim_reason ?? "")}<div class="claim-photos" data-photos="${esc(JSON.stringify(o.claim_photos ?? []))}"></div></div>` : ""}
       <dl class="rows">
-        <div><dt>Vendedor</dt><dd>${esc(sellers.get(o.seller_id)?.display_name ?? "—")}</dd></div>
-        <div><dt>Comprador</dt><dd>${esc(o.buyer_contact || "—")}</dd></div>
+        <div><dt>Vendedor</dt><dd>${esc(o.seller_name ?? "—")}</dd></div>
+        ${["ready", "released"].includes(o.stage) ? `<div><dt>Yappy del vendedor</dt><dd>${o.payout_phone ? `${esc(o.payout_phone)} · ${esc(o.payout_name ?? "")}` : `<span style="color:var(--down)">No lo ha puesto en Mi cuenta</span>`}</dd></div>` : ""}
+        <div><dt>Comprador</dt><dd>${esc(o.buyer_contact || (o.buyer_id ? `Cuenta ${o.buyer_id.slice(0, 8).toUpperCase()}` : "—"))}</dd></div>
         <div><dt>El comprador paga</dt><dd>${formatUsd(total)}</dd></div>
         <div><dt>Pagar al vendedor</dt><dd>${formatUsd(o.price_cents)}</dd></div>
         <div><dt>Comisión (+ ITBMS ${formatUsd(o.itbms_cents)})</dt><dd>${formatUsd(o.fee_cents)}</dd></div>
         ${o.payment_ref ? `<div><dt>Ref. de pago</dt><dd>${esc(o.payment_ref)}</dd></div>` : ""}
-        <div><dt>Creada / actualizada</dt><dd>${fmtDate(o.created_at)} · ${fmtDate(o.updated_at)}</dd></div>
+        ${o.delivered_at ? `<div><dt>Entregada</dt><dd>${fmtDate(o.delivered_at)}${o.buyer_confirmed_at ? " · el comprador confirmó" : ""}</dd></div>` : ""}
+        ${o.stage === "delivered" ? `<div><dt>Se puede pagar al vendedor desde</dt><dd>${fmtDate(o.ready_at)}</dd></div>` : ""}
+        ${o.payout_ref ? `<div><dt>Ref. del pago al vendedor</dt><dd>${esc(o.payout_ref)}</dd></div>` : ""}
+        <div><dt>Creada / actualizada</dt><dd>${fmtDate(o.created_at)} · ${fmtDate(o.updated_at)}${o.source === "checkout" ? " · pagó en línea" : ""}</dd></div>
       </dl>
       <label class="f muted-label" style="margin-top:8px">Notas<textarea class="textarea order-notes" rows="2" maxlength="500">${esc(o.notes ?? "")}</textarea></label>
       <div class="order-actions">
-        ${f?.next ? `<button class="btn primary" data-act="next">${f.action}</button>` : ""}
-        ${canCancel ? `<button class="btn danger" data-act="cancel">${PAID_STATES.includes(o.status) ? "Reembolsar" : "Cancelar"}</button>` : ""}
+        ${(STAFF_ACTIONS[o.stage] ?? []).map(([a, t, st]) => `<button class="btn ${st}" data-act="${a}">${t}</button>`).join("")}
         <button class="btn" data-act="notes">Guardar notas</button>
       </div><div class="order-msg"></div></li>`;
   };
+  const list = (xs, empty) => xs.length ? `<ul class="admin-list">${xs.map(card).join("")}</ul>` : `<p class="muted small">${empty}</p>`;
 
   body.innerHTML = `
     <section class="panel col"><h2>Nueva orden protegida</h2>
@@ -4067,9 +4332,21 @@ async function adminOrders(body) {
       <div class="row-input"><input class="input" id="noSearch" placeholder="Busca el anuncio (título, jugador, set…)"><button class="btn" id="noFind" style="border-radius:12px">Buscar</button></div>
       <div id="noResults"></div>
     </section>
-    <h2 class="display admin-h">Abiertas (${open.length})</h2>
-    ${open.length ? `<ul class="admin-list">${open.map(card).join("")}</ul>` : `<p class="muted small">No hay órdenes abiertas.</p>`}
-    <details class="admin-closed"><summary>Cerradas (${closed.length})</summary>${closed.length ? `<ul class="admin-list">${closed.map(card).join("")}</ul>` : `<p class="muted small">Ninguna todavía.</p>`}</details>`;
+    <h2 class="display admin-h">Pagar hoy (${payNow.length})</h2>
+    <p class="small muted" style="margin:0">El comprador confirmó o pasaron los 3 días sin reclamo. Envíale al vendedor el monto por Yappy y marca “Ya le pagué”.</p>
+    ${list(payNow, "Nada por pagar.")}
+    ${claims.length ? `<h2 class="display admin-h">Reclamos (${claims.length})</h2>${list(claims, "")}` : ""}
+    <h2 class="display admin-h">En curso (${open.length})</h2>
+    ${list(open, "No hay órdenes en curso.")}
+    <details class="admin-closed"><summary>Cerradas (${closed.length})</summary>${list(closed, "Ninguna todavía.")}</details>`;
+
+  // claim photos (private bucket: short-lived links for staff)
+  body.querySelectorAll(".claim-photos").forEach(async (el) => {
+    const paths = JSON.parse(el.dataset.photos || "[]");
+    if (!paths.length) { el.innerHTML = `<span class="xs muted">Sin fotos.</span>`; return; }
+    const { data } = await sb.storage.from("claim-photos").createSignedUrls(paths, 3600);
+    el.innerHTML = (data ?? []).filter((x) => x.signedUrl).map((x) => `<a href="${esc(x.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(x.signedUrl)}" alt="Foto del reclamo"></a>`).join("");
+  });
 
   // new order
   const find = async () => {
@@ -4118,6 +4395,18 @@ async function adminOrders(body) {
   $("#noSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); find(); } });
 
   // order actions
+  const ASK = {
+    mark_paid: ["Referencia del pago (Yappy o transferencia):", "payment_ref"],
+    release: ["Referencia del Yappy que le enviaste al vendedor:", "payout_ref"],
+    refund: ["Referencia del reembolso (opcional):", null],
+    reject_claim: ["¿Por qué se rechaza el reclamo? (queda en las notas)", null],
+  };
+  const CONFIRM = {
+    cancel: "¿Cancelar esta orden? No hubo pago.",
+    refund: "¿Marcar como reembolsada? Confirma que ya le devolviste el dinero al comprador. La carta vuelve a estar a la venta.",
+    buyer_confirmed: "¿El comprador te confirmó que recibió la carta bien? Queda lista para pagarle al vendedor.",
+    mark_delivered: "¿El comprador ya tiene la carta? Empiezan sus 3 días para reclamar.",
+  };
   body.querySelectorAll("li.order").forEach((li) => {
     const o = orders.find((x) => x.id === li.dataset.id), msg = li.querySelector(".order-msg");
     li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
@@ -4126,37 +4415,18 @@ async function adminOrders(body) {
         const { error } = await sb.from("protected_orders").update({ notes: li.querySelector(".order-notes").value.trim() || null }).eq("id", o.id);
         return error ? adminFail(error, msg) : (msg.innerHTML = `<p class="notice good" style="margin:0">Notas guardadas.</p>`);
       }
-      const patch = {};
-      let listingStatus = null;
-      if (act === "cancel") {
-        const refund = PAID_STATES.includes(o.status);
-        if (!confirm(refund ? "¿Marcar como reembolsada? Confirma que ya le devolviste el dinero al comprador." : "¿Cancelar esta orden?")) return;
-        patch.status = refund ? "refunded" : "cancelled";
-        listingStatus = "active";
-      } else {
-        patch.status = ORDER_FLOW[o.status].next;
-        if (patch.status === "paid") {
-          const ref = prompt("Referencia del pago (Yappy o transferencia):", o.payment_ref ?? "");
-          if (ref === null) return;
-          patch.payment_ref = ref.trim() || null;
-          listingStatus = "reserved";
-        }
-        if (patch.status === "released" && !confirm(`¿Ya le pagaste ${formatUsd(o.price_cents)} al vendedor? Esto cierra la orden y marca la carta como vendida.`)) return;
-        if (patch.status === "released") listingStatus = "sold";
+      let ref = null;
+      if (ASK[act]) {
+        const [q, field] = ASK[act];
+        ref = prompt(act === "release" ? `Pagar ${formatUsd(o.price_cents)} a ${o.seller_name ?? "el vendedor"}${o.payout_phone ? ` (Yappy ${o.payout_phone})` : ""}.\n${q}` : q, (field && o[field]) || "");
+        if (ref === null) return;
       }
+      if (CONFIRM[act] && !confirm(CONFIRM[act])) return;
       li.querySelectorAll("button").forEach((x) => (x.disabled = true));
-      const { error } = await sb.from("protected_orders").update(patch).eq("id", o.id);
-      if (error) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(error, msg); }
-      if (listingStatus) await sb.from("listings").update({ status: listingStatus }).eq("id", o.listing_id);
-      if (patch.status === "released") {
-        // Record the sale: this is the local Panama price data behind the estimates.
-        const l = byListing.get(o.listing_id);
-        const { error: saleErr } = await sb.from("sales").insert({
-          listing_id: o.listing_id, catalog_id: l?.catalog_id ?? null,
-          grading_key: l?.grading_company ? `${l.grading_company}${Number(l.grade)}` : "raw",
-          condition: l?.condition ?? null, price_cents: o.price_cents, via_protected: true,
-        });
-        if (saleErr && saleErr.code !== "23505") console.error(saleErr); // 23505 = already recorded
+      const { error } = await sb.rpc("staff_order_action", { p_order: o.id, p_action: act, p_ref: ref?.trim() || null });
+      if (error) {
+        li.querySelectorAll("button").forEach((x) => (x.disabled = false));
+        return adminFail(error, msg, /not allowed/.test(error.message ?? "") ? "La orden cambió de estado. Recarga el panel." : "No se pudo guardar. Intenta de nuevo.");
       }
       route();
     }));
@@ -4500,8 +4770,8 @@ function viewTerms(app) {
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
-    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más la comisión de protección: ${fee}.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>El comprador tiene 3 días desde que recibe la carta para avisarnos si no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta cuando el comprador confirma que la recibió bien, o a los 3 días de la entrega si no hubo reclamo.</li></ol><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado, incluida la comisión; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe mandarnos fotos o video de la carta como la recibió. Si la venta no se concreta por causa del vendedor, también devolvemos todo. La comisión no se reembolsa si el comprador desiste por otras razones después de recibir la carta.</p><p>El vendedor recibe el 100% del precio publicado, o del precio que aceptó en una oferta; la comisión la paga el comprador y se calcula sobre ese precio.</p>`],
-    ["Pagos por fuera de ${esc(CONFIG.APP_NAME)}", `<p>Si conociste al comprador o al vendedor en ${esc(CONFIG.APP_NAME)}, la venta se paga con Compra Protegida. <b>Está prohibido cerrar el trato por fuera</b> (por WhatsApp, en persona o en otra app) para no pagar la comisión: podemos retirar los anuncios y suspender las cuentas que lo hagan.</p><p>Si aun así pagas por fuera, ${esc(CONFIG.APP_NAME)} no puede protegerte ni devolverte el dinero. Nunca le pagues directo al vendedor.</p>`],
+    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más la comisión de protección: ${fee}.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado, incluida la comisión; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo. La comisión no se reembolsa si el comprador desiste por otras razones después de recibir la carta.</p><p>El vendedor recibe el 100% del precio publicado, o del precio que aceptó en una oferta; la comisión la paga el comprador y se calcula sobre ese precio.</p>`],
+    [`Pagos por fuera de ${esc(CONFIG.APP_NAME)}`, `<p>Si conociste al comprador o al vendedor en ${esc(CONFIG.APP_NAME)}, la venta se paga con Compra Protegida. <b>Está prohibido cerrar el trato por fuera</b> (por WhatsApp, en persona o en otra app) para no pagar la comisión: podemos retirar los anuncios y suspender las cuentas que lo hagan.</p><p>Si aun así pagas por fuera, ${esc(CONFIG.APP_NAME)} no puede protegerte ni devolverte el dinero. Nunca le pagues directo al vendedor.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
     ["Plan Coleccionista", `<p>Es una suscripción opcional de ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes. Sin el plan, cada cuenta puede escanear 3 cartas al día en “¿Cuánto vale tu carta?”; con el plan, sin límite para uso personal (ponemos un tope diario alto para evitar abusos).</p><ul><li>Cada pago activa el plan por 30 días. No se renueva solo: si no vuelves a pagar, tu cuenta regresa al plan gratis.</li><li>Los valores que muestra el escáner son referencias de mercado, no tasaciones (sección 5).</li><li>Podemos cambiar el precio o lo que incluye el plan; los cambios aplican desde tu siguiente pago.</li></ul>`],
@@ -4518,11 +4788,11 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, y la referencia del pago.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, la referencia del pago, cuándo se entregó y confirmó la carta, y los reclamos con sus fotos (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Cobro de ventas:</b> si vendes, tu número de Yappy y el nombre del titular, para enviarte tu dinero. Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Coordinar las Compras Protegidas y atender reclamos.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
-    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>Tiendas aliadas</b>: si pides una Revisión en tienda, le damos a la tienda tu nombre para mostrar y los datos de la carta para coordinar la cita.</li><li><b>WhatsApp (Meta)</b>: solo si decides contactarnos por ahí.</li><li><b>Cloudflare Turnstile</b>: el captcha de entrar y crear cuenta. Revisa datos técnicos de tu navegador para distinguir personas de robots.</li><li><b>Google Fonts y jsDelivr</b>: sirven la letra y el código de la página; reciben tu IP al descargarlos, como cualquier sitio web.</li><li><b>Catálogos y guías de precios</b> (TCGdex, Pokémon TCG API, PriceCharting, Cardmarket y otros): les pedimos datos de la carta, nunca datos tuyos.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
+    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>Tiendas aliadas</b>: si pides una Revisión en tienda, le damos a la tienda tu nombre para mostrar y los datos de la carta para coordinar la cita.</li><li><b>Yappy (Banco General)</b>: procesa los pagos en línea. Recibe el monto y la referencia de tu compra; tus datos de pago los das directamente en la app de Yappy y nunca pasan por ${esc(CONFIG.APP_NAME)}. También usamos Yappy para pagarles a los vendedores.</li><li><b>WhatsApp (Meta)</b>: solo si decides contactarnos por ahí.</li><li><b>Cloudflare Turnstile</b>: el captcha de entrar y crear cuenta. Revisa datos técnicos de tu navegador para distinguir personas de robots.</li><li><b>Google Fonts y jsDelivr</b>: sirven la letra y el código de la página; reciben tu IP al descargarlos, como cualquier sitio web.</li><li><b>Catálogos y guías de precios</b> (TCGdex, Pokémon TCG API, PriceCharting, Cardmarket y otros): les pedimos datos de la carta, nunca datos tuyos.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
     ["Cuánto tiempo los guardamos", `<p>Mientras tengas tu cuenta. Si la cierras, borramos tus datos en un plazo razonable, salvo lo que debamos conservar por obligaciones legales o contables (por ejemplo, registros de Compras Protegidas) o para resolver disputas.</p>`],
     ["Tus derechos", `<p>Tienes derecho a <b>acceder</b> a tus datos, <b>rectificarlos</b>, <b>cancelarlos</b> (borrarlos), <b>oponerte</b> a su uso y pedir su <b>portabilidad</b>. Puedes cambiar tu nombre y fotos desde <a href="#/cuenta">Mi cuenta</a>; para lo demás escribe a ${legalVal("EMAIL")} y te respondemos en los plazos de la ley. Si no quedas conforme, puedes acudir a la Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI).</p>`],
     ["Cookies y almacenamiento en tu navegador", `<p>No usamos cookies de publicidad ni rastreadores de terceros (como Google Analytics o el píxel de Meta). Guardamos en el almacenamiento local de tu navegador solo esto:</p><ul><li><b>Tu sesión</b>, para que no tengas que entrar cada vez.</li><li><b>Un identificador anónimo de uso</b>, para contar visitas sin saber quién eres.</li><li><b>Una copia temporal de precios</b>, para que la página cargue más rápido.</li></ul><p>Puedes borrarlo cuando quieras desde la configuración de tu navegador; si lo haces, se cierra tu sesión.</p>`],
