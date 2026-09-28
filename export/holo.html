@@ -73,16 +73,9 @@ kbd { font-family: var(--sans); font-size: 11px; font-weight: 600; line-height: 
 header.top { position: sticky; top: 0; z-index: 40; background: var(--glass); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
 header.top .row { position: relative; display: flex; align-items: center; gap: 8px; height: var(--header-h); }
 .logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.02em; }
-.logo .tagline { max-width: 175px; padding-left: 10px; border-left: 1px solid var(--border); font-size: 11px; font-weight: 500; line-height: 1.25; letter-spacing: 0; color: var(--fg-2); }
-@media (max-width: 480px) { .logo .tagline { max-width: 140px; font-size: 10px; } }
 .logo .mark { flex-shrink: 0; position: relative; width: 22px; height: 22px; border-radius: 7px; background: var(--fg); overflow: hidden; }
 .logo .mark::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / .7) 50%, transparent 75%); transform: translate(-100%); }
 .logo:hover .mark::after { animation: shine 2s linear infinite; }
-@media (max-width: 899.98px) { header.top .logo { position: absolute; left: 50%; transform: translateX(-50%); } }
-nav.links { display: flex; align-items: center; gap: 4px; margin-left: 20px; }
-nav.links a { padding: 8px 12px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; white-space: nowrap; color: var(--fg-2); transition: color .15s var(--ease), background-color .15s var(--ease); }
-nav.links a:hover { color: var(--fg); }
-nav.links a[aria-current="page"] { color: var(--brand); }
 .top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .nav-account { display: flex; align-items: center; gap: 8px; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-md); border: 0; background: transparent; color: var(--fg); cursor: pointer; transition: background-color .15s var(--ease), color .15s var(--ease); }
@@ -91,8 +84,11 @@ nav.links a[aria-current="page"] { color: var(--brand); }
 .search-trigger { display: inline-flex; align-items: center; gap: 8px; height: 36px; min-width: 250px; padding: 0 6px 0 12px; border: 1px solid var(--input); border-radius: var(--radius-md); background: var(--field); color: var(--fg-3); font-size: 14px; cursor: pointer; transition: background-color .15s var(--ease), border-color .15s var(--ease); }
 .search-trigger:hover { background: rgb(255 255 255 / .07); color: var(--fg-2); }
 .search-trigger kbd { margin-left: auto; }
-@media (min-width: 900px) and (max-width: 1179.98px) { .search-trigger { min-width: 0; width: 36px; padding: 0; justify-content: center; } .search-trigger span, .search-trigger kbd, .acct .nm { display: none; } .acct { padding-right: 8px; } }
-@media (max-width: 899.98px) { .search-trigger { min-width: 0; width: 36px; padding: 0; justify-content: center; border: 0; background: none; color: var(--fg); } .search-trigger:hover { background: var(--muted); } .search-trigger .i { width: 20px; height: 20px; } .search-trigger span, .search-trigger kbd { display: none; } }
+@media (min-width: 1024px) { .search-trigger { width: clamp(250px, 30vw, 420px); } }
+@media (max-width: 767.98px) { .search-trigger { min-width: 0; width: 36px; padding: 0; justify-content: center; border: 0; background: none; color: var(--fg); } .search-trigger:hover { background: var(--muted); } .search-trigger .i { width: 20px; height: 20px; } .search-trigger span, .search-trigger kbd { display: none; } }
+@media (max-width: 1023.98px) { .top-right .acct .nm { display: none; } .top-right .acct { padding-right: 8px; } }
+@media (max-width: 639.98px) { header.top .row, .top-right { gap: 6px; } .top-right .acct { gap: 4px; padding: 0 3px; } .top-right .acct > .i { display: none; } }
+@media (max-width: 379.98px) { .top-right .btn.sell-btn { padding: 0 12px; } .top-right .btn.sell-btn .i { display: none; } header.top .logo { gap: 8px; } }
 .acct { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 4px; border: 1px solid var(--border); border-radius: 999px; background: transparent; font-size: 14px; font-weight: 600; cursor: pointer; transition: background-color .15s var(--ease); }
 .acct:hover, .acct[aria-expanded="true"] { background: var(--muted); }
 .acct .nm { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -100,17 +96,24 @@ nav.links a[aria-current="page"] { color: var(--brand); }
 .avatar { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--muted); color: var(--fg); font-size: 13px; font-weight: 700; flex-shrink: 0; }
 .avatar.lg { width: 44px; height: 44px; font-size: 16px; background: var(--muted); }
 
-/* mobile menu: full-width popover under the header, like Collectr's */
-.mmenu { position: fixed; z-index: 45; top: var(--header-h); left: 0; right: 0; background: var(--glass-strong); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border-bottom: 1px solid var(--border); padding: 12px 16px 20px; transform-origin: top center; box-shadow: var(--shadow-lg); }
-.mmenu[hidden] { display: none; }
-.mmenu nav { display: grid; gap: 4px; }
-.mmenu nav a { display: flex; align-items: center; justify-content: space-between; padding: 12px; margin: 0 -4px; border-radius: var(--radius-md); font-size: 16px; font-weight: 500; transition: background-color .15s var(--ease); }
-.mmenu nav a:hover { background: var(--muted); }
-.mmenu nav a[aria-current="page"] { color: var(--brand); }
-.mmenu nav a .i { color: var(--fg-3); }
-.mm-foot { margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
-.mm-user { display: flex; align-items: center; gap: 10px; font-weight: 600; min-width: 0; }
-.mm-user span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* side menu: every section lives in a drawer from the left; the header keeps logo, search, account and Vender */
+.sidenav { position: fixed; z-index: 60; top: 0; bottom: 0; left: 0; display: flex; flex-direction: column; width: min(320px, 86vw); padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); background: var(--glass-strong); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); border-right: 1px solid var(--border); box-shadow: var(--shadow-lg); overflow-y: auto; overscroll-behavior: contain; }
+.sidenav[hidden] { display: none; }
+.sidenav[data-state="open"] { animation: slideFromLeft .35s var(--ease-drawer); }
+.sidenav[data-state="closed"] { animation: slideToLeft .25s var(--ease-drawer) forwards; }
+.sn-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; }
+.sn-tag { margin: 4px 0 0; font-size: 12px; line-height: 1.35; color: var(--fg-2); }
+.sn-links { display: grid; gap: 2px; margin-top: 18px; }
+.sn-links a { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: var(--radius-md); color: var(--fg-2); font-size: 15px; font-weight: 600; transition: background-color .15s var(--ease), color .15s var(--ease); }
+.sn-links a:hover, .sn-links a[aria-current="page"] { background: var(--muted); color: var(--fg); }
+.sn-links a .i { width: 18px; height: 18px; color: var(--fg-3); }
+.sn-links a[aria-current="page"] .i { color: var(--fg); }
+.sn-links a .nbadge { margin-left: auto; }
+.sn-foot { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--border); display: grid; gap: 12px; }
+.sn-user { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
+.sn-user .who { display: grid; min-width: 0; }
+.sn-user .who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sn-user .who .xs { font-weight: 400; }
 
 /* ---------------------------------------------------------------- buttons + fields */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 18px; border: 1px solid transparent; border-radius: 999px; background: var(--muted); color: var(--fg); font-size: 14px; font-weight: 600; white-space: nowrap; cursor: pointer; user-select: none; transition: color .15s var(--ease), background-color .15s var(--ease), border-color .15s var(--ease), box-shadow .15s var(--ease), transform .15s var(--ease), opacity .15s var(--ease); }
@@ -191,10 +194,7 @@ label.f .hint { font-weight: 400; color: var(--fg-2); }
 .intro h1 { margin-top: 14px; max-width: 780px; font-size: clamp(32px, 5.2vw, 52px); line-height: 1.04; letter-spacing: -.035em; font-weight: 800; }
 .lead { margin-top: 14px; max-width: 620px; color: var(--fg-2); font-size: 16px; }
 .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
-.finder { margin-top: 28px; }
-.finder form { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
-.finder .input-icon { flex: 1; }
-@media (min-width: 640px) { .finder form { flex-direction: row; } .finder .btn { min-width: 112px; } }
+.rtools { display: flex; align-items: center; gap: 8px; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; max-width: calc(100% + 32px); }
 .chips::-webkit-scrollbar { display: none; }
@@ -527,6 +527,58 @@ details.report .i { width: 14px; height: 14px; }
 .acc-shop .shp { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 16 / 9; margin-top: 6px; padding: 16px; border: 1.5px dashed var(--input); border-radius: var(--radius-lg); background: var(--card); color: var(--fg-2); font-size: 14px; font-weight: 500; text-align: center; object-fit: cover; transition: border-color .15s var(--ease); }
 .acc-shop:hover .shp, .acc-shop:focus-within .shp { border-color: #525252; }
 .acc-shop img.shp { padding: 0; border-style: solid; }
+/* my account: the seller's dashboard (numbers only) */
+.account.dash { max-width: none; }
+.account.dash .acc-form { max-width: 640px; }
+.dash-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.dash-me { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.dash-name { font-size: 28px; line-height: 1.1; letter-spacing: -.035em; font-weight: 800; overflow-wrap: anywhere; }
+.dash-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-body { margin-top: 24px; display: grid; gap: 16px; }
+.dash-body > .loading { padding: 24px 0; }
+.dash-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 640px) { .dash-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .dash-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.dtile { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-xl); background: var(--card); }
+.dtile .k { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--fg-2); }
+.dtile .k .i { width: 15px; height: 15px; color: var(--fg-3); }
+.dtile .v { margin-top: 6px; font-size: 28px; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.dtile .s { margin-top: 4px; font-size: 12px; line-height: 1.35; color: var(--fg-3); }
+.dash-seg { display: inline-flex; gap: 4px; padding: 4px; border-radius: var(--radius-lg); background: var(--muted); }
+.dash-seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 8px; background: none; color: var(--fg-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.dash-seg button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm); }
+.dash-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.dash-row { display: grid; gap: 12px; padding: 14px 0; border-top: 1px solid var(--border); }
+.dash-list > .dash-row:first-child, .dash-list > .dash-hrow + .dash-row { border-top: 0; padding-top: 4px; }
+.dr-card { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dr-thumb { flex-shrink: 0; width: 48px; aspect-ratio: 63 / 88; overflow: hidden; border-radius: 6px; background: var(--muted); }
+.dr-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dr-info { display: grid; gap: 2px; min-width: 0; }
+.dr-title { overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.dr-card:hover .dr-title { text-decoration: underline; text-underline-offset: 3px; }
+.dr-sub, .dr-meta { overflow: hidden; font-size: 12px; color: var(--fg-2); text-overflow: ellipsis; white-space: nowrap; }
+.dr-meta b { font-size: 13px; color: var(--fg); }
+.dr-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.dr-stats > div { min-width: 0; padding: 8px 10px; border-radius: var(--radius-md); background: var(--muted); }
+.dr-stats dt { font-size: 11px; font-weight: 600; color: var(--fg-3); }
+.dr-stats dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dr-stats dd.zero { color: var(--fg-3); }
+.dr-stats dd small { display: block; font-size: 11px; font-weight: 500; color: var(--fg-2); }
+.dash-hrow { display: none; }
+@media (min-width: 640px) and (max-width: 899.98px) { .dr-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (min-width: 900px) {
+  .dash-row { grid-template-columns: minmax(0, 1fr) 540px; align-items: center; }
+  .dr-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; }
+  .dr-stats > div, .dr-stats > span { padding: 0 4px; background: none; text-align: right; }
+  .dr-stats dt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .dash-hrow { display: grid; padding: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+  .dash-list > .dash-hrow + .dash-row { border-top: 1px solid var(--border); padding-top: 14px; }
+}
+.of-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.of-head .dr-thumb { width: 36px; }
+.of-head .of-t { flex: 1; min-width: 0; }
+.of-head .of-t a { display: block; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
 /* staff panel */
 .admin { padding-top: 32px; display: flex; flex-direction: column; gap: 16px; }
 .admin-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
@@ -596,8 +648,8 @@ fieldset.plain legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-we
 
 /* ---------------------------------------------------------------- overlays */
 .pop { position: fixed; z-index: 50; min-width: 220px; padding: 4px; background: var(--popover); border: 1px solid var(--input); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
-.pop[data-state="open"], .mmenu[data-state="open"] { animation: enter .15s ease; --tw-enter-opacity: 0; --tw-enter-scale: .95; --tw-enter-translate-y: -.5rem; }
-.pop[data-state="closed"], .mmenu[data-state="closed"] { animation: exit .15s ease forwards; --tw-exit-opacity: 0; --tw-exit-scale: .95; }
+.pop[data-state="open"] { animation: enter .15s ease; --tw-enter-opacity: 0; --tw-enter-scale: .95; --tw-enter-translate-y: -.5rem; }
+.pop[data-state="closed"] { animation: exit .15s ease forwards; --tw-exit-opacity: 0; --tw-exit-scale: .95; }
 .pop .item { display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; padding: 0 10px; border: 0; border-radius: var(--radius-sm); background: none; font-size: 14px; text-align: left; cursor: pointer; outline: none; transition: background-color .15s var(--ease); }
 .pop .item:hover, .pop .item:focus-visible { background: var(--muted); }
 .pop .item .i { color: var(--fg-2); }
@@ -701,6 +753,8 @@ body:not(.gate) .gate-bg { display: none; }
 /* Vaul drawer + overlay */
 @keyframes slideFromBottom { from { transform: translate3d(0, var(--initial-transform, 100%), 0); } to { transform: translate3d(0, 0, 0); } }
 @keyframes slideToBottom { to { transform: translate3d(0, var(--initial-transform, 100%), 0); } }
+@keyframes slideFromLeft { from { transform: translate3d(-100%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
+@keyframes slideToLeft { to { transform: translate3d(-100%, 0, 0); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes fadeOut { to { opacity: 0; } }
 /* shine, ping, custom loader */
@@ -727,16 +781,23 @@ body:not(.gate) .gate-bg { display: none; }
 <div class="bprogress" id="bprogress" aria-hidden="true"><div class="bar"><div class="peg"></div></div></div>
 <header class="top">
   <div class="wrap row">
-    <button class="icon-btn sm-only" id="menuBtn" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobileMenu"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-    <a class="logo" href="#/"><i class="mark" aria-hidden="true"></i><span id="brand">Holo</span><span class="tagline">#1 marketplace de cartas coleccionables en Panamá</span></a>
-    <nav class="links lg-only" id="navLinks" aria-label="Principal"></nav>
+    <button class="icon-btn" id="menuBtn" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="sideNav"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+    <a class="logo" href="#/"><i class="mark" aria-hidden="true"></i><span id="brand">Holo</span></a>
     <div class="top-right">
       <button class="search-trigger" id="searchBtn" type="button" aria-label="Buscar cartas" aria-haspopup="dialog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Buscar cartas…</span><kbd id="searchKbd">⌘K</kbd></button>
       <div class="nav-account" id="nav"></div>
     </div>
   </div>
 </header>
-<div class="mmenu" id="mobileMenu" hidden></div>
+<aside class="sidenav" id="sideNav" aria-label="Menú" hidden>
+  <div class="sn-head">
+    <a class="logo" href="#/"><i class="mark" aria-hidden="true"></i><span class="brand-name">Holo</span></a>
+    <button class="icon-btn" type="button" id="sideClose" aria-label="Cerrar menú"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <p class="sn-tag">#1 marketplace de cartas coleccionables en Panamá</p>
+  <nav class="sn-links" id="sideLinks" aria-label="Secciones"></nav>
+  <div class="sn-foot" id="sideFoot"></div>
+</aside>
 <main id="app" class="app"></main>
 <footer class="bottom"><div class="wrap"><p>© 2026 <span class="brand-name">Holo</span> · Hecho en Panamá · Precios en USD</p><p>Los precios estimados son referencias, no garantías ni tasaciones oficiales.</p><p><a href="#/terminos">Términos y condiciones</a> · <a href="#/privacidad">Privacidad</a></p></div></footer>
 <section aria-label="Notificaciones"><ol class="toaster" id="toaster"></ol></section>
@@ -974,6 +1035,11 @@ const ICONS = {
   user: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
   layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
   store: '<path d="M4 9v11h16V9"/><path d="M3 9l1.6-5h14.8L21 9z"/><path d="M9 20v-6h6v6"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+  eye: '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>',
 };
 const ic = (name, cls = "") => `<svg class="i${cls ? ` ${cls}` : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
 const TRI = {
@@ -1132,33 +1198,45 @@ function openMenu(trigger, items, { align = "end" } = {}) {
   (entries().find((n) => n.getAttribute("aria-checked") === "true") ?? entries()[0])?.focus({ preventScroll: true });
 }
 
-// ------------------------------------------------------------- mobile menu
-function toggleMobileMenu(force) {
-  const menu = $("#mobileMenu"), btn = $("#menuBtn");
-  const open = force ?? menu.hidden;
-  if (!open) return menu._close?.();
-  if (!menu.hidden) return;
-  menu.hidden = false;
-  menu.dataset.state = "open";
+// ------------------------------------------------------------- side menu
+// Every section lives in a drawer from the left, on phones, tablets and computers alike.
+function toggleSideNav(force) {
+  const nav = $("#sideNav"), btn = $("#menuBtn");
+  const open = force ?? nav.hidden;
+  if (!open) return nav._close?.();
+  if (!nav.hidden) return;
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.dataset.state = "open";
+  document.body.append(ov);
+  nav.hidden = false;
+  nav.dataset.state = "open";
+  nav.setAttribute("role", "dialog");
+  nav.setAttribute("aria-modal", "true");
   btn.setAttribute("aria-expanded", "true");
-  btn.setAttribute("aria-label", "Cerrar menú");
-  btn.innerHTML = ic("x");
+  lockScroll(true);
   let removeLayer = () => {};
-  const outside = (e) => { if (!menu.contains(e.target) && !btn.contains(e.target)) close(); };
+  const onKey = (e) => trapFocus(nav, e);
   const close = (instant) => {
-    if (!menu._close) return;
-    menu._close = null;
+    if (!nav._close) return;
+    nav._close = null;
     removeLayer();
-    document.removeEventListener("pointerdown", outside, true);
+    lockScroll(false);
+    nav.removeEventListener("keydown", onKey);
+    nav.removeAttribute("role");
+    nav.removeAttribute("aria-modal");
     btn.setAttribute("aria-expanded", "false");
-    btn.setAttribute("aria-label", "Abrir menú");
-    btn.innerHTML = ic("menu");
-    const hide = () => { menu.hidden = true; delete menu.dataset.state; };
-    if (instant === true) hide(); else animateOut(menu, hide);
+    const hide = () => { nav.hidden = true; delete nav.dataset.state; };
+    if (instant === true) { ov.remove(); hide(); return; }
+    animateOut(ov, () => ov.remove());
+    animateOut(nav, hide);
+    btn.focus({ preventScroll: true });
   };
-  menu._close = close;
+  nav._close = close;
+  nav.addEventListener("keydown", onKey);
+  ov.addEventListener("click", () => close());
   removeLayer = pushLayer(close);
-  document.addEventListener("pointerdown", outside, true);
+  (nav.querySelector('.sn-links [aria-current="page"]') ?? nav.querySelector(".sn-links a"))?.focus({ preventScroll: true });
 }
 
 // ------------------------------------------------------------- filters drawer (Vaul motion + drag to dismiss)
@@ -1288,7 +1366,7 @@ function thumbArt(l) {
 }
 function openSearch() {
   if ($(".cmd") || document.body.classList.contains("gate")) return;
-  toggleMobileMenu(false);
+  toggleSideNav(false);
   const { el, close } = modal("cmd", `<form class="cmd-in" role="search">${ic("search")}<input id="cmdQ" type="search" placeholder="Busca Charizard, Wembanyama, Prizm…" autocomplete="off" spellcheck="false" aria-label="Buscar cartas" aria-controls="cmdList" aria-autocomplete="list" role="combobox" aria-expanded="true"><kbd>Esc</kbd></form>
     <div class="cmd-list" id="cmdList" role="listbox" aria-label="Resultados"></div>
     <div class="cmd-foot"><span><kbd>↵</kbd> abrir</span><span><kbd>↑</kbd><kbd>↓</kbd> moverse</span><span><kbd>Esc</kbd> cerrar</span></div>`, { label: "Buscar cartas" });
@@ -1588,23 +1666,22 @@ async function route() {
   }
 }
 
-const NAV_LINKS = [["explorar", "#/", "Explorar"], ["escanear", "#/escanear", "¿Cuánto vale?"], ["protegida", "#/protegida", "Compra Protegida"], ["vender", "#/vender", "Vender"]];
+const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["escanear", "#/escanear", "¿Cuánto vale?", "camera"], ["protegida", "#/protegida", "Compra Protegida", "shield"], ["vender", "#/vender", "Vender", "plus"]];
 function renderNav() {
   const { path } = parseHash();
   const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(isStaff ? [["admin", "#/admin", "Admin"]] : [])];
-  const links = (arrow, extra = []) => [...all, ...extra].map(([k, href, text]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${text}${arrow ? ic("chevronRight") : ""}</a>`).join("");
+  const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
-  $("#navLinks").innerHTML = links(false);
+  const badge = pendingOffers ? `<span class="nbadge" title="Tienes cosas pendientes en Mi cuenta">${pendingOffers}</span>` : "";
+  $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span>${k === "cuenta" ? badge : ""}</a>`).join("");
+  $("#sideFoot").innerHTML = session
+    ? `<p class="sn-user"><span class="avatar">${initial}</span><span class="who"><span>${esc(name)}</span>${session.user.email ? `<span class="xs muted">${esc(session.user.email)}</span>` : ""}</span></p><button type="button" class="btn outline block" id="snSignOut">${ic("logout")}Salir</button>`
+    : sb ? `<a class="btn primary block" href="#/entrar">Iniciar sesión</a>` : `<a class="btn primary block" href="#/vender">Publica tu carta gratis</a>`;
+  const sell = `<a class="btn primary sm sell-btn" href="#/vender">${ic("plus")}Vender</a>`;
   $("#nav").innerHTML = session
-    ? `<button type="button" class="acct lg-only" id="acctBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${pendingOffers ? `<span class="nbadge" title="Tienes cosas pendientes en Mi cuenta">${pendingOffers}</span>` : ""}${ic("chevronDown")}</button>
-       <a class="btn primary sm lg-only" href="#/vender">${ic("plus")}Vender</a>`
-    : sb ? `<a class="btn primary sm lg-only" href="#/entrar">Iniciar sesión</a>` : "";
-  $("#mobileMenu").innerHTML = `<nav aria-label="Menú">${links(true, session ? [["cuenta", "#/cuenta", `Mi cuenta${pendingOffers ? ` (${pendingOffers})` : ""}`]] : [])}</nav>
-    <div class="mm-foot">${session
-      ? `<p class="mm-user"><span class="avatar">${initial}</span><span>${esc(name)}</span></p><button type="button" class="btn outline block" id="mmSignOut">${ic("logout")}Salir</button>`
-      : sb ? `<a class="btn primary block" href="#/entrar">Iniciar sesión</a>` : `<a class="btn primary block" href="#/vender">Publica tu carta gratis</a>`}</div>`;
+    ? `<button type="button" class="acct" id="acctBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Tu cuenta: ${esc(name)}"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${badge}${ic("chevronDown")}</button>${sell}`
+    : sb ? `<a class="acct" href="#/entrar" aria-label="Iniciar sesión"><span class="avatar">${ic("user")}</span><span class="nm">Iniciar sesión</span></a>${sell}` : sell;
   const signOut = async () => {
     const { error } = await sb.auth.signOut();
     if (error) return toast("No pudimos cerrar la sesión. Intenta de nuevo.", { type: "error" });
@@ -1619,7 +1696,7 @@ function renderNav() {
     "sep",
     { label: "Salir", icon: "logout", onSelect: signOut },
   ]));
-  $("#mmSignOut")?.addEventListener("click", () => { toggleMobileMenu(false); signOut(); });
+  $("#snSignOut")?.addEventListener("click", () => { toggleSideNav(false); signOut(); });
 }
 
 // ============================================================= components
@@ -2283,12 +2360,7 @@ async function viewHome(app, params) {
       <h1 class="sr-only">Cartas coleccionables en Panamá, con precio claro</h1>
       <div class="cta"><a class="btn primary lg" href="#/vender">Publica tu carta gratis</a><a class="btn outline lg" href="#/escanear">${ic("camera")}¿Cuánto vale tu carta?</a><a class="btn outline lg" href="#/protegida">${ic("shield")}¿Cómo funciona Compra Protegida?</a></div></section>`}
     <div class="wrap">
-      <section class="panel finder"${filtered ? ' style="margin-top:24px"' : ""}>
-        <h2 class="ptitle">Encuentra una carta</h2>
-        <form id="finder" role="search"><div class="input-icon">${ic("search")}<input class="input" id="qHome" name="q" type="search" value="${esc(f.q ?? "")}" placeholder="Busca Charizard, Wembanyama, Prizm…" aria-label="Buscar cartas" autocomplete="off" enterkeyhint="search"></div>
-          <button class="btn primary">Buscar</button>${f.q ? `<a class="btn ghost" href="${hrefWith(f, { q: undefined })}">Limpiar</a>` : ""}</form>
-      </section>
-      <nav class="seller-seg" aria-label="Tipo de vendedor">
+      <nav class="seller-seg"${filtered ? ' style="margin-top:24px"' : ""} aria-label="Tipo de vendedor">
         ${[[undefined, "Todos"], ["tiendas", `${ic("store")}Tiendas verificadas`], ["particulares", "Particulares"]].map(([v, t]) => `<a class="${f.seller === v ? "on" : ""}" href="${hrefWith(f, { vendedor: v })}"${f.seller === v ? ' aria-current="true"' : ""}>${t}</a>`).join("")}
       </nav>
       ${f.seller === "tiendas" ? `<div class="panel shop-note"><p style="font-weight:600">Tiendas con local o marca comprobados por ${esc(CONFIG.APP_NAME)}</p>
@@ -2319,18 +2391,12 @@ async function viewHome(app, params) {
           </form>
         </aside>
         <section aria-labelledby="resultsTitle">
-          <div class="rhead"><h2 id="resultsTitle">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : f.category ? esc(categoryName(f.category)) : "Recién publicadas"}</h2><p class="small muted num" id="count" aria-live="polite"></p></div>
+          <div class="rhead"><h2 id="resultsTitle">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : f.category ? esc(categoryName(f.category)) : "Recién publicadas"}</h2><div class="rtools">${f.q ? `<a class="btn ghost sm" href="${hrefWith(f, { q: undefined })}">${ic("x")}Quitar búsqueda</a>` : ""}<p class="small muted num" id="count" aria-live="polite"></p></div></div>
           <div id="list">${skeletonGrid(8)}</div>
         </section>
       </div>
     </div>`;
 
-  $("#finder").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const q = $("#qHome").value.trim();
-    $("#qHome").blur();
-    goList(hrefWith(f, { q: q || undefined }));
-  });
   const applyFilters = () => {
     const fd = new FormData($("#filterForm"));
     let min = String(fd.get("min") ?? "").trim(), max = String(fd.get("max") ?? "").trim();
@@ -2709,32 +2775,21 @@ const OFFER_STATUS = { pending: "Pendiente", countered: "Contraoferta", accepted
 async function renderActivity(uid, box) {
   const codePanel = `<section class="panel"><div class="phead"><h2 class="ptitle" style="margin:0">Tu código de comprador</h2><span class="code-big">${buyerCode()}</span></div>
     <p class="xs muted" style="margin:6px 0 0">Va en tu mensaje cuando compras con Compra Protegida. Así la compra queda en tu cuenta, se respeta el precio de tus ofertas aceptadas y puedes dejar una reseña.</p></section>`;
-  const [recv, mine, orders, done] = await Promise.all([
-    sb.from("offers").select("id, listing_id, buyer_id, amount_cents, counter_cents, status, updated_at").eq("seller_id", uid).in("status", ["pending", "countered", "accepted"]).order("updated_at", { ascending: false }).limit(30),
+  const [mine, orders, done] = await Promise.all([
     sb.from("offers").select("id, listing_id, amount_cents, counter_cents, status, updated_at").eq("buyer_id", uid).order("updated_at", { ascending: false }).limit(20),
     sb.from("protected_orders").select("id, listing_id, seller_id").eq("buyer_id", uid).eq("status", "released").limit(50),
     sb.from("reviews").select("order_id").eq("reviewer_id", uid).limit(200),
   ]);
   if (!box.isConnected) return;
-  if (recv.error) { box.innerHTML = codePanel; return; } // migration 0013 not applied yet
+  if (mine.error) { box.innerHTML = codePanel; return; } // migration 0013 not applied yet
   const reviewed = new Set((done.data ?? []).map((r) => r.order_id));
   const toReview = (orders.data ?? []).filter((o) => !reviewed.has(o.id));
-  const ids = [...new Set([...recv.data, ...(mine.data ?? []), ...toReview].map((x) => x.listing_id))];
+  const ids = [...new Set([...mine.data, ...toReview].map((x) => x.listing_id))];
   const { data: ls } = ids.length ? await sb.from("listings").select("id, title, price_cents, status").in("id", ids) : { data: [] };
   const L = new Map((ls ?? []).map((x) => [x.id, x]));
-  const people = await profilesById([...recv.data.map((o) => o.buyer_id), ...toReview.map((o) => o.seller_id)]);
+  const people = await profilesById(toReview.map((o) => o.seller_id));
   if (!box.isConnected) return;
   const link = (lid) => `<a href="#/carta/${encodeURIComponent(lid)}" style="font-weight:600">${esc(L.get(lid)?.title ?? "Anuncio")}</a>`;
-  const received = recv.data.map((o) => {
-    const l = L.get(o.listing_id), who = esc(people.get(o.buyer_id)?.display_name ?? "Un comprador");
-    const body = o.status === "pending"
-      ? `<p class="small" style="margin:6px 0 0">${who} ofrece <b>${formatUsd(o.amount_cents)}</b>${l ? ` · tu precio: ${formatUsd(l.price_cents)}` : ""}</p>
-        <div class="order-actions"><button class="btn primary sm" data-of="accept">Aceptar</button><button class="btn outline sm" data-of="reject">Rechazar</button>
-        <input class="input of-amt" type="number" step="0.01" inputmode="decimal" placeholder="Contraoferta $" aria-label="Contraoferta en dólares" style="max-width:150px;height:32px"><button class="btn sm" data-of="counter">Contraofertar</button></div>`
-      : o.status === "countered" ? `<p class="small" style="margin:6px 0 0">Le contraofertaste <b>${formatUsd(o.counter_cents)}</b> a ${who} (ofreció ${formatUsd(o.amount_cents)}). Esperando su respuesta.</p>`
-      : `<p class="small" style="margin:6px 0 0">Aceptaste <b>${formatUsd(o.amount_cents)}</b> de ${who}. Cuando pague con Compra Protegida, el equipo de ${esc(CONFIG.APP_NAME)} te escribe para la entrega.</p>`;
-    return `<li class="panel" data-offer="${o.id}" data-price="${l?.price_cents ?? 0}" data-amount="${o.amount_cents}"><div class="phead">${link(o.listing_id)}<span class="b ${o.status === "accepted" ? "good" : "prot"}">${OFFER_STATUS[o.status]}</span></div>${body}<div class="order-msg"></div></li>`;
-  });
   const made = (mine.data ?? []).map((o) => `<li class="panel"><div class="phead">${link(o.listing_id)}<span class="b ${o.status === "accepted" ? "good" : o.status === "countered" ? "prot" : "neutral"}">${OFFER_STATUS[o.status]}</span></div>
     <p class="small" style="margin:6px 0 0">Ofreciste ${formatUsd(o.amount_cents)}${o.status === "countered" ? ` · te contraofertaron <b>${formatUsd(o.counter_cents)}</b>. <a class="link" href="#/carta/${encodeURIComponent(o.listing_id)}">Responder</a>` : o.status === "accepted" ? `. <a class="link" href="#/carta/${encodeURIComponent(o.listing_id)}">Comprar a ese precio</a>` : ""}</p></li>`);
   const reviews = toReview.map((o) => `<li class="panel" data-order="${o.id}" data-seller="${o.seller_id}">
@@ -2743,9 +2798,20 @@ async function renderActivity(uid, box) {
     <textarea class="textarea rv-text" rows="2" maxlength="500" placeholder="Cuéntale a otros compradores cómo te fue (opcional)" style="margin-top:8px"></textarea>
     <button class="btn primary sm rv-send" style="margin-top:8px">Publicar reseña</button><div class="order-msg"></div></li>`);
   box.innerHTML = `${reviews.length ? `<section class="panel col"><h2>Deja tu reseña</h2><p class="xs muted" style="margin:0">Tu compra protegida terminó. Tu reseña ayuda a otros a comprar con confianza.</p><ul class="admin-list">${reviews.join("")}</ul></section>` : ""}
-    ${received.length ? `<section class="panel col"><h2>Ofertas recibidas</h2><ul class="admin-list">${received.join("")}</ul></section>` : ""}
     ${made.length ? `<section class="panel col"><h2>Mis ofertas</h2><ul class="admin-list">${made.join("")}</ul></section>` : ""}
     ${codePanel}`;
+  box.querySelectorAll(".rv-send").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), rating = Number(li.querySelector("input[type=radio]:checked")?.value);
+    if (!rating) return toast("Elige de 1 a 5 estrellas.", { type: "error" });
+    b.disabled = true;
+    const { error } = await sb.from("reviews").insert({ order_id: li.dataset.order, reviewer_id: uid, reviewee_id: li.dataset.seller, rating, comment: li.querySelector(".rv-text").value.trim() || null });
+    if (error && error.code !== "23505") { b.disabled = false; console.error(error); return toast("No pudimos publicar tu reseña. Intenta de nuevo.", { type: "error" }); }
+    toast("¡Gracias por tu reseña!");
+    renderActivity(uid, box);
+  }));
+}
+// Seller's answer to a received offer: accept, reject or counter. respond_offer() checks every rule again.
+function bindOfferActions(box, done) {
   box.querySelectorAll("[data-of]").forEach((b) => b.addEventListener("click", async () => {
     const li = b.closest("li"), action = b.dataset.of, args = { p_offer: li.dataset.offer, p_action: action };
     const price = Number(li.dataset.price), amount = Number(li.dataset.amount);
@@ -2759,17 +2825,143 @@ async function renderActivity(uid, box) {
     if (error) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); console.error(error); return toast(offerError(error, amount + 1, price - 1), { type: "error" }); }
     toast({ accept: "Oferta aceptada", reject: "Oferta rechazada", counter: "Contraoferta enviada" }[action]);
     refreshOfferBadge();
-    renderActivity(uid, box);
+    done();
   }));
-  box.querySelectorAll(".rv-send").forEach((b) => b.addEventListener("click", async () => {
-    const li = b.closest("li"), rating = Number(li.querySelector("input[type=radio]:checked")?.value);
-    if (!rating) return toast("Elige de 1 a 5 estrellas.", { type: "error" });
-    b.disabled = true;
-    const { error } = await sb.from("reviews").insert({ order_id: li.dataset.order, reviewer_id: uid, reviewee_id: li.dataset.seller, rating, comment: li.querySelector(".rv-text").value.trim() || null });
-    if (error && error.code !== "23505") { b.disabled = false; console.error(error); return toast("No pudimos publicar tu reseña. Intenta de nuevo.", { type: "error" }); }
-    toast("¡Gracias por tu reseña!");
-    renderActivity(uid, box);
-  }));
+}
+
+// Mi cuenta: the seller's dashboard. Their cards, the offers they received and, per card and in total,
+// how many people saw them. Only counts from our own events (migrations 0007 and 0017): no AI, and no
+// visitor ids leave the database. The seller's own visits and the staff's are not counted.
+let listingStatsOn = true;
+async function loadListingStats(uid, ids) {
+  if (!ids.length) return { totals: {}, byId: new Map() };
+  if (listingStatsOn) {
+    const { data, error } = await sb.rpc("my_listing_stats");
+    if (!error && data) return { totals: data.totals ?? {}, byId: new Map((data.listings ?? []).map((r) => [r.id, r])) };
+    if (!["PGRST202", "42883"].includes(error?.code)) { console.error(error); return null; }
+    listingStatsOn = false; // migration 0017 not applied yet
+  }
+  // Until 0017 runs, staff can read the raw events (0007 policy) and count them the same way here.
+  if (!isStaff) return null;
+  const [ev, own, team] = await Promise.all([
+    sb.from("events").select("name, visitor_id, user_id, listing_ref, created_at").in("listing_ref", ids)
+      .in("name", ["ver_carta", "click_whatsapp", "click_protegida", "compartir"]).limit(20000),
+    sb.from("events").select("visitor_id").eq("user_id", uid).limit(5000),
+    sb.from("profiles").select("id").eq("is_staff", true),
+  ]);
+  if (ev.error) { console.error(ev.error); return null; }
+  const ownBrowsers = new Set((own.data ?? []).map((r) => r.visitor_id));
+  const skipUsers = new Set([uid, ...(team.data ?? []).map((r) => r.id)]);
+  const rows = ev.data.filter((e) => !ownBrowsers.has(e.visitor_id) && !skipUsers.has(e.user_id));
+  const week = Date.now() - 7 * 864e5;
+  const people = (list) => new Set(list.map((e) => e.visitor_id)).size;
+  const count = (list) => {
+    const views = list.filter((e) => e.name === "ver_carta"), recent = views.filter((e) => Date.parse(e.created_at) >= week);
+    return {
+      views: views.length, visitors: people(views), views_7d: recent.length, visitors_7d: people(recent),
+      interested: people(list.filter((e) => e.name === "click_whatsapp" || e.name === "click_protegida")),
+      shares: list.filter((e) => e.name === "compartir").length,
+      last_view: views.reduce((m, e) => (!m || e.created_at > m ? e.created_at : m), null),
+    };
+  };
+  const by = new Map();
+  for (const e of rows) { if (!by.has(e.listing_ref)) by.set(e.listing_ref, []); by.get(e.listing_ref).push(e); }
+  return { totals: count(rows), byId: new Map([...by].map(([id, list]) => [id, count(list)])) };
+}
+const fmtN = (n) => new Intl.NumberFormat("es-PA").format(n ?? 0);
+function daysAgo(ts) {
+  const d = Math.floor((Date.now() - Date.parse(ts)) / 864e5);
+  return d <= 0 ? "hoy" : d === 1 ? "ayer" : `hace ${fmtN(d)} días`;
+}
+async function renderDashboard(uid, prof, box) {
+  const mine = () => sb.from("listings").select(listingCols()).eq("seller_id", uid).in("status", ["active", "reserved", "sold"]).order("created_at", { ascending: false }).limit(200);
+  let [ls, of] = await Promise.all([
+    mine(),
+    sb.from("offers").select("id, listing_id, buyer_id, amount_cents, counter_cents, status, created_at, updated_at").eq("seller_id", uid).order("updated_at", { ascending: false }).limit(200),
+  ]);
+  if (missingKind(ls.error)) { photoKinds = false; ls = await mine(); }
+  if (!box.isConnected) return;
+  if (ls.error) { console.error(ls.error); box.innerHTML = `<p class="notice bad">No pudimos cargar tus cartas. Recarga la página.</p>`; return; }
+  const listings = (ls.data ?? []).map((r) => rowToListing(r, prof));
+  const offers = of.error ? [] : of.data ?? []; // no offers table until migration 0013
+  const [stats, buyers] = await Promise.all([loadListingStats(uid, listings.map((l) => l.id)), profilesById(offers.map((o) => o.buyer_id))]);
+  if (!box.isConnected) return;
+
+  const byId = new Map(listings.map((l) => [l.id, l]));
+  const forSale = listings.filter((l) => l.status !== "sold"), sold = listings.filter((l) => l.status === "sold");
+  const made = offers.filter((o) => o.status !== "withdrawn"), pending = offers.filter((o) => o.status === "pending");
+  const t = stats?.totals ?? {};
+  const num = (v) => (stats ? fmtN(v) : "—");
+  const later = "Se activa pronto";
+  const tile = (icon, label, value, note) => `<div class="dtile"><p class="k">${ic(icon)}${label}</p><p class="v">${value}</p><p class="s">${note}</p></div>`;
+  const tiles = [
+    tile("grid", "En venta", fmtN(forSale.length), `${formatUsd(forSale.reduce((s, l) => s + toCents(l.priceUsd), 0))} en total${sold.length ? ` · ${fmtN(sold.length)} ${sold.length === 1 ? "vendida" : "vendidas"}` : ""}`),
+    tile("eye", "Vistas", num(t.views), stats ? `${fmtN(t.views_7d)} en los últimos 7 días` : later),
+    tile("users", "Personas", num(t.visitors), stats ? "vieron tus cartas" : later),
+    tile("cart", "Interesados", num(t.interested), stats ? "tocaron Comprar o WhatsApp" : later),
+    tile("tag", "Ofertas", fmtN(made.length), pending.length ? `${fmtN(pending.length)} por responder` : "ninguna por responder"),
+    tile("share", "Compartidas", num(t.shares), stats ? "veces que compartieron tus cartas" : later),
+  ];
+
+  const thumb = (l) => (l?.photos[0] ? `<img src="${esc(l.photos[0])}" alt="" loading="lazy" decoding="async">` : "");
+  const cell = (label, v, extra = "") => `<div><dt>${label}</dt><dd${v === 0 ? ' class="zero"' : ""}>${v == null ? "—" : fmtN(v)}${extra}</dd></div>`;
+  const row = (l) => {
+    const s = stats ? stats.byId.get(l.id) ?? {} : null;
+    const os = made.filter((o) => o.listing_id === l.id);
+    const best = Math.max(0, ...os.filter((o) => o.status !== "rejected").map((o) => o.amount_cents));
+    const meta = [`<b>${formatUsd(toCents(l.priceUsd))}</b>`, l.status === "reserved" ? "Reservada" : "", `publicada ${daysAgo(l.createdAt)}`, s?.last_view ? `última vista ${daysAgo(s.last_view)}` : ""].filter(Boolean).join(" · ");
+    return `<li class="dash-row"><a class="dr-card" href="#/carta/${encodeURIComponent(l.id)}"><span class="dr-thumb">${thumb(l)}</span>
+      <span class="dr-info"><span class="dr-title">${esc(l.title)}</span><span class="dr-sub">${esc([l.card.setName, l.card.number].filter(Boolean).join(" · "))}</span><span class="dr-meta">${meta}</span></span></a>
+      <dl class="dr-stats">${cell("Vistas", s ? s.views ?? 0 : null)}${cell("Personas", s ? s.visitors ?? 0 : null)}${cell("Últimos 7 días", s ? s.views_7d ?? 0 : null)}${cell("Ofertas", os.length, best ? `<small>mejor ${formatUsd(best)}</small>` : "")}${cell("Interesados", s ? s.interested ?? 0 : null)}${cell("Compartida", s ? s.shares ?? 0 : null)}</dl></li>`;
+  };
+  const head = `<li class="dash-row dash-hrow" aria-hidden="true"><span>Carta</span><div class="dr-stats">${["Vistas", "Personas", "7 días", "Ofertas", "Interesados", "Compartida"].map((h) => `<span>${h}</span>`).join("")}</div></li>`;
+  let tab = "venta";
+  const cards = () => {
+    const list = tab === "venta" ? forSale : sold;
+    if (list.length) return `<ul class="dash-list">${head}${list.map(row).join("")}</ul>`;
+    return tab === "venta"
+      ? `<div class="empty-state"><span class="ico">${ic("tag")}</span><p style="font-weight:600">Todavía no tienes cartas en venta.</p><p class="small muted" style="margin:4px 0 16px">Publicar es gratis. Aquí vas a ver cuánta gente mira cada carta.</p><a class="btn primary" href="#/vender">Publicar una carta</a></div>`
+      : `<div class="empty-state"><p style="font-weight:600">Todavía no has vendido cartas.</p></div>`;
+  };
+
+  const offerItem = (o) => {
+    const l = byId.get(o.listing_id), who = esc(buyers.get(o.buyer_id)?.display_name ?? "Un comprador");
+    const price = l ? toCents(l.priceUsd) : 0, pct = price ? Math.round((o.amount_cents / price) * 100) : 0;
+    const body = o.status === "pending"
+      ? `<p class="small" style="margin:8px 0 0">${who} ofrece <b>${formatUsd(o.amount_cents)}</b>${l ? ` · tu precio: ${formatUsd(price)} (${pct}%)` : ""}</p>
+        <div class="order-actions"><button class="btn primary sm" data-of="accept">Aceptar</button><button class="btn outline sm" data-of="reject">Rechazar</button>
+        <input class="input of-amt" type="number" step="0.01" inputmode="decimal" placeholder="Contraoferta $" aria-label="Contraoferta en dólares" style="max-width:150px;height:32px"><button class="btn sm" data-of="counter">Contraofertar</button></div>`
+      : o.status === "countered" ? `<p class="small" style="margin:8px 0 0">Le contraofertaste <b>${formatUsd(o.counter_cents)}</b> a ${who} (ofreció ${formatUsd(o.amount_cents)}). Esperando su respuesta.</p>`
+      : o.status === "accepted" ? `<p class="small" style="margin:8px 0 0">Aceptaste <b>${formatUsd(o.amount_cents)}</b> de ${who}. Cuando pague con Compra Protegida, el equipo de ${esc(CONFIG.APP_NAME)} te escribe para la entrega.</p>`
+      : `<p class="small muted" style="margin:8px 0 0">${who} ofreció ${formatUsd(o.amount_cents)}${pct ? ` (${pct}% de tu precio)` : ""}.</p>`;
+    return `<li class="panel" data-offer="${o.id}" data-price="${price}" data-amount="${o.amount_cents}">
+      <div class="of-head"><span class="dr-thumb">${thumb(l)}</span><div class="of-t"><a href="#/carta/${encodeURIComponent(o.listing_id)}">${esc(l?.title ?? "Anuncio")}</a><p class="xs muted">${esc(fmtDate(o.created_at))}</p></div>
+      <span class="b ${o.status === "accepted" ? "good" : ["pending", "countered"].includes(o.status) ? "prot" : "neutral"}">${OFFER_STATUS[o.status]}</span></div>${body}<div class="order-msg"></div></li>`;
+  };
+  const open = offers.filter((o) => ["pending", "countered", "accepted"].includes(o.status)).sort((a, b) => (b.status === "pending") - (a.status === "pending"));
+  const past = offers.filter((o) => ["rejected", "withdrawn"].includes(o.status));
+  const offersPanel = of.error ? "" : `<section class="panel col" aria-labelledby="dashOffersTitle">
+      <div class="phead"><h2 class="ptitle" id="dashOffersTitle">${ic("tag")}Ofertas recibidas</h2>${pending.length ? `<span class="b prot">${fmtN(pending.length)} por responder</span>` : ""}</div>
+      ${open.length ? `<ul class="admin-list" style="margin:0">${open.map(offerItem).join("")}</ul>` : `<p class="small muted" style="margin:0">${offers.length ? "No tienes ofertas abiertas." : "Todavía no te han hecho ofertas. Cuando alguien ofrezca por una de tus cartas, la verás aquí para aceptarla, rechazarla o contraofertar."}</p>`}
+      ${past.length ? `<details class="admin-closed"><summary>Anteriores (${fmtN(past.length)})</summary><ul class="admin-list">${past.map(offerItem).join("")}</ul></details>` : ""}
+    </section>`;
+
+  box.innerHTML = `<section class="dash-tiles" aria-label="Resumen de tus cartas">${tiles.join("")}</section>
+    <section class="panel col" aria-labelledby="dashCardsTitle">
+      <div class="phead"><h2 class="ptitle" id="dashCardsTitle">${ic("grid")}Mis cartas</h2>
+        ${sold.length ? `<div class="dash-seg" role="group" aria-label="Mostrar"><button type="button" data-tab="venta" aria-pressed="true">En venta · ${fmtN(forSale.length)}</button><button type="button" data-tab="vendidas" aria-pressed="false">Vendidas · ${fmtN(sold.length)}</button></div>` : ""}</div>
+      <div id="dashCards">${cards()}</div>
+      ${stats && listings.length ? `<p class="xs muted" style="margin:0">No cuentan tus propias visitas ni las del equipo de ${esc(CONFIG.APP_NAME)}. Interesados: personas que tocaron Comprar o WhatsApp en la carta.</p>` : ""}
+    </section>
+    ${offersPanel}`;
+  box.querySelector(".dash-seg")?.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-tab]");
+    if (!b) return;
+    tab = b.dataset.tab;
+    box.querySelectorAll(".dash-seg button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    $("#dashCards").innerHTML = cards();
+  });
+  bindOfferActions(box, () => renderDashboard(uid, prof, box));
 }
 
 // Mi cuenta: my purchases and sales (migration 0014). The stage and the 3-day window come from the
@@ -4197,13 +4389,16 @@ async function viewAccount(app) {
   }
   const st = { avatar: null, shopPhoto: null };
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
-  app.innerHTML = `<div class="account"><h1 class="display" style="font-size:30px">Mi cuenta</h1>
-    <p class="muted" style="margin:4px 0 0">Así te ven los compradores en tus anuncios. <a class="link" href="#/vendedor/${encodeURIComponent(uid)}">Ver mi perfil público</a></p>
+  app.innerHTML = `<div class="account dash">
+    <div class="dash-head"><div class="dash-me">${sellerAvatar(profileToSeller(uid, prof), 56)}<div style="min-width:0"><p class="kicker">Mi cuenta</p><h1 class="dash-name">${esc(prof.display_name)}</h1>${session.user.email ? `<p class="xs muted" style="margin-top:2px">${esc(session.user.email)}</p>` : ""}</div></div>
+      <div class="dash-actions"><a class="btn outline sm" href="#/vendedor/${encodeURIComponent(uid)}">Ver mi perfil público</a><a class="btn primary sm" href="#/vender">${ic("plus")}Publicar carta</a></div></div>
+    <div id="dash" class="dash-body"><p class="loading"><span class="spinner"></span>Cargando tus cartas…</p></div>
     <div id="accOrders" class="col" style="margin-top:24px;gap:16px"></div>
     <div id="accActivity" class="col" style="margin-top:16px;gap:16px"></div>
-    <form id="accForm" class="col" style="margin-top:24px" novalidate>
+    <form id="accForm" class="col acc-form" style="margin-top:24px" novalidate>
       <section class="panel col">
         <h2>Perfil</h2>
+        <p class="xs muted" style="margin:0">Así te ven los compradores en tus anuncios.</p>
         <div class="acc-avatar"><label class="acc-pick" title="Cambiar foto de perfil">${pic(profilePhotoUrl(prof.avatar_path), "av", esc(prof.display_name.slice(0, 1).toUpperCase()))}
           <input type="file" id="avatarIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
           <div><p style="margin:0;font-weight:600">Foto de perfil</p><p class="xs muted" style="margin:2px 0 0">Tu cara o el logo de tu tienda. Toca la foto para cambiarla.</p></div></div>
@@ -4226,6 +4421,7 @@ async function viewAccount(app) {
 
   renderOrders(uid, $("#accOrders"));
   renderActivity(uid, $("#accActivity"));
+  renderDashboard(uid, prof, $("#dash"));
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
   if (desc) { desc.addEventListener("input", count); count(); }
@@ -4268,7 +4464,7 @@ async function viewAccount(app) {
       const old = [st.avatar && prof.avatar_path, st.shopPhoto && prof.shop_photo_path].filter(Boolean);
       if (old.length) sb.storage.from("profile-photos").remove(old);
       Object.assign(prof, res.data); st.avatar = st.shopPhoto = null;
-      profileName = prof.display_name; renderNav();
+      profileName = prof.display_name; renderNav(); $(".dash-name")?.replaceChildren(prof.display_name);
       say("good", "Listo, tu perfil quedó guardado.");
     } catch (err) {
       console.error(err);
@@ -4906,15 +5102,16 @@ async function mountCaptcha(box) {
 document.querySelectorAll(".brand-name, #brand").forEach((n) => (n.textContent = CONFIG.APP_NAME));
 if (!/Mac|iPhone|iPad/i.test(navigator.userAgentData?.platform ?? navigator.platform ?? "")) $("#searchKbd").textContent = "Ctrl K";
 $("#searchBtn").addEventListener("click", openSearch);
-$("#menuBtn").addEventListener("click", () => toggleMobileMenu());
-$("#mobileMenu").addEventListener("click", (e) => { if (e.target.closest("a")) toggleMobileMenu(false); });
+$("#menuBtn").addEventListener("click", () => toggleSideNav());
+$("#sideClose").addEventListener("click", () => toggleSideNav(false));
+$("#sideNav").addEventListener("click", (e) => { if (e.target.closest("a")) toggleSideNav(false); });
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && layers.length) { e.preventDefault(); layers.at(-1).close(); return; }
   const palette = ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "k") || (e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey && !isTyping(e.target));
   if (palette && !document.body.classList.contains("gate")) { e.preventDefault(); openSearch(); }
 });
-// Leaving the mobile layout closes the mobile-only overlays.
-for (const q of ["(min-width: 900px)", "(min-width: 1024px)"]) matchMedia(q).addEventListener("change", () => { $("#mobileMenu")._close?.(true); $("#fpanel")?._close?.(true); });
+// Leaving the mobile layout closes the filters drawer (on large screens it is a sidebar).
+matchMedia("(min-width: 1024px)").addEventListener("change", () => $("#fpanel")?._close?.(true));
 // Card images fade in once loaded; broken ones leave a neutral box instead of a broken-image icon.
 document.addEventListener("load", (e) => { if (e.target instanceof HTMLImageElement) e.target.classList.remove("loading-img"); }, true);
 document.addEventListener("error", (e) => { if (e.target instanceof HTMLImageElement && e.target.classList.contains("card")) e.target.classList.replace("loading-img", "broken") || e.target.classList.add("broken"); }, true);
