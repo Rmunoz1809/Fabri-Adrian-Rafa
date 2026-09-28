@@ -462,6 +462,19 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 }
 .legal-page { max-width: 760px; }
 .scan { max-width: 440px; }
+.nbadge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #ef4444; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; }
+.code-big { font: 700 18px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
+.stars-in { display: flex; gap: 4px; }
+.stars-in label { position: relative; cursor: pointer; font-size: 28px; line-height: 1; color: var(--fg-3); border-radius: 6px; }
+.stars-in input { position: absolute; opacity: 0; pointer-events: none; }
+.stars-in label:has(input:focus-visible) { box-shadow: 0 0 0 3px var(--ring); }
+.stars-in:has(input[value="1"]:checked) label:nth-child(-n+1), .stars-in:has(input[value="2"]:checked) label:nth-child(-n+2),
+.stars-in:has(input[value="3"]:checked) label:nth-child(-n+3), .stars-in:has(input[value="4"]:checked) label:nth-child(-n+4),
+.stars-in:has(input[value="5"]:checked) label:nth-child(-n+5) { color: var(--warn); }
+.reviews { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 14px; }
+.reviews li + li { border-top: 1px solid var(--border); padding-top: 14px; }
+.rv-stars { margin: 0; color: var(--warn); letter-spacing: 2px; }
+.rv-flag { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
 .scan .seg { display: grid; grid-template-columns: 1fr 1fr; }
 .scan .drop.card-ratio { aspect-ratio: auto; height: 180px; max-width: none; }
 .scan-result { display: grid; gap: 16px; margin-top: 20px; grid-template-columns: minmax(0, 1fr); scroll-margin-top: calc(var(--header-h) + 16px); }
@@ -1300,6 +1313,7 @@ const sb = window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, C
 let session = null;
 let profileName = null;
 let isStaff = false;
+let pendingOffers = 0; // offers waiting for this user (seller: new offers; buyer: counteroffers)
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
 // ------------------------------------------------------------- analytics (migration 0007)
 // First-party funnel events. Visitors get a random id kept in their browser; no IP,
@@ -1360,7 +1374,9 @@ async function withProfiles(rows) {
   // Until migration 0004 runs the shop columns don't exist; fall back to the basics.
   if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids));
   const byId = new Map((data ?? []).map((p) => [p.id, p]));
-  return withAuthChecks(rows.map((r) => rowToListing(r, byId.get(r.seller_id))));
+  const listings = rows.map((r) => rowToListing(r, byId.get(r.seller_id)));
+  await Promise.all([applySellerStats(listings.map((l) => l.seller)), withAuthChecks(listings)]);
+  return listings;
 }
 // "Revisada por <tienda>" (migration 0011). Until it runs there are simply no badges.
 let authChecksOn = true;
@@ -1431,7 +1447,9 @@ async function fetchSellerListings(id, prof) {
   const { data, error } = await sb.from("listings").select(listingCols()).eq("seller_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(100);
   if (missingKind(error)) { photoKinds = false; return fetchSellerListings(id, prof); }
   if (error) { console.error(error); return []; }
-  return withAuthChecks((data ?? []).map((r) => rowToListing(r, prof)));
+  const listings = (data ?? []).map((r) => rowToListing(r, prof));
+  await Promise.all([applySellerStats(listings.map((l) => l.seller)), withAuthChecks(listings)]);
+  return listings;
 }
 async function fetchRealListing(id) {
   if (!sb) return null;
@@ -1543,10 +1561,10 @@ function renderNav() {
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   $("#navLinks").innerHTML = links(false);
   $("#nav").innerHTML = session
-    ? `<button type="button" class="acct lg-only" id="acctBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${ic("chevronDown")}</button>
+    ? `<button type="button" class="acct lg-only" id="acctBtn" aria-haspopup="menu" aria-expanded="false"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${pendingOffers ? `<span class="nbadge" title="Tienes ofertas por responder">${pendingOffers}</span>` : ""}${ic("chevronDown")}</button>
        <a class="btn primary sm lg-only" href="#/vender">${ic("plus")}Vender</a>`
     : sb ? `<a class="btn primary sm lg-only" href="#/entrar">Iniciar sesión</a>` : "";
-  $("#mobileMenu").innerHTML = `<nav aria-label="Menú">${links(true, session ? [["cuenta", "#/cuenta", "Mi cuenta"]] : [])}</nav>
+  $("#mobileMenu").innerHTML = `<nav aria-label="Menú">${links(true, session ? [["cuenta", "#/cuenta", `Mi cuenta${pendingOffers ? ` (${pendingOffers})` : ""}`]] : [])}</nav>
     <div class="mm-foot">${session
       ? `<p class="mm-user"><span class="avatar">${initial}</span><span>${esc(name)}</span></p><button type="button" class="btn outline block" id="mmSignOut">${ic("logout")}Salir</button>`
       : sb ? `<a class="btn primary block" href="#/entrar">Iniciar sesión</a>` : `<a class="btn primary block" href="#/vender">Publica tu carta gratis</a>`}</div>`;
@@ -1558,7 +1576,7 @@ function renderNav() {
   };
   $("#acctBtn")?.addEventListener("click", (e) => openMenu(e.currentTarget, [
     { heading: session.user.email ?? name },
-    { label: "Mi cuenta", icon: "user", href: "#/cuenta" },
+    { label: pendingOffers ? `Mi cuenta (${pendingOffers} ${pendingOffers === 1 ? "oferta" : "ofertas"})` : "Mi cuenta", icon: "user", href: "#/cuenta" },
     { label: "Vender una carta", icon: "plus", href: "#/vender" },
     ...(isStaff ? [{ label: "Panel de staff", icon: "layout", href: "#/admin" }] : []),
     "sep",
@@ -2316,7 +2334,7 @@ function sellerPanel(s) {
       <p class="kicker">${shop ? "Vende esta tienda" : "Vendedor"}</p>
       ${s.id ? `<a class="seller seller-link" href="#/vendedor/${encodeURIComponent(s.id)}" title="Ver el perfil de ${esc(s.displayName)}">` : `<div class="seller">`}${sellerAvatar(s, 44)}
         <div style="min-width:0;flex:1"><p class="nm">${esc(s.displayName)}</p>
-        <p class="xs muted">${s.rating ? `★ ${s.rating.toFixed(1)} · ` : ""}${s.salesCount} ${s.salesCount === 1 ? "venta" : "ventas"}</p>
+        <p class="xs muted">${sellerScore(s)}</p>
         <div class="tbadges" style="margin-top:6px">${sellerBadge(s)}</div></div>${s.id ? `${ic("chevronRight")}</a>` : "</div>"}
       ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
       ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} confirmó que la tienda existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
@@ -2339,6 +2357,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
       seller = profileToSeller(id, prof);
       since = prof.created_at;
       listings = await fetchSellerListings(id, prof);
+      await applySellerStats([seller]);
       rememberListings(listings);
     }
   }
@@ -2353,7 +2372,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null;
   const inCat = (c) => listings.filter((l) => !c || l.card.category === c);
   const chip = (slug, name) => `<button type="button" class="chip ${cat === slug ? "on" : ""}" data-cat="${slug ?? ""}"${cat === slug ? ' aria-pressed="true"' : ' aria-pressed="false"'}>${name}<span class="chip-n">${inCat(slug).length}</span></button>`;
-  const meta = [s.rating ? `★ ${s.rating.toFixed(1)}` : "", `${s.salesCount} ${s.salesCount === 1 ? "venta" : "ventas"}`,
+  const meta = [sellerScore(s),
     since ? `En ${esc(CONFIG.APP_NAME)} desde ${new Date(since).toLocaleDateString("es-PA", { month: "long", year: "numeric" })}` : ""].filter(Boolean).join(" · ");
   app.innerHTML = `<div class="wrap seller-page">
     <nav class="crumbs" aria-label="Ruta" style="margin-top:20px"><a href="#/">Inicio</a>${ic("chevronRight")}<a href="#/?vendedor=${isVerifiedShop(s) ? "tiendas" : "particulares"}">${isVerifiedShop(s) ? "Tiendas verificadas" : "Particulares"}</a>${ic("chevronRight")}<span aria-current="page">${esc(s.displayName)}</span></nav>
@@ -2368,7 +2387,8 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
         ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
         ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} confirmó que la tienda existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
         ${isMe ? `<a class="btn" href="#/cuenta">Editar mi perfil</a>` : ""}
-      </div></section></aside>
+      </div></section>
+    <section class="panel" id="sellerReviews" hidden></section></aside>
     <section class="seller-cards" aria-labelledby="forSaleTitle">
     <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
     <nav class="chips seller-chips" aria-label="Categorías">${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}</nav>
@@ -2384,6 +2404,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
       : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "No tienes" : `${esc(s.displayName)} no tiene`} cartas de ${esc(categoryName(cat))} en venta.</p><button type="button" class="btn outline" style="margin-top:16px" data-cat="">Ver todas sus cartas</button></div>`;
   };
   renderList();
+  if (!demo && sb) renderSellerReviews(id, isMe);
   app.querySelector(".seller-cards").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-cat]");
     if (!b) return;
@@ -2410,7 +2431,7 @@ async function viewDetail(app, id) {
   const quote = l.protectedEligible ? quoteProtected(price) : null;
   const ref = `ref ${l.id.slice(0, 8)}`;
   const contact = waLink(`Hola, me interesa "${l.title}" (${formatUsd(price)}, ${ref}).`);
-  const buy = quote ? waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.`) : null;
+  const buy = quote ? waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.${session ? ` Mi código Holo: ${buyerCode()}.` : ""}`) : null;
   const cond = CONDITIONS.find((c) => c.code === l.condition);
   const isOwner = session && l.sellerId === session.user.id;
   const forSale = l.isDemo || l.status === "active";
@@ -2458,6 +2479,7 @@ async function viewDetail(app, id) {
           <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección (4%)</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
           <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
           ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
+        ${!isOwner && forSale && !l.isDemo && sb ? `<section class="panel"><h2 class="ptitle">${ic("tag")}Hacer oferta</h2><div id="offerBody"><p class="loading"><span class="spinner"></span></p></div></section>` : ""}
         ${!forSale ? "" : `<section class="panel"><h2 class="ptitle">${ic("chat")}Contacto</h2>
           ${contact ? `<a class="btn outline block" id="contactBtn" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}
           <p class="xs muted" style="margin:10px 0 0">${esc(CONFIG.APP_NAME)} no revisa las cartas ni responde si alguien vende una réplica. Revisa la carta en persona antes de pagar${quote ? " o usa Compra Protegida" : ""}.</p></section>`}
@@ -2489,6 +2511,7 @@ async function viewDetail(app, id) {
   });
   setupShare(l);
   if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
+  if ($("#offerBody")) renderOffer(l, $("#offerBody"));
   const needAccount = (e) => {
     if (session || !sb) return false;
     e.preventDefault();
@@ -2549,6 +2572,184 @@ async function viewDetail(app, id) {
     toast("Anuncio eliminado");
     go("/");
   });
+}
+
+// ------------------------------------------------------------- offers, reviews, completed sales (migration 0013)
+// Offers go from 60% of the price to just under it; every change runs through make_offer/respond_offer
+// in the database. Reviews come only from released Compras Protegidas, shown from the first one.
+const OFFER_MIN = 0.6;
+const minOfferCents = (priceCents) => Math.ceil(priceCents * OFFER_MIN);
+const buyerCode = () => (session ? session.user.id.slice(0, 8).toUpperCase() : "");
+const stars = (n) => "★".repeat(Math.round(n)) + "☆".repeat(5 - Math.round(n));
+const sellerScore = (s) => [s.rating ? `★ ${s.rating.toFixed(1)} (${s.reviewCount ?? 0} ${s.reviewCount === 1 ? "reseña" : "reseñas"})` : "",
+  `${s.salesCount} ${s.salesCount === 1 ? "venta completada" : "ventas completadas"}`].filter(Boolean).join(" · ");
+let statsOn = true;
+async function applySellerStats(sellers) {
+  const ids = [...new Set(sellers.map((s) => s?.id).filter((id) => id && isUuid(id)))];
+  if (!statsOn || !sb || !ids.length) return;
+  const { data, error } = await sb.from("seller_stats").select("seller_id, completed_sales, review_count, avg_rating").in("seller_id", ids);
+  if (error) { if (["42P01", "PGRST205"].includes(error.code)) statsOn = false; else console.error(error); return; }
+  const byId = new Map((data ?? []).map((x) => [x.seller_id, x]));
+  for (const s of sellers) {
+    const x = s && byId.get(s.id);
+    if (x) { s.salesCount = x.completed_sales; s.reviewCount = x.review_count; s.rating = x.avg_rating != null ? Number(x.avg_rating) : null; }
+  }
+}
+async function refreshOfferBadge() {
+  if (!sb || !session) return;
+  const me = session.user.id;
+  const { count, error } = await sb.from("offers").select("id", { count: "exact", head: true })
+    .or(`and(seller_id.eq.${me},status.eq.pending),and(buyer_id.eq.${me},status.eq.countered)`);
+  const n = error ? 0 : count ?? 0;
+  if (n !== pendingOffers) { pendingOffers = n; renderNav(); }
+}
+const offerError = (e, min, max) => /out of range/.test(e?.message ?? "") ? `La oferta tiene que estar entre ${formatUsd(min)} y ${formatUsd(max)}.`
+  : /not available/.test(e?.message ?? "") ? "Esta carta ya no está disponible."
+  : /too many/.test(e?.message ?? "") ? "Tienes demasiadas ofertas abiertas. Retira alguna primero."
+  : "No pudimos guardar tu respuesta. Intenta de nuevo.";
+
+// Listing page: the buyer's side of an offer.
+async function renderOffer(l, box) {
+  const price = toCents(l.priceUsd), min = minOfferCents(price);
+  const intro = `¿Te parece alto? Ofrece desde ${formatUsd(min)} (60% del precio). El vendedor puede aceptar, rechazar o contraofertar.`;
+  if (!session) {
+    box.innerHTML = `<p class="sub">${intro}</p><a class="btn outline block" style="margin-top:12px" href="#/entrar?next=${encodeURIComponent(`/carta/${l.id}`)}">Entrar para hacer una oferta</a>`;
+    return;
+  }
+  const { data, error } = await sb.from("offers").select("id, amount_cents, counter_cents, status").eq("listing_id", l.id).eq("buyer_id", session.user.id).order("updated_at", { ascending: false }).limit(1);
+  if (!box.isConnected) return;
+  if (error) { box.closest("section")?.remove(); return; } // migration 0013 not applied yet
+  const o = data?.[0];
+  const form = (label, text) => `<p class="sub">${text}</p>
+    <div class="row-input" style="margin-top:12px"><input class="input" id="offerAmt" type="number" min="${min / 100}" max="${(price - 1) / 100}" step="0.01" inputmode="decimal" placeholder="Tu oferta en $" aria-label="Tu oferta en dólares"><button type="button" class="btn primary" id="offerSend">${label}</button></div>`;
+  if (o?.status === "pending") {
+    box.innerHTML = `${form("Cambiar", `Ofreciste <b>${formatUsd(o.amount_cents)}</b>. Esperando la respuesta del vendedor.`)}<button type="button" class="btn ghost sm" id="offerWithdraw" style="margin-top:8px">Retirar mi oferta</button>`;
+  } else if (o?.status === "countered") {
+    box.innerHTML = `<p class="sub">Ofreciste ${formatUsd(o.amount_cents)} y el vendedor te contraofertó <b>${formatUsd(o.counter_cents)}</b>.</p>
+      <div class="share-row" style="margin-top:12px"><button type="button" class="btn primary" id="offerTake">Aceptar ${formatUsd(o.counter_cents)}</button><button type="button" class="btn outline" id="offerDecline">Rechazar</button></div>`;
+  } else if (o?.status === "accepted") {
+    const q = quoteProtected(o.amount_cents);
+    const buy = waLink(`Quiero comprar con Compra Protegida: "${l.title}" (ref ${l.id.slice(0, 8)}). Oferta aceptada: ${formatUsd(q.priceCents)}. Total ${formatUsd(q.buyerTotalCents)}. Mi código Holo: ${buyerCode()}.`);
+    box.innerHTML = `<p class="notice good" style="margin:0">¡El vendedor aceptó tu oferta de <b>${formatUsd(o.amount_cents)}</b>!</p>
+      <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(q.priceCents)}</dd></div><div><dt>Protección (4%)</dt><dd>${formatUsd(q.feeCents)}</dd></div>
+      <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(q.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(q.buyerTotalCents)}</dd></div></dl>
+      ${buy ? `<a class="btn primary block" style="margin-top:12px" id="offerBuy" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido a este precio</a>` : `<p class="notice soft center" style="margin-top:12px">Compra Protegida disponible pronto.</p>`}`;
+  } else {
+    box.innerHTML = form("Ofertar", o?.status === "rejected" ? `Tu oferta de ${formatUsd(o.amount_cents)} no fue aceptada. Puedes ofrecer otro monto desde ${formatUsd(min)}.` : intro);
+  }
+  const act = async (fn, args, ok) => {
+    box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const { error: e } = await sb.rpc(fn, args);
+    if (!box.isConnected) return;
+    if (e) { box.querySelectorAll("button").forEach((b) => (b.disabled = false)); console.error(e); return toast(offerError(e, min, price - 1), { type: "error" }); }
+    toast(ok);
+    refreshOfferBadge();
+    renderOffer(l, box);
+  };
+  $("#offerSend")?.addEventListener("click", () => {
+    const cents = Math.round(Number($("#offerAmt").value) * 100);
+    if (!(cents >= min && cents < price)) return toast(`La oferta tiene que estar entre ${formatUsd(min)} y ${formatUsd(price - 1)}.`, { type: "error" });
+    act("make_offer", { p_listing: l.id, p_amount: cents }, "Oferta enviada. Verás la respuesta aquí y en Mi cuenta.");
+  });
+  $("#offerAmt")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("#offerSend").click(); } });
+  $("#offerWithdraw")?.addEventListener("click", () => act("respond_offer", { p_offer: o.id, p_action: "withdraw" }, "Oferta retirada."));
+  $("#offerTake")?.addEventListener("click", () => act("respond_offer", { p_offer: o.id, p_action: "accept_counter" }, "¡Listo! Ya puedes comprar a ese precio."));
+  $("#offerDecline")?.addEventListener("click", () => act("respond_offer", { p_offer: o.id, p_action: "decline_counter" }, "Contraoferta rechazada."));
+  $("#offerBuy")?.addEventListener("click", () => track("click_protegida", l.id));
+}
+
+// Mi cuenta: offers received and made, reviews to write, and the buyer code for Compra Protegida.
+const OFFER_STATUS = { pending: "Pendiente", countered: "Contraoferta", accepted: "Aceptada", rejected: "No aceptada", withdrawn: "Retirada" };
+async function renderActivity(uid, box) {
+  const codePanel = `<section class="panel"><div class="phead"><h2 class="ptitle" style="margin:0">Tu código de comprador</h2><span class="code-big">${buyerCode()}</span></div>
+    <p class="xs muted" style="margin:6px 0 0">Va en tu mensaje cuando compras con Compra Protegida. Así la compra queda en tu cuenta, se respeta el precio de tus ofertas aceptadas y puedes dejar una reseña.</p></section>`;
+  const [recv, mine, orders, done] = await Promise.all([
+    sb.from("offers").select("id, listing_id, buyer_id, amount_cents, counter_cents, status, updated_at").eq("seller_id", uid).in("status", ["pending", "countered", "accepted"]).order("updated_at", { ascending: false }).limit(30),
+    sb.from("offers").select("id, listing_id, amount_cents, counter_cents, status, updated_at").eq("buyer_id", uid).order("updated_at", { ascending: false }).limit(20),
+    sb.from("protected_orders").select("id, listing_id, seller_id").eq("buyer_id", uid).eq("status", "released").limit(50),
+    sb.from("reviews").select("order_id").eq("reviewer_id", uid).limit(200),
+  ]);
+  if (!box.isConnected) return;
+  if (recv.error) { box.innerHTML = codePanel; return; } // migration 0013 not applied yet
+  const reviewed = new Set((done.data ?? []).map((r) => r.order_id));
+  const toReview = (orders.data ?? []).filter((o) => !reviewed.has(o.id));
+  const ids = [...new Set([...recv.data, ...(mine.data ?? []), ...toReview].map((x) => x.listing_id))];
+  const { data: ls } = ids.length ? await sb.from("listings").select("id, title, price_cents, status").in("id", ids) : { data: [] };
+  const L = new Map((ls ?? []).map((x) => [x.id, x]));
+  const people = await profilesById([...recv.data.map((o) => o.buyer_id), ...toReview.map((o) => o.seller_id)]);
+  if (!box.isConnected) return;
+  const link = (lid) => `<a href="#/carta/${encodeURIComponent(lid)}" style="font-weight:600">${esc(L.get(lid)?.title ?? "Anuncio")}</a>`;
+  const received = recv.data.map((o) => {
+    const l = L.get(o.listing_id), who = esc(people.get(o.buyer_id)?.display_name ?? "Un comprador");
+    const body = o.status === "pending"
+      ? `<p class="small" style="margin:6px 0 0">${who} ofrece <b>${formatUsd(o.amount_cents)}</b>${l ? ` · tu precio: ${formatUsd(l.price_cents)}` : ""}</p>
+        <div class="order-actions"><button class="btn primary sm" data-of="accept">Aceptar</button><button class="btn outline sm" data-of="reject">Rechazar</button>
+        <input class="input of-amt" type="number" step="0.01" inputmode="decimal" placeholder="Contraoferta $" aria-label="Contraoferta en dólares" style="max-width:150px;height:32px"><button class="btn sm" data-of="counter">Contraofertar</button></div>`
+      : o.status === "countered" ? `<p class="small" style="margin:6px 0 0">Le contraofertaste <b>${formatUsd(o.counter_cents)}</b> a ${who} (ofreció ${formatUsd(o.amount_cents)}). Esperando su respuesta.</p>`
+      : `<p class="small" style="margin:6px 0 0">Aceptaste <b>${formatUsd(o.amount_cents)}</b> de ${who}. Cuando pague con Compra Protegida, el equipo de ${esc(CONFIG.APP_NAME)} te escribe para la entrega.</p>`;
+    return `<li class="panel" data-offer="${o.id}" data-price="${l?.price_cents ?? 0}" data-amount="${o.amount_cents}"><div class="phead">${link(o.listing_id)}<span class="b ${o.status === "accepted" ? "good" : "prot"}">${OFFER_STATUS[o.status]}</span></div>${body}<div class="order-msg"></div></li>`;
+  });
+  const made = (mine.data ?? []).map((o) => `<li class="panel"><div class="phead">${link(o.listing_id)}<span class="b ${o.status === "accepted" ? "good" : o.status === "countered" ? "prot" : "neutral"}">${OFFER_STATUS[o.status]}</span></div>
+    <p class="small" style="margin:6px 0 0">Ofreciste ${formatUsd(o.amount_cents)}${o.status === "countered" ? ` · te contraofertaron <b>${formatUsd(o.counter_cents)}</b>. <a class="link" href="#/carta/${encodeURIComponent(o.listing_id)}">Responder</a>` : o.status === "accepted" ? `. <a class="link" href="#/carta/${encodeURIComponent(o.listing_id)}">Comprar a ese precio</a>` : ""}</p></li>`);
+  const reviews = toReview.map((o) => `<li class="panel" data-order="${o.id}" data-seller="${o.seller_id}">
+    <p style="margin:0;font-weight:600">¿Cómo te fue con ${esc(people.get(o.seller_id)?.display_name ?? "el vendedor")}?</p><p class="xs muted" style="margin:2px 0 8px">${esc(L.get(o.listing_id)?.title ?? "")}</p>
+    <div class="stars-in" role="radiogroup" aria-label="Calificación">${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="rt-${o.id}" value="${n}"><span aria-hidden="true">★</span><span class="sr-only">${n} ${n === 1 ? "estrella" : "estrellas"}</span></label>`).join("")}</div>
+    <textarea class="textarea rv-text" rows="2" maxlength="500" placeholder="Cuéntale a otros compradores cómo te fue (opcional)" style="margin-top:8px"></textarea>
+    <button class="btn primary sm rv-send" style="margin-top:8px">Publicar reseña</button><div class="order-msg"></div></li>`);
+  box.innerHTML = `${reviews.length ? `<section class="panel col"><h2>Deja tu reseña</h2><p class="xs muted" style="margin:0">Tu compra protegida terminó. Tu reseña ayuda a otros a comprar con confianza.</p><ul class="admin-list">${reviews.join("")}</ul></section>` : ""}
+    ${received.length ? `<section class="panel col"><h2>Ofertas recibidas</h2><ul class="admin-list">${received.join("")}</ul></section>` : ""}
+    ${made.length ? `<section class="panel col"><h2>Mis ofertas</h2><ul class="admin-list">${made.join("")}</ul></section>` : ""}
+    ${codePanel}`;
+  box.querySelectorAll("[data-of]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), action = b.dataset.of, args = { p_offer: li.dataset.offer, p_action: action };
+    const price = Number(li.dataset.price), amount = Number(li.dataset.amount);
+    if (action === "counter") {
+      args.p_amount = Math.round(Number(li.querySelector(".of-amt").value) * 100);
+      if (!(args.p_amount > amount && args.p_amount < price)) return toast(`La contraoferta tiene que estar entre ${formatUsd(amount + 1)} y ${formatUsd(price - 1)}.`, { type: "error" });
+    }
+    if (action === "accept" && !(await confirmDialog({ title: `¿Aceptar ${formatUsd(amount)}?`, body: "El comprador podrá comprar con Compra Protegida a ese precio.", confirm: "Aceptar oferta" }))) return;
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const { error } = await sb.rpc("respond_offer", args);
+    if (error) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); console.error(error); return toast(offerError(error, amount + 1, price - 1), { type: "error" }); }
+    toast({ accept: "Oferta aceptada", reject: "Oferta rechazada", counter: "Contraoferta enviada" }[action]);
+    refreshOfferBadge();
+    renderActivity(uid, box);
+  }));
+  box.querySelectorAll(".rv-send").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), rating = Number(li.querySelector("input[type=radio]:checked")?.value);
+    if (!rating) return toast("Elige de 1 a 5 estrellas.", { type: "error" });
+    b.disabled = true;
+    const { error } = await sb.from("reviews").insert({ order_id: li.dataset.order, reviewer_id: uid, reviewee_id: li.dataset.seller, rating, comment: li.querySelector(".rv-text").value.trim() || null });
+    if (error && error.code !== "23505") { b.disabled = false; console.error(error); return toast("No pudimos publicar tu reseña. Intenta de nuevo.", { type: "error" }); }
+    toast("¡Gracias por tu reseña!");
+    renderActivity(uid, box);
+  }));
+}
+
+// Seller page: public reviews (verified purchases only).
+async function renderSellerReviews(id, isMe) {
+  const box = $("#sellerReviews");
+  const { data, error } = await sb.from("reviews").select("id, reviewer_id, rating, comment, created_at, flagged").eq("reviewee_id", id).eq("hidden", false).order("created_at", { ascending: false }).limit(20);
+  if (!box?.isConnected || error || !data?.length) return;
+  const people = await profilesById(data.map((r) => r.reviewer_id));
+  if (!box.isConnected) return;
+  box.hidden = false;
+  box.innerHTML = `<h2 class="ptitle">Reseñas</h2><ul class="reviews">${data.map((r) => `<li>
+    <p class="rv-stars" aria-label="${r.rating} de 5 estrellas">${stars(r.rating)}</p>
+    ${r.comment ? `<p class="small" style="margin:4px 0 0;white-space:pre-line">${esc(r.comment)}</p>` : ""}
+    <p class="xs muted" style="margin:4px 0 0">${esc(people.get(r.reviewer_id)?.display_name ?? "Comprador")} · ${new Date(r.created_at).toLocaleDateString("es-PA", { day: "numeric", month: "short", year: "numeric" })} · Compra verificada${isMe ? r.flagged ? " · Reportada" : ` · <button type="button" class="link rv-flag" data-flag="${r.id}">Reportar</button>` : ""}</p></li>`).join("")}</ul>`;
+  box.querySelectorAll("[data-flag]").forEach((b) => b.addEventListener("click", async () => {
+    if (!(await confirmDialog({ title: "¿Reportar esta reseña?", body: `El equipo de ${CONFIG.APP_NAME} la revisa y la oculta si es falsa u ofensiva.`, confirm: "Reportar" }))) return;
+    const { error: e } = await sb.rpc("flag_review", { p_review: b.dataset.flag });
+    if (e) { console.error(e); return toast("No pudimos reportarla. Intenta de nuevo.", { type: "error" }); }
+    toast("Gracias. El equipo la revisa pronto.");
+    renderSellerReviews(id, isMe);
+  }));
+}
+async function findByCode(code) {
+  const { data } = await sb.from("public_profiles").select("id, display_name")
+    .gte("id", `${code}-0000-0000-0000-000000000000`).lte("id", `${code}-ffff-ffff-ffff-ffffffffffff`).limit(2);
+  return data?.length === 1 ? data[0] : null;
 }
 
 // ------------------------------------------------------------- authenticity check at a partner shop
@@ -3687,6 +3888,7 @@ async function viewAccount(app) {
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
   app.innerHTML = `<div class="account"><h1 class="display" style="font-size:30px">Mi cuenta</h1>
     <p class="muted" style="margin:4px 0 0">Así te ven los compradores en tus anuncios. <a class="link" href="#/vendedor/${encodeURIComponent(uid)}">Ver mi perfil público</a></p>
+    <div id="accActivity" class="col" style="margin-top:24px;gap:16px"></div>
     <form id="accForm" class="col" style="margin-top:24px" novalidate>
       <section class="panel col">
         <h2>Perfil</h2>
@@ -3710,6 +3912,7 @@ async function viewAccount(app) {
       <button class="btn primary block" id="accBtn">Guardar cambios</button>
     </form></div>`;
 
+  renderActivity(uid, $("#accActivity"));
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
   if (desc) { desc.addEventListener("input", count); count(); }
@@ -3879,17 +4082,31 @@ async function adminOrders(body) {
       const q2 = quoteProtected(l.price_cents);
       return `<li class="panel" data-lid="${l.id}"><div class="phead"><span style="font-weight:600">${esc(l.title)}</span><span class="small muted">${esc(sellersFound.get(l.seller_id)?.display_name ?? "")}</span></div>
         <p class="small" style="margin:6px 0">Carta ${formatUsd(q2.priceCents)} + comisión ${formatUsd(q2.feeCents)} + ITBMS ${formatUsd(q2.itbmsCents)} = <b>${formatUsd(q2.buyerTotalCents)}</b></p>
-        <div class="row-input"><input class="input no-buyer" maxlength="120" placeholder="Comprador: nombre y WhatsApp"><button class="btn primary no-create" style="border-radius:12px">Crear orden</button></div><div class="no-msg"></div></li>`;
+        <div class="row-input"><input class="input no-buyer" maxlength="120" placeholder="Comprador: nombre y WhatsApp"></div>
+        <div class="row-input" style="margin-top:8px"><input class="input no-code" maxlength="8" placeholder="Código Holo del comprador (opcional)" autocapitalize="characters"><button class="btn primary no-create" style="border-radius:12px">Crear orden</button></div><div class="no-msg"></div></li>`;
     }).join("")}</ul>`;
     out.querySelectorAll("[data-lid]").forEach((li) => li.querySelector(".no-create").addEventListener("click", async (e) => {
-      const l = data.find((x) => x.id === li.dataset.lid), q2 = quoteProtected(l.price_cents), msg = li.querySelector(".no-msg");
+      const l = data.find((x) => x.id === li.dataset.lid), msg = li.querySelector(".no-msg");
       e.target.disabled = true;
+      // The buyer's code (in their message and in Mi cuenta) links the order to their account, so they
+      // can review the seller afterwards, and applies the price of an offer the seller accepted.
+      const code = li.querySelector(".no-code").value.trim().toLowerCase();
+      let buyerId = null, price = l.price_cents;
+      if (code) {
+        const buyer = /^[0-9a-f]{8}$/.test(code) ? await findByCode(code) : null;
+        if (!buyer) { e.target.disabled = false; msg.innerHTML = `<p class="notice bad" style="margin:0">No encontramos ese código. Está en el mensaje del comprador y en su Mi cuenta.</p>`; return; }
+        buyerId = buyer.id;
+        const { data: off } = await sb.from("offers").select("amount_cents").eq("listing_id", l.id).eq("buyer_id", buyerId).eq("status", "accepted").order("updated_at", { ascending: false }).limit(1);
+        if (off?.[0]) price = off[0].amount_cents;
+      }
+      const q2 = quoteProtected(price);
       const { error } = await sb.from("protected_orders").insert({
-        listing_id: l.id, seller_id: l.seller_id, buyer_contact: li.querySelector(".no-buyer").value.trim() || null,
+        listing_id: l.id, seller_id: l.seller_id, buyer_id: buyerId, buyer_contact: li.querySelector(".no-buyer").value.trim() || null,
         price_cents: q2.priceCents, fee_cents: q2.feeCents, itbms_cents: q2.itbmsCents, status: "awaiting_payment",
       });
       if (error) { e.target.disabled = false; return adminFail(error, msg, "No se pudo crear la orden."); }
       await sb.from("listings").update({ protected_eligible: true }).eq("id", l.id);
+      if (price !== l.price_cents) toast(`Orden creada con la oferta aceptada: ${formatUsd(price)}.`);
       route();
     }));
   };
@@ -4094,6 +4311,23 @@ async function adminReports(body) {
     }
     route();
   }));
+  await adminFlaggedReviews(body);
+}
+async function adminFlaggedReviews(body) {
+  const { data, error } = await sb.from("reviews").select("id, reviewer_id, reviewee_id, rating, comment, created_at").eq("flagged", true).eq("hidden", false).order("created_at", { ascending: false }).limit(50);
+  if (error || !data?.length || !body.isConnected) return;
+  const people = await profilesById(data.flatMap((r) => [r.reviewer_id, r.reviewee_id]));
+  body.insertAdjacentHTML("beforeend", `<h2 class="h2" style="margin-top:24px">Reseñas reportadas (${data.length})</h2><ul class="admin-list">${data.map((r) => `<li class="panel" data-rv="${r.id}">
+    <div class="phead"><span style="font-weight:600">${stars(r.rating)} de ${esc(people.get(r.reviewer_id)?.display_name ?? "—")} a ${esc(people.get(r.reviewee_id)?.display_name ?? "—")}</span><span class="small muted">${fmtDate(r.created_at)}</span></div>
+    ${r.comment ? `<p class="small" style="margin:8px 0 0">“${esc(r.comment)}”</p>` : ""}
+    <div class="order-actions"><button class="btn danger" data-rv-act="hide">Ocultar reseña</button><button class="btn" data-rv-act="keep">Mantenerla</button></div><div class="order-msg"></div></li>`).join("")}</ul>`);
+  body.querySelectorAll("[data-rv-act]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li");
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const { error: e } = await sb.from("reviews").update(b.dataset.rvAct === "hide" ? { hidden: true } : { flagged: false }).eq("id", li.dataset.rv);
+    if (e) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(e, li.querySelector(".order-msg")); }
+    li.remove();
+  }));
 }
 
 // ------------------------------------------------------------- authenticity checks
@@ -4262,14 +4496,14 @@ function viewTerms(app) {
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
-    ["Compra Protegida", `<p>Es opcional y la elige el comprador. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más la comisión de protección: ${fee}.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>El comprador tiene 3 días desde que recibe la carta para avisarnos si no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta cuando el comprador confirma que la recibió bien, o a los 3 días de la entrega si no hubo reclamo.</li></ol><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado, incluida la comisión; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe mandarnos fotos o video de la carta como la recibió. Si la venta no se concreta por causa del vendedor, también devolvemos todo. La comisión no se reembolsa si el comprador desiste por otras razones después de recibir la carta.</p><p>El vendedor recibe el 100% del precio publicado; la comisión la paga el comprador.</p>`],
+    ["Compra Protegida", `<p>Es opcional y la elige el comprador. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más la comisión de protección: ${fee}.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>El comprador tiene 3 días desde que recibe la carta para avisarnos si no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta cuando el comprador confirma que la recibió bien, o a los 3 días de la entrega si no hubo reclamo.</li></ol><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado, incluida la comisión; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe mandarnos fotos o video de la carta como la recibió. Si la venta no se concreta por causa del vendedor, también devolvemos todo. La comisión no se reembolsa si el comprador desiste por otras razones después de recibir la carta.</p><p>El vendedor recibe el 100% del precio publicado, o del precio que aceptó en una oferta; la comisión la paga el comprador y se calcula sobre ese precio.</p>`],
     ["Compras fuera de Compra Protegida", `<p>Si compras o vendes coordinando directamente con la otra persona, el trato, el pago y la entrega son responsabilidad de ustedes. ${esc(CONFIG.APP_NAME)} no garantiza esas operaciones. Te recomendamos reunirte en lugares públicos, revisar la carta antes de pagar y nunca pagar por adelantado.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
     ["Plan Coleccionista", `<p>Es una suscripción opcional de ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes. Sin el plan, cada cuenta puede escanear 3 cartas al día en “¿Cuánto vale tu carta?”; con el plan, sin límite para uso personal (ponemos un tope diario alto para evitar abusos).</p><ul><li>Cada pago activa el plan por 30 días. No se renueva solo: si no vuelves a pagar, tu cuenta regresa al plan gratis.</li><li>Los valores que muestra el escáner son referencias de mercado, no tasaciones (sección 5).</li><li>Podemos cambiar el precio o lo que incluye el plan; los cambios aplican desde tu siguiente pago.</li></ul>`],
     ["Reembolsos", `<ul><li><b>Compra Protegida:</b> devolvemos todo lo pagado, incluida la comisión, si la carta no llega, no es original o no coincide con el anuncio y el comprador reclama dentro de los 3 días de recibirla (sección 6). El reembolso se hace por el mismo medio de pago, en un máximo de 5 días hábiles desde que lo aprobamos.</li><li><b>Revisión en tienda:</b> se devuelve si la revisión no se puede hacer por causa nuestra o de la tienda, no según el resultado (sección 9).</li><li><b>Plan Coleccionista:</b> no se reembolsa una vez activado, salvo que el servicio no funcione por causa nuestra (sección 10).</li><li><b>Compras directas entre usuarios:</b> no pasan por ${esc(CONFIG.APP_NAME)}; cualquier devolución se acuerda entre comprador y vendedor (sección 7).</li><li>Para pedir un reembolso escríbenos a ${legalVal("EMAIL")} o por WhatsApp con la referencia de tu compra.</li></ul>`],
-    ["Conducta prohibida", `<ul><li>Estafas, suplantación de identidad o pedir pagos por adelantado fuera de Compra Protegida.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li></ul>`],
-    ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios o suspender cuentas. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
+    ["Conducta prohibida", `<ul><li>Estafas, suplantación de identidad o pedir pagos por adelantado fuera de Compra Protegida.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li><li>Hacer ofertas sin intención de comprar, o publicar reseñas falsas u ofensivas (o pedir u ofrecer algo a cambio de una reseña).</li></ul>`],
+    ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios, ocultar reseñas que incumplan estas reglas o suspender cuentas. Las reseñas solo las puede dejar quien compró con Compra Protegida. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Marcas", `<p>Pokémon, NBA, NFL y los nombres de jugadores, equipos y fabricantes (Panini, Topps y otros) son marcas de sus dueños. ${esc(CONFIG.APP_NAME)} no está afiliado ni patrocinado por ellos. Las imágenes de catálogo se usan solo para identificar las cartas. Si tienes derechos sobre una imagen y quieres que la retiremos, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Responsabilidad", `<p>Hacemos lo posible para que la plataforma funcione bien y sea segura, pero puede tener interrupciones o errores. En la medida que permita la ley, no respondemos por daños indirectos, por operaciones entre usuarios fuera de Compra Protegida ni por cartas falsas vendidas por usuarios (sección 8). Nada en estos términos limita los derechos que te da la Ley 45 de 2007 de protección al consumidor.</p>`],
     ["Cambios", `<p>Podemos actualizar estos términos. Si el cambio es importante, te avisaremos en la plataforma. Seguir usándola después del aviso significa que aceptas la nueva versión.</p>`],
@@ -4280,7 +4514,7 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, y la referencia del pago.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, y la referencia del pago.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Coordinar las Compras Protegidas y atender reclamos.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
@@ -4365,6 +4599,7 @@ async function loadProfileName() {
   profileName = data?.display_name ?? null;
   isStaff = Boolean(data?.is_staff);
   renderNav();
+  refreshOfferBadge();
   if (isStaff && parseHash().path === "/admin") route(); // staff flag arrived after the first render
 }
 (async () => {
