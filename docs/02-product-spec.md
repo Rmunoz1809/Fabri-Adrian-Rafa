@@ -35,14 +35,14 @@
 
 ## Comisiones (Compra Protegida)
 
-La paga el **vendedor** cuando se completa la venta; publicar es gratis y el comprador paga solo el precio de la carta. Se configura en [`src/lib/fees.ts`](../src/lib/fees.ts), en `holo.html` y en `protected_quote()` (migración 0015).
+La pagan **las dos partes**: el comprador la suma al precio y al vendedor se le descuenta de lo que recibe; publicar es gratis. Se configura en [`src/lib/fees.ts`](../src/lib/fees.ts), en `holo.html` y en `protected_quote()` (migración 0016).
 
 | Concepto | Valor |
 |---|---|
-| Tasa | 3% del precio de venta |
+| Tasa | 3% del precio al comprador y 3% al vendedor |
 | Mínimo / máximo | Sin mínimo ni máximo |
-| ITBMS | 7% sobre la comisión |
-| Ejemplo con una carta de $100 | El comprador paga $100.00; al vendedor se le descuentan $3.00 + $0.21 de ITBMS y recibe $96.79 |
+| ITBMS | 7% sobre cada comisión |
+| Ejemplo con una carta de $100 | El comprador paga $103.21; el vendedor recibe $96.79; Holo cobra $6.00 + $0.42 de ITBMS |
 
 ## Funciones de IA (prioridad y costo)
 

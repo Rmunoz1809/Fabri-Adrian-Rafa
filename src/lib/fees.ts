@@ -1,6 +1,6 @@
-// "Compra Protegida" pricing. Listing is free. The buyer pays only the card price; when the sale
-// goes through the platform keeps a commission (plus ITBMS on it) from the seller's payout.
-// Mirrors quoteProtected() in holo.html and protected_quote() in migration 0015. USD cents.
+// "Compra Protegida" pricing. Listing is free. Both sides pay the same commission (plus ITBMS on
+// it): the buyer on top of the price, the seller out of their payout.
+// Mirrors quoteProtected() in holo.html and protected_quote() in migration 0016. USD cents.
 
 export interface FeeConfig {
   /** Percentage of the card price, in basis points (500 = 5%). */
@@ -27,6 +27,8 @@ export interface ProtectedQuote {
   priceCents: number;
   feeCents: number;
   itbmsCents: number;
+  sellerFeeCents: number;
+  sellerItbmsCents: number;
   buyerTotalCents: number;
   sellerPayoutCents: number;
   platformRevenueCents: number;
@@ -47,9 +49,11 @@ export function quoteProtected(priceCents: number, cfg: FeeConfig = DEFAULT_FEES
     priceCents,
     feeCents,
     itbmsCents,
-    buyerTotalCents: priceCents,
+    sellerFeeCents: feeCents,
+    sellerItbmsCents: itbmsCents,
+    buyerTotalCents: priceCents + feeCents + itbmsCents,
     sellerPayoutCents: priceCents - feeCents - itbmsCents,
-    platformRevenueCents: feeCents,
+    platformRevenueCents: feeCents * 2,
   };
 }
 

@@ -2,13 +2,15 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FEES, quoteProtected, toCents } from "./fees";
 
 describe("quoteProtected", () => {
-  it("takes 3% plus 7% ITBMS on it from the seller; the buyer pays the price", () => {
+  it("charges 3% + ITBMS to the buyer and takes 3% + ITBMS from the seller", () => {
     const q = quoteProtected(toCents(100));
     expect(q.feeCents).toBe(300);
     expect(q.itbmsCents).toBe(21);
-    expect(q.buyerTotalCents).toBe(10_000);
+    expect(q.buyerTotalCents).toBe(10_321);
+    expect(q.sellerFeeCents).toBe(300);
+    expect(q.sellerItbmsCents).toBe(21);
     expect(q.sellerPayoutCents).toBe(9_679);
-    expect(q.platformRevenueCents).toBe(300);
+    expect(q.platformRevenueCents).toBe(600);
   });
 
   it("matches the published fee table", () => {
@@ -20,6 +22,7 @@ describe("quoteProtected", () => {
     const q = quoteProtected(toCents(5));
     expect(q.feeCents).toBe(15);
     expect(q.itbmsCents).toBe(1);
+    expect(q.buyerTotalCents).toBe(516);
     expect(q.sellerPayoutCents).toBe(484);
   });
 
@@ -27,6 +30,7 @@ describe("quoteProtected", () => {
     const q = quoteProtected(toCents(5000));
     expect(q.feeCents).toBe(15_000);
     expect(q.itbmsCents).toBe(1_050);
+    expect(q.buyerTotalCents).toBe(500_000 + 15_000 + 1_050);
     expect(q.sellerPayoutCents).toBe(500_000 - 15_000 - 1_050);
   });
 
@@ -37,11 +41,12 @@ describe("quoteProtected", () => {
     expect(q.itbmsCents).toBe(8);
   });
 
-  it("never charges the buyer more than the price, and the three parts add up", () => {
+  it("buyer total and seller payout sit symmetrically around the price", () => {
     for (const usd of [1, 9.99, 49.5, 250, 1200]) {
       const q = quoteProtected(toCents(usd));
-      expect(q.buyerTotalCents).toBe(toCents(usd));
-      expect(q.sellerPayoutCents + q.feeCents + q.itbmsCents).toBe(q.priceCents);
+      const side = q.feeCents + q.itbmsCents;
+      expect(q.buyerTotalCents).toBe(q.priceCents + side);
+      expect(q.sellerPayoutCents).toBe(q.priceCents - side);
       expect(q.sellerPayoutCents).toBeGreaterThan(0);
     }
   });
@@ -55,6 +60,7 @@ describe("quoteProtected", () => {
   it("accepts a custom config (admin fee settings)", () => {
     const q = quoteProtected(10_000, { ...DEFAULT_FEES, rateBps: 500, minCents: 100, maxCents: 400, itbmsBps: 0 });
     expect(q.feeCents).toBe(400);
+    expect(q.buyerTotalCents).toBe(10_400);
     expect(q.sellerPayoutCents).toBe(9_600);
   });
 });
