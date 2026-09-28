@@ -3641,11 +3641,7 @@ function describeCard(c, ai) {
 }
 
 // What every seller must know before publishing: our commission, zero tolerance for fakes, and their duties.
-// Sellers must accept this notice (and the Terms) before the form shows. Remembered per account and
-// per version: bump SELL_TERMS_VERSION when the notice changes so everyone accepts it again.
-const SELL_TERMS_VERSION = "2026-09-28";
-const sellTermsKey = (uid) => `holo.sellTerms.${uid}`;
-function sellTermsAccepted(uid) { try { return localStorage.getItem(sellTermsKey(uid)) === SELL_TERMS_VERSION; } catch { return false; } }
+// Sellers must accept this notice (and the Terms) every time they open the sell page: nothing is remembered.
 function sellIntro(mode = "view") {
   const ex = quoteProtected(toCents(100));
   return `<section class="panel sell-intro" aria-labelledby="sellIntroTitle">
@@ -3661,7 +3657,6 @@ function sellIntro(mode = "view") {
     <div id="sellAccept" class="si-accept">${mode === "ask"
       ? `<p class="small">Para publicar debes leer este aviso y aceptar los <a class="link" href="#/terminos" target="_blank" rel="noopener">Términos y condiciones</a>.</p>
         <button type="button" class="btn primary block" id="sellAcceptBtn">${ic("check")}Leí el aviso y acepto los Términos y condiciones</button>`
-      : mode === "done" ? `<p class="small si-ok">${ic("checkCircle")}Aceptaste este aviso y los <a class="link" href="#/terminos" target="_blank" rel="noopener">Términos y condiciones</a>.</p>`
       : `<p class="xs muted">Al publicar aceptas los <a class="link" href="#/terminos">Términos y condiciones</a>.</p>`}</div>
   </section>`;
 }
@@ -3678,8 +3673,8 @@ function viewSell(app) {
   const locOptions = FLAT_LOCATIONS.map((l, i) => `<option value="${i}">${esc(l.neighborhood)}, ${esc(l.district)}</option>`).join("");
   app.innerHTML = `<div class="wrap page"><h1>Vende tu carta</h1>
     <p class="lead">Publicar es gratis. Toma una foto y reconocemos la carta, su versión y su precio de hoy.</p>
-    ${sellIntro(sellTermsAccepted(session.user.id) ? "done" : "ask")}
-    <div id="sellGate"${sellTermsAccepted(session.user.id) ? "" : " hidden"}>
+    ${sellIntro("ask")}
+    <div id="sellGate" hidden>
     <form id="sellForm" class="sell" novalidate>
       <section class="left">
         <h2 class="step"><span class="num-badge">1</span>Fotos reales</h2>
@@ -3732,7 +3727,6 @@ function viewSell(app) {
     </form></div></div>`;
 
   $("#sellAcceptBtn")?.addEventListener("click", () => {
-    try { localStorage.setItem(sellTermsKey(session.user.id), SELL_TERMS_VERSION); } catch { /* private mode: accepted for this visit */ }
     $("#sellAccept").innerHTML = `<p class="small si-ok">${ic("checkCircle")}Aceptaste este aviso y los <a class="link" href="#/terminos" target="_blank" rel="noopener">Términos y condiciones</a>.</p>`;
     $("#sellGate").hidden = false;
     $("#sellGate").scrollIntoView({ behavior: "smooth", block: "start" });
