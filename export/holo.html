@@ -251,6 +251,8 @@ label.f .hint { font-weight: 400; color: var(--fg-2); }
 .grid.live > li { animation: enter .3s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 30ms); --tw-enter-opacity: 0; --tw-enter-translate-y: .5rem; }
 .pcard { position: relative; display: flex; flex-direction: column; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-sm); container-type: inline-size; transition: border-color .15s var(--ease), background-color .15s var(--ease), transform .15s var(--ease); }
 a.pcard:hover { border-color: #3a3a3a; background: var(--card-hover); }
+/* desktop (real mouse): the hovered card gets a white outline */
+@media (hover: hover) and (pointer: fine) { a.pcard:hover { border-color: rgb(255 255 255 / .9); box-shadow: 0 0 0 1px rgb(255 255 255 / .9), var(--shadow-sm); } }
 a.pcard:active { transform: scale(.98); }
 a.pcard:focus-visible { outline: none; border-color: #737373; box-shadow: 0 0 0 3px var(--ring); }
 .media { position: relative; border-radius: 8px; container-type: inline-size; }
