@@ -461,6 +461,13 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
   .seller-seg a { min-width: 0; padding: 4px 8px; font-size: 13px; white-space: normal; }
 }
 .legal-page { max-width: 760px; }
+.scan { max-width: 440px; }
+.scan .seg { display: grid; grid-template-columns: 1fr 1fr; }
+.scan .drop.card-ratio { aspect-ratio: auto; height: 180px; max-width: none; }
+.scan-result { display: grid; gap: 16px; margin-top: 20px; grid-template-columns: minmax(0, 1fr); scroll-margin-top: calc(var(--header-h) + 16px); }
+.scan-card { padding: 16px; display: flex; justify-content: center; }
+.scan-card img { width: 100%; max-width: 280px; aspect-ratio: 63 / 88; object-fit: contain; border-radius: 10px; }
+@media (min-width: 900px) { .scan-result { grid-template-columns: 320px minmax(0, 1fr); align-items: start; } }
 .legal-page h2 { font-size: 18px; margin: 28px 0 8px; }
 .legal-page p, .legal-page li { line-height: 1.6; }
 .legal-page ul, .legal-page ol { padding-left: 20px; }
@@ -714,6 +721,7 @@ const CONFIG = {
   SUPABASE_URL: "https://vqcpqoedsyatxswdzqcy.supabase.co",
   SUPABASE_KEY: "sb_publishable_tDP2wsl-yvSv2egMu7QFtw_cTQ12NZg",
   WHATSAPP: "", // platform WhatsApp, international format without "+", e.g. "5076XXXXXXX"
+  PLAN_USD: 4, // Plan Coleccionista per month (scans: 3/day free, "sin límite" with the plan; enforced in the database, migration 0012)
   AUTH_CHECK_USD: 5, // "Revisión en tienda": a partner shop checks the card in person (migration 0011)
   SHOW_DEMO_LISTINGS: true,
   CATALOG_API: "https://api.pokemontcg.io/v2",
@@ -1505,6 +1513,7 @@ async function route() {
     if (path.startsWith("/carta/")) return await viewDetail(app, safeDecode(path.slice(7)));
     if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)), params);
     if (path === "/protegida") return viewProtected(app);
+    if (path === "/escanear") return viewScan(app);
     if (path === "/terminos") return viewTerms(app);
     if (path === "/privacidad") return viewPrivacy(app);
     if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
@@ -1524,10 +1533,10 @@ async function route() {
   }
 }
 
-const NAV_LINKS = [["explorar", "#/", "Explorar"], ["protegida", "#/protegida", "Compra Protegida"], ["vender", "#/vender", "Vender"]];
+const NAV_LINKS = [["explorar", "#/", "Explorar"], ["escanear", "#/escanear", "¿Cuánto vale?"], ["protegida", "#/protegida", "Compra Protegida"], ["vender", "#/vender", "Vender"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
   const all = [...NAV_LINKS, ...(isStaff ? [["admin", "#/admin", "Admin"]] : [])];
   const links = (arrow, extra = []) => [...all, ...extra].map(([k, href, text]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${text}${arrow ? ic("chevronRight") : ""}</a>`).join("");
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
@@ -2219,7 +2228,7 @@ async function viewHome(app, params) {
       <p class="eyebrow"><span class="dot"></span>Marketplace de Panamá · Pokémon, NBA y NFL</p>
       <h1>Cartas coleccionables en Panamá, con precio claro.</h1>
       <p class="lead">Cada anuncio muestra un rango de precio de mercado, y con Compra Protegida el vendedor solo cobra cuando confirmas que recibiste la carta bien.</p>
-      <div class="cta"><a class="btn primary lg" href="#/vender">Publica tu carta gratis</a><a class="btn outline lg" href="#/protegida">${ic("shield")}¿Cómo funciona Compra Protegida?</a></div></section>`}
+      <div class="cta"><a class="btn primary lg" href="#/vender">Publica tu carta gratis</a><a class="btn outline lg" href="#/escanear">${ic("camera")}¿Cuánto vale tu carta?</a><a class="btn outline lg" href="#/protegida">${ic("shield")}¿Cómo funciona Compra Protegida?</a></div></section>`}
     <div class="wrap">
       <section class="panel finder"${filtered ? ' style="margin-top:24px"' : ""}>
         <h2 class="ptitle">Encuentra una carta</h2>
@@ -3117,6 +3126,19 @@ async function identifyCard(files, status) {
   return { kind: "pokemon", card, alternatives: ranked.slice(1, 7), ai, source: ai ? "ia" : "ocr", confidence };
 }
 
+/** Free identification (no AI cost): OCR in the browser + the Pokémon catalog. Same scoring as identifyCard. */
+async function identifyFree(files, status) {
+  const read = await ocrRead(files[0], status);
+  status("Buscando tu carta en el catálogo…");
+  const ranked = await visualRank(await ocrCandidates(read), files[0]);
+  if (!ranked.length) return null;
+  const card = await catalogFromDex(ranked[0].id);
+  if (!card) return null;
+  const [best, next] = ranked;
+  const exact = best.text >= 6, clear = !next || best.score - next.score > 0.6;
+  return { kind: "pokemon", card, alternatives: ranked.slice(1, 7), source: "ocr", confidence: exact && clear ? "alta" : exact || clear ? "media" : "baja" };
+}
+
 /** Short listing description written from the identified card (never invents condition). */
 function describeCard(c, ai) {
   const parts = [];
@@ -3490,6 +3512,126 @@ function viewSell(app) {
     toast("Anuncio publicado", { description: "Ya está visible para los compradores." });
     go(`/carta/${id}`);
   });
+  // Coming from "Véndela en Holo" in the scanner: start with that photo.
+  if (pendingSellFiles?.length) {
+    const dt = new DataTransfer();
+    pendingSellFiles.forEach((f) => dt.items.add(f));
+    pendingSellFiles = null;
+    $("#photos").files = dt.files;
+    $("#photos").dispatchEvent(new Event("change"));
+  }
+}
+
+// ============================================================= scanner (#/escanear)
+// "¿Cuánto vale tu carta?": photo → card → market value. Loose Pokémon cards are read for free in the
+// browser first (OCR + catalog); the paid AI only runs for slabs, sports cards and unclear photos.
+// The daily quota lives in the database (scan_quota, migration 0012).
+let pendingSellFiles = null;
+const quotaText = (q) => q.plan_until
+  ? `Plan Coleccionista activo hasta el ${new Date(q.plan_until).toLocaleDateString("es-PA", { day: "numeric", month: "long" })}: escaneos sin límite.`
+  : `Te ${q.limit - q.used === 1 ? "queda" : "quedan"} ${Math.max(0, q.limit - q.used)} de ${q.limit} escaneos gratis hoy.`;
+function planOffer(q) {
+  const pay = waLink(`Quiero el Plan Coleccionista (${formatUsd(toCents(CONFIG.PLAN_USD))} al mes).`);
+  return `<section class="panel accent" style="margin-top:16px"><h2 class="ptitle">${ic("trend")}Usaste tus ${q.limit} escaneos gratis de hoy</h2>
+    <p class="sub">Mañana tienes ${q.limit} más. Con el <b>Plan Coleccionista</b> escaneas sin límite por ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes.</p>
+    ${pay ? `<a class="btn primary" style="margin-top:12px" href="${esc(pay)}" target="_blank" rel="noopener">Quiero el plan</a>` : `<p class="notice soft" style="margin:12px 0 0">Muy pronto podrás activarlo aquí mismo.</p>`}</section>`;
+}
+function viewScan(app) {
+  setTitle("¿Cuánto vale tu carta?");
+  const head = `<p class="eyebrow"><span class="dot"></span>Gratis · 3 escaneos al día</p><h1>¿Cuánto vale tu carta?</h1>
+    <p class="lead">Tómale una foto y te decimos qué carta es y cuánto vale hoy en el mercado. Pokémon, NBA y NFL, sueltas o graduadas.</p>`;
+  if (!sb) { app.innerHTML = `<div class="wrap page">${head}<p class="notice bad">No hay conexión con el servidor. Revisa tu internet y recarga.</p></div>`; return; }
+  if (!session) {
+    app.innerHTML = `<div class="wrap page"><div style="max-width:760px">${head}</div>
+      <div class="panel" style="max-width:440px;margin-top:24px;padding:24px"><p style="font-weight:600">Entra o crea tu cuenta para escanear.</p><p class="small muted" style="margin:4px 0 16px">Es gratis y toma menos de un minuto.</p>
+      <a class="btn primary block" href="#/entrar?next=${encodeURIComponent("/escanear")}">Entrar o crear cuenta</a></div></div>`;
+    return;
+  }
+  app.innerHTML = `<div class="wrap page"><div style="max-width:760px">${head}</div>
+    <div class="scan">
+      <div class="seg" role="radiogroup" aria-label="Tipo de carta" style="margin-top:8px">
+        <label class="on"><input type="radio" name="scanKind" value="raw" checked>Carta suelta</label>
+        <label><input type="radio" name="scanKind" value="graded">Graduada (en slab)</label>
+      </div>
+      <label class="drop card-ratio" id="scanDrop" style="margin-top:16px"><span class="ico">${ic("camera")}</span><span style="font-weight:600">Toma o sube una foto</span><span class="xs muted" style="padding:0 24px">De frente, con buena luz y sin reflejos.</span>
+        <input type="file" id="scanIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
+      <p class="xs muted" id="scanQuota" style="margin-top:10px;text-align:center"></p>
+    </div>
+    <div id="scanResult" aria-live="polite"></div></div>`;
+  const quotaEl = $("#scanQuota"), out = $("#scanResult");
+  app.querySelectorAll("input[name=scanKind]").forEach((r) => r.addEventListener("change", () =>
+    app.querySelectorAll(".scan .seg label").forEach((lb) => lb.classList.toggle("on", lb.querySelector("input").checked))));
+  sb.rpc("scan_quota", { p_use: false }).then(({ data, error }) => { if (!error && data && quotaEl.isConnected) quotaEl.textContent = quotaText(data); });
+  let run = 0;
+  $("#scanIn").addEventListener("change", async (e) => {
+    const raw = e.target.files?.[0];
+    e.target.value = "";
+    if (!raw) return;
+    const me = ++run, graded = app.querySelector("input[name=scanKind]:checked")?.value === "graded";
+    const status = (t) => { if (me === run) out.innerHTML = `<div class="panel accent small" style="display:flex;align-items:center;gap:10px;margin-top:16px"><span class="spinner"></span>${esc(t)}</div>`; };
+    status("Revisando tus escaneos de hoy…");
+    const { data: q, error: qe } = await sb.rpc("scan_quota", { p_use: true });
+    if (me !== run || !out.isConnected) return;
+    if (qe && qe.code !== "PGRST202") { console.error(qe); out.innerHTML = `<p class="notice bad" style="margin-top:16px">No pudimos iniciar el escaneo. Intenta de nuevo.</p>`; return; }
+    if (q) quotaEl.textContent = quotaText(q);
+    if (q && !q.allowed) { out.innerHTML = planOffer(q); return; }
+    track("escanear");
+    const file = await compressImage(raw);
+    // Free read first; a likely match is shown with "¿No es tu carta?", and only then the paid AI runs.
+    const withAI = async () => {
+      const mine = ++run;
+      let r = null;
+      try { r = await identifyCard([file], status); } catch (err) { console.warn("scan failed", err instanceof Event ? `${err.type} ${err.target?.src ?? ""}` : err); }
+      if (mine === run && out.isConnected) renderScanResult(out, r, file, graded);
+    };
+    const free = graded ? null : await identifyFree([file], status).catch((err) => { console.warn("free scan", err); return null; });
+    if (me !== run || !out.isConnected) return;
+    if (free && free.confidence !== "baja") return renderScanResult(out, free, file, graded, free.confidence === "alta" ? null : withAI);
+    withAI();
+  });
+}
+function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
+  const again = `<button type="button" class="btn outline" data-again>${ic("camera")}Escanear otra</button>`;
+  const bind = () => out.querySelector("[data-again]")?.addEventListener("click", () => { out.innerHTML = ""; $("#scanIn")?.click(); });
+  if (!res || res.kind === "not-card") {
+    out.innerHTML = `<div class="panel" style="margin-top:16px"><p style="margin:0;font-weight:600">${res ? "La foto no parece una carta coleccionable." : "No pudimos reconocer la carta."}</p>
+      <p class="sub">Prueba con una foto de frente, con buena luz y sin reflejos${askedGraded ? ", donde se lea la etiqueta del slab" : ""}.</p><div class="share-row" style="margin-top:12px">${again}</div></div>`;
+    return bind();
+  }
+  const ai = res.ai, c = res.card;
+  const grading = ai?.is_graded && GRADERS.includes(ai.grading_company) && ai.grade >= 1 && ai.grade <= 10
+    ? { company: ai.grading_company, grade: Math.round(ai.grade * 2) / 2, cert: ai.cert_number ?? null } : null;
+  const card = c
+    ? { category: "pokemon", subject: c.name, setName: c.set.name, year: c.set.releaseDate?.slice(0, 4) ?? "", number: c.set.printedTotal ? `${c.number}/${c.set.printedTotal}` : c.number, variant: c.rarity ?? "", catalogId: c.id, dexId: c.dexId }
+    : { category: ["pokemon", "nba", "nfl"].includes(ai.category) ? ai.category : "pokemon", subject: ai.subject, setName: ai.set_name ?? "", year: ai.year ?? "", number: ai.card_number ?? "", variant: ai.variant ?? "" };
+  const l = { id: "escanear", isDemo: false, card, grading, condition: grading ? null : "NM", priceUsd: null, photos: [] };
+  const img = c?.images?.large || c?.images?.small || URL.createObjectURL(file);
+  const meta = [card.setName, card.year, card.number, card.variant].filter(Boolean).map(esc).join(" · ");
+  out.innerHTML = `<div class="scan-result">
+    <div class="panel scan-card"><img src="${esc(img)}" alt="${esc(card.subject)}" class="card"></div>
+    <div class="col" style="gap:16px;min-width:0">
+      <section class="panel"><p class="eyebrow" style="margin:0">${esc(categoryName(card.category))}${res.confidence && res.confidence !== "alta" ? " · revisa que sea tu carta" : ""}</p>
+        <h2 style="margin:6px 0 4px;font-size:22px">${esc(card.subject)}</h2><p class="small muted" style="margin:0">${meta}</p>
+        <div class="dbadges" style="margin-top:10px">${grading ? `<span class="b prot">${esc(grading.company)} ${esc(grading.grade)}</span>` : `<span class="b neutral">Sin graduar · valor en condición Near Mint</span>`}</div>
+        ${ai?.is_graded && !grading ? `<p class="notice warn small" style="margin:10px 0 0">Vimos un slab pero no pudimos leer la nota. Mostramos el valor sin graduar.</p>` : ""}
+        ${retryWithAI ? `<p class="small" style="margin:12px 0 0">¿No es tu carta? <button type="button" class="link" data-ai style="background:none;border:0;padding:0;cursor:pointer;font:inherit">Analizarla con IA</button> <span class="xs muted">(no gasta otro escaneo)</span></p>` : ""}</section>
+      <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy…</p></section>
+      <div class="share-row"><button type="button" class="btn primary" data-sell>${ic("tag")}Véndela en Holo</button><button type="button" class="btn outline" data-share>${ic("external")}Compartir</button>${again}</div>
+      <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
+    </div></div>`;
+  loadPriceChart(l);
+  bind();
+  out.firstElementChild.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  out.querySelector("[data-ai]")?.addEventListener("click", () => retryWithAI());
+  out.querySelector("[data-sell]").addEventListener("click", () => { pendingSellFiles = [file]; go("/vender"); });
+  out.querySelector("[data-share]").addEventListener("click", async () => {
+    const val = $("#priceChart .headline .val")?.textContent?.trim();
+    const url = `${location.origin}${location.pathname}#/escanear`;
+    const text = `Escaneé mi ${card.subject}${grading ? ` ${grading.company} ${grading.grade}` : ""} en ${CONFIG.APP_NAME}${val ? ` y vale unos ${val}` : ""}. ¿Cuánto vale la tuya?`;
+    track("compartir");
+    if (navigator.share) { try { await navigator.share({ text, url }); return; } catch (err) { if (err?.name === "AbortError") return; } }
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, "_blank", "noopener");
+  });
 }
 
 // ============================================================= account
@@ -3642,8 +3784,8 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["ordenes", "revisiones", "anuncios", "tiendas", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
-  const tabs = [["ordenes", "Órdenes"], ["revisiones", "Revisiones"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
+  const tab = ["ordenes", "revisiones", "planes", "anuncios", "tiendas", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
   app.innerHTML = `<div class="wrap admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
@@ -3651,6 +3793,7 @@ async function viewAdmin(app, params) {
   try {
     if (tab === "ordenes") await adminOrders(body);
     else if (tab === "revisiones") await adminChecks(body);
+    else if (tab === "planes") await adminPlans(body, params.get("q") ?? "");
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
     else if (tab === "tiendas") await adminShops(body);
     else if (tab === "reportes") await adminReports(body);
@@ -3873,7 +4016,7 @@ async function adminShops(body) {
 // [event, label, step it is compared against]. WhatsApp and "Comprar protegido" are
 // parallel choices after opening a card, so both compare against ver_carta.
 const FUNNEL = [
-  ["visita", "Visitaron Holo", null], ["registro", "Crearon cuenta", "visita"], ["ver_carta", "Abrieron una carta", "registro"],
+  ["visita", "Visitaron Holo", null], ["registro", "Crearon cuenta", "visita"], ["ver_carta", "Abrieron una carta", "registro"], ["escanear", "Escanearon una carta", "registro"],
   ["click_whatsapp", "Tocaron WhatsApp", "ver_carta"], ["click_protegida", "Tocaron “Comprar protegido”", "ver_carta"],
 ];
 async function adminAnalytics(body, days) {
@@ -4007,6 +4150,54 @@ async function adminChecks(body) {
   }));
 }
 
+// ------------------------------------------------------------- plans (Plan Coleccionista)
+// Manual activation until the Yappy payment button is connected: the user pays, staff adds 30 days.
+async function adminPlans(body, q) {
+  const { data: subs, error } = await sb.from("subscriptions").select("user_id, active_until, source, payment_ref, updated_at").order("active_until", { ascending: false }).limit(200);
+  if (error) {
+    body.innerHTML = `<p class="notice bad">${["42P01", "PGRST205"].includes(error.code) ? "Falta aplicar la migración 0012 en Supabase." : "No pudimos cargar los planes. Recarga la página."}</p>`;
+    return;
+  }
+  const bySub = new Map(subs.map((s) => [s.user_id, s]));
+  const words = searchTokens(q);
+  let found = [];
+  if (words.length) {
+    let pq = sb.from("public_profiles").select("id, display_name").limit(20);
+    for (const t of words) pq = pq.or(searchFilter(t, ["display_name"]));
+    found = (await pq).data ?? [];
+  }
+  const people = await profilesById([...subs.map((s) => s.user_id), ...found.map((p) => p.id)]);
+  const now = Date.now(), active = subs.filter((s) => Date.parse(s.active_until) > now);
+  const row = (id) => {
+    const s = bySub.get(id), on = s && Date.parse(s.active_until) > now;
+    return `<li class="panel" data-id="${id}"><div class="phead"><a href="#/vendedor/${encodeURIComponent(id)}" style="font-weight:600">${esc(people.get(id)?.display_name ?? "—")}</a>
+      <span class="b ${on ? "good" : "neutral"}">${on ? `Activo hasta ${fmtDate(s.active_until)}` : s ? `Venció ${fmtDate(s.active_until)}` : "Sin plan"}</span></div>
+      ${s?.payment_ref ? `<p class="xs muted" style="margin:6px 0 0">Último pago: ${esc(s.payment_ref)}</p>` : ""}
+      <div class="order-actions"><input class="input pl-ref" maxlength="120" placeholder="Ref. de pago Yappy" style="max-width:220px">
+        <button class="btn primary" data-act="add">${on ? "Sumar 30 días" : "Activar 30 días"}</button>${on ? `<button class="btn danger" data-act="stop">Quitar plan</button>` : ""}</div>
+      <div class="order-msg"></div></li>`;
+  };
+  body.innerHTML = `<p class="small muted" style="margin:0">Plan Coleccionista: ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes, escaneos sin límite. Cuando la persona pague por Yappy, búscala por su nombre y activa 30 días.</p>
+    <form class="row-input" id="plSearch" style="margin-top:16px;max-width:460px"><input class="input" name="q" value="${esc(q)}" placeholder="Nombre del usuario"><button class="btn">Buscar</button></form>
+    ${words.length ? `<h2 class="h2" style="margin-top:20px">Resultados</h2>${found.length ? `<ul class="admin-list">${found.map((p) => row(p.id)).join("")}</ul>` : `<p class="muted small">Nadie con ese nombre.</p>`}` : ""}
+    <h2 class="h2" style="margin-top:20px">Planes activos (${active.length})</h2>
+    ${active.length ? `<ul class="admin-list">${active.map((s) => row(s.user_id)).join("")}</ul>` : `<p class="muted small">Todavía no hay planes activos.</p>`}`;
+  $("#plSearch").addEventListener("submit", (e) => { e.preventDefault(); go(`/admin?tab=planes&q=${encodeURIComponent(new FormData(e.target).get("q").trim())}`); });
+  body.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), msg = li.querySelector(".order-msg"), id = li.dataset.id, s = bySub.get(id);
+    const ref = li.querySelector(".pl-ref").value.trim() || null;
+    if (b.dataset.act === "stop" && !confirm("¿Quitar el plan ahora? Vuelve a 3 escaneos al día.")) return;
+    const base = Math.max(Date.now(), s ? Date.parse(s.active_until) : 0);
+    const patch = b.dataset.act === "stop"
+      ? { user_id: id, active_until: new Date().toISOString(), source: "manual", payment_ref: s?.payment_ref ?? null }
+      : { user_id: id, active_until: new Date(base + 30 * DAY_MS).toISOString(), source: "manual", payment_ref: ref ?? s?.payment_ref ?? null };
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const { error: e2 } = await sb.from("subscriptions").upsert(patch);
+    if (e2) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(e2, msg); }
+    route();
+  }));
+}
+
 // ------------------------------------------------------------- summary
 async function adminSummary(body) {
   const [{ data: orders, error }, { count: activeCount }, { count: shopCount }, { count: pendingShops }, { count: openReports }] = await Promise.all([
@@ -4075,7 +4266,8 @@ function viewTerms(app) {
     ["Compras fuera de Compra Protegida", `<p>Si compras o vendes coordinando directamente con la otra persona, el trato, el pago y la entrega son responsabilidad de ustedes. ${esc(CONFIG.APP_NAME)} no garantiza esas operaciones. Te recomendamos reunirte en lugares públicos, revisar la carta antes de pagar y nunca pagar por adelantado.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
-    ["Reembolsos", `<ul><li><b>Compra Protegida:</b> devolvemos todo lo pagado, incluida la comisión, si la carta no llega, no es original o no coincide con el anuncio y el comprador reclama dentro de los 3 días de recibirla (sección 6). El reembolso se hace por el mismo medio de pago, en un máximo de 5 días hábiles desde que lo aprobamos.</li><li><b>Revisión en tienda:</b> se devuelve si la revisión no se puede hacer por causa nuestra o de la tienda, no según el resultado (sección 9).</li><li><b>Compras directas entre usuarios:</b> no pasan por ${esc(CONFIG.APP_NAME)}; cualquier devolución se acuerda entre comprador y vendedor (sección 7).</li><li>Para pedir un reembolso escríbenos a ${legalVal("EMAIL")} o por WhatsApp con la referencia de tu compra.</li></ul>`],
+    ["Plan Coleccionista", `<p>Es una suscripción opcional de ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes. Sin el plan, cada cuenta puede escanear 3 cartas al día en “¿Cuánto vale tu carta?”; con el plan, sin límite para uso personal (ponemos un tope diario alto para evitar abusos).</p><ul><li>Cada pago activa el plan por 30 días. No se renueva solo: si no vuelves a pagar, tu cuenta regresa al plan gratis.</li><li>Los valores que muestra el escáner son referencias de mercado, no tasaciones (sección 5).</li><li>Podemos cambiar el precio o lo que incluye el plan; los cambios aplican desde tu siguiente pago.</li></ul>`],
+    ["Reembolsos", `<ul><li><b>Compra Protegida:</b> devolvemos todo lo pagado, incluida la comisión, si la carta no llega, no es original o no coincide con el anuncio y el comprador reclama dentro de los 3 días de recibirla (sección 6). El reembolso se hace por el mismo medio de pago, en un máximo de 5 días hábiles desde que lo aprobamos.</li><li><b>Revisión en tienda:</b> se devuelve si la revisión no se puede hacer por causa nuestra o de la tienda, no según el resultado (sección 9).</li><li><b>Plan Coleccionista:</b> no se reembolsa una vez activado, salvo que el servicio no funcione por causa nuestra (sección 10).</li><li><b>Compras directas entre usuarios:</b> no pasan por ${esc(CONFIG.APP_NAME)}; cualquier devolución se acuerda entre comprador y vendedor (sección 7).</li><li>Para pedir un reembolso escríbenos a ${legalVal("EMAIL")} o por WhatsApp con la referencia de tu compra.</li></ul>`],
     ["Conducta prohibida", `<ul><li>Estafas, suplantación de identidad o pedir pagos por adelantado fuera de Compra Protegida.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li></ul>`],
     ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios o suspender cuentas. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Marcas", `<p>Pokémon, NBA, NFL y los nombres de jugadores, equipos y fabricantes (Panini, Topps y otros) son marcas de sus dueños. ${esc(CONFIG.APP_NAME)} no está afiliado ni patrocinado por ellos. Las imágenes de catálogo se usan solo para identificar las cartas. Si tienes derechos sobre una imagen y quieres que la retiremos, escríbenos a ${legalVal("EMAIL")}.</p>`],
