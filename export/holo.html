@@ -713,6 +713,7 @@ const CONFIG = {
   SUPABASE_URL: "https://vqcpqoedsyatxswdzqcy.supabase.co",
   SUPABASE_KEY: "sb_publishable_tDP2wsl-yvSv2egMu7QFtw_cTQ12NZg",
   WHATSAPP: "", // platform WhatsApp, international format without "+", e.g. "5076XXXXXXX"
+  AUTH_CHECK_USD: 5, // "Revisión en tienda": a partner shop checks the card in person (migration 0011)
   SHOW_DEMO_LISTINGS: true,
   CATALOG_API: "https://api.pokemontcg.io/v2",
   // Opcional: poner true sólo si se corrió supabase/price_snapshots.sql (suma un precio diario
@@ -724,7 +725,7 @@ const CONFIG = {
   IDENTIFY_FUNCTION: "identificar-carta",
   // Datos legales que aparecen en #/terminos y #/privacidad. Completar antes de abrir al público
   // (mientras falten, las páginas muestran "[por completar]").
-  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "26 de septiembre de 2026" },
+  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "27 de septiembre de 2026" },
   // Captcha (Cloudflare Turnstile). The site key is public. Empty = no captcha.
   TURNSTILE_SITE_KEY: "0x4AAAAAAFEs9iFLgZge-5AM",
 };
@@ -1350,7 +1351,23 @@ async function withProfiles(rows) {
   // Until migration 0004 runs the shop columns don't exist; fall back to the basics.
   if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids));
   const byId = new Map((data ?? []).map((p) => [p.id, p]));
-  return rows.map((r) => rowToListing(r, byId.get(r.seller_id)));
+  return withAuthChecks(rows.map((r) => rowToListing(r, byId.get(r.seller_id))));
+}
+// "Revisada por <tienda>" (migration 0011). Until it runs there are simply no badges.
+let authChecksOn = true;
+async function withAuthChecks(listings) {
+  if (!authChecksOn || !listings.length) return listings;
+  const { data, error } = await sb.from("listing_authenticity").select("listing_id, shop_name, checked_at").in("listing_id", listings.map((l) => l.id));
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code)) authChecksOn = false; else console.error(error);
+    return listings;
+  }
+  const byId = new Map((data ?? []).map((c) => [c.listing_id, c]));
+  for (const l of listings) {
+    const c = byId.get(l.id);
+    if (c) l.authCheck = { shop: c.shop_name || "una tienda aliada", at: c.checked_at };
+  }
+  return listings;
 }
 // Accent-insensitive search in the database: "pacifica" finds "Pacífica" and "pokemon" finds "Pokémon".
 // Each word becomes a case-insensitive regex (PostgREST imatch) in which vowels, n and c also match
@@ -1405,7 +1422,7 @@ async function fetchSellerListings(id, prof) {
   const { data, error } = await sb.from("listings").select(listingCols()).eq("seller_id", id).eq("status", "active").order("created_at", { ascending: false }).limit(100);
   if (missingKind(error)) { photoKinds = false; return fetchSellerListings(id, prof); }
   if (error) { console.error(error); return []; }
-  return (data ?? []).map((r) => rowToListing(r, prof));
+  return withAuthChecks((data ?? []).map((r) => rowToListing(r, prof)));
 }
 async function fetchRealListing(id) {
   if (!sb) return null;
@@ -1570,6 +1587,7 @@ function verdictBadge(l) {
   return { "buen-precio": `<span class="b good">Buen precio</span>`, "en-rango": `<span class="b neutral">Precio justo</span>`, alto: `<span class="b warn">Sobre el mercado</span>` }[v] ?? "";
 }
 const protectedBadge = () => `<span class="b prot">${ic("shield")}Compra Protegida</span>`;
+const authBadge = (l) => `<span class="b good" title="Una tienda aliada la revisó en persona. Es su opinión, no una garantía.">${ic("check")}Revisada por ${esc(l.authCheck.shop)}</span>`;
 const verifBadge = () => `<span class="b good" title="El vendedor subió una foto de la carta con un papel escrito a mano">${ic("camera")}Foto de verificación</span>`;
 const shopBadge = () => `<span class="b shop">${ic("store")}Tienda verificada</span>`;
 /** Price vs. the estimate's middle value, Collectr-style: arrow + amount + percent. */
@@ -1584,7 +1602,7 @@ function marketDelta(l) {
 function tile(l, i = 0) {
   return `<li style="--i:${Math.min(i, 16)}"><a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
     <div class="media card-ratio"><div class="inner">${cardArt(l)}</div>
-      <div class="corner-l">${conditionBadge(l)}${l.protectedEligible ? `<span class="chip-img prot" title="Compra Protegida disponible">${ic("shield")}<span class="sr-only">Compra Protegida disponible</span></span>` : ""}${l.verificationPhoto ? `<span class="chip-img good" title="Tiene foto de verificación">${ic("camera")}<span class="sr-only">Tiene foto de verificación</span></span>` : ""}</div>
+      <div class="corner-l">${conditionBadge(l)}${l.protectedEligible ? `<span class="chip-img prot" title="Compra Protegida disponible">${ic("shield")}<span class="sr-only">Compra Protegida disponible</span></span>` : ""}${l.verificationPhoto ? `<span class="chip-img good" title="Tiene foto de verificación">${ic("camera")}<span class="sr-only">Tiene foto de verificación</span></span>` : ""}${l.authCheck ? `<span class="chip-img good" title="Revisada por ${esc(l.authCheck.shop)}">${ic("check")}<span class="sr-only">Revisada por ${esc(l.authCheck.shop)}</span></span>` : ""}</div>
       ${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
     <p class="title">${esc(l.title)}</p>
     <p class="set">${esc([l.card.setName, l.card.number].filter(Boolean).join(" · "))}</p>
@@ -2397,7 +2415,7 @@ async function viewDetail(app, id) {
           <h1>${esc(l.title)}</h1>
           ${l.card.setName ? `<a class="dset" href="#/?q=${encodeURIComponent(l.card.setName)}">${esc(l.card.setName)}</a>` : ""}
           ${meta ? `<p class="dmeta">${meta}</p>` : ""}
-          <div class="dbadges">${conditionBadge(l)}${l.protectedEligible ? protectedBadge() : ""}${l.verificationPhoto ? verifBadge() : ""}${verdictBadge(l)}</div>
+          <div class="dbadges">${conditionBadge(l)}${l.protectedEligible ? protectedBadge() : ""}${l.verificationPhoto ? verifBadge() : ""}${l.authCheck ? authBadge(l) : ""}${verdictBadge(l)}</div>
         </div>
         <div class="dprice"><p class="big">${formatUsd(price)}</p>${marketDelta(l)}</div>
       </div>
@@ -2412,6 +2430,8 @@ async function viewDetail(app, id) {
         ${l.verificationPhoto ? `<section class="panel verif"><h2 class="ptitle">${ic("camera")}Foto de verificación</h2>
           <p class="sub">El vendedor fotografió la carta junto a un papel escrito a mano con “HOLO” y la fecha. Así sabes que la tiene en sus manos y que las fotos no son de internet.</p>
           <a href="${esc(l.verificationPhoto)}" target="_blank" rel="noopener"><img src="${esc(l.verificationPhoto)}" alt="Foto de verificación de la carta" loading="lazy"></a></section>` : ""}
+        ${l.authCheck ? `<section class="panel"><h2 class="ptitle">${ic("check")}Revisada en tienda</h2>
+          <p class="sub">${esc(l.authCheck.shop)} revisó esta carta en persona${l.authCheck.at ? ` el ${new Date(l.authCheck.at).toLocaleDateString("es-PA", { day: "numeric", month: "long", year: "numeric" })}` : ""} y no encontró señales de réplica. Es la opinión de la tienda, no una garantía: igual revisa la carta antes de pagar.</p></section>` : ""}
       </div>
       <div class="dmain">
         <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
@@ -2429,7 +2449,8 @@ async function viewDetail(app, id) {
           <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
           ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}" target="_blank" rel="noopener">${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
         ${!forSale ? "" : `<section class="panel"><h2 class="ptitle">${ic("chat")}Contacto</h2>
-          ${contact ? `<a class="btn outline block" id="contactBtn" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}</section>`}
+          ${contact ? `<a class="btn outline block" id="contactBtn" style="margin-top:14px" href="${esc(contact)}" target="_blank" rel="noopener">${ic("chat")}Preguntar por WhatsApp</a>` : `<p class="notice soft center" style="margin-top:14px">El contacto por WhatsApp se activa pronto.</p>`}
+          <p class="xs muted" style="margin:10px 0 0">${esc(CONFIG.APP_NAME)} no revisa las cartas ni responde si alguien vende una réplica. Revisa la carta en persona antes de pagar${quote ? " o usa Compra Protegida" : ""}.</p></section>`}
         <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
           <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
           <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a></div></section>
@@ -2437,6 +2458,7 @@ async function viewDetail(app, id) {
         ${isOwner && ["active", "reserved"].includes(l.status) ? `<section class="panel"><h2 class="ptitle">${ic("tag")}¿Ya la vendiste?</h2>
           <p class="sub">Márcala como vendida para que deje de aparecer. Si nos dices el precio final, ayudas a que los precios estimados reflejen lo que se paga en Panamá.</p>
           <div class="row-input" style="margin-top:12px"><input class="input" id="soldPrice" type="number" min="1" step="0.01" inputmode="decimal" placeholder="Precio final (opcional)"><button type="button" class="btn primary" id="markSold">Marcar vendida</button></div></section>` : ""}
+        ${isOwner && l.status === "active" && !l.authCheck ? `<section class="panel"><h2 class="ptitle">${ic("check")}Revisión en tienda</h2><div id="authCheckBody"><p class="loading"><span class="spinner"></span></p></div></section>` : ""}
         ${isOwner ? `<button type="button" class="btn danger block" id="deleteListing">${ic("trash")}Eliminar mi anuncio</button>` : ""}
         ${!isOwner && !l.isDemo && session ? `<details class="report"><summary>${ic("alert")}Reportar este anuncio</summary>
           <div class="col" style="gap:10px;margin-top:10px">
@@ -2456,6 +2478,7 @@ async function viewDetail(app, id) {
     t.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(t); } });
   });
   setupShare(l);
+  if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
   const needAccount = (e) => {
     if (session || !sb) return false;
     e.preventDefault();
@@ -2515,6 +2538,43 @@ async function viewDetail(app, id) {
     listingCache.delete(l.id);
     toast("Anuncio eliminado");
     go("/");
+  });
+}
+
+// ------------------------------------------------------------- authenticity check at a partner shop
+// The seller pays by Yappy and takes the card to the shop; Holo never holds it. Staff records the
+// result in #/admin?tab=revisiones and a passed check shows "Revisada por <tienda>".
+const CHECK_STATUS = {
+  requested: "Esperando pago", paid: "Pagada: lleva la carta a la tienda", authentic: "Revisada ✓",
+  not_authentic: "No pasó la revisión", inconclusive: "Sin resultado claro", cancelled: "Cancelada",
+};
+async function renderAuthCheck(l, box) {
+  const price = formatUsd(toCents(CONFIG.AUTH_CHECK_USD));
+  const { data, error } = await sb.from("authenticity_checks").select("id, status, created_at").eq("listing_id", l.id).order("created_at", { ascending: false }).limit(1);
+  if (!box.isConnected) return;
+  if (error) { box.innerHTML = `<p class="xs muted" style="margin:0">Muy pronto podrás pedir que una tienda aliada revise tu carta.</p>`; return; }
+  const last = data?.[0];
+  if (last && ["requested", "paid"].includes(last.status)) {
+    const pay = last.status === "requested" ? waLink(`Quiero pagar la revisión en tienda de "${l.title}" (ref ${l.id.slice(0, 8)}). Total ${price}.`) : null;
+    box.innerHTML = `<p class="sub"><b>${CHECK_STATUS[last.status]}.</b> ${last.status === "requested" ? `Te escribimos por WhatsApp para el pago (${price} por Yappy) y la cita en la tienda.` : "Te escribimos por WhatsApp con la tienda y la hora."}</p>
+      ${pay ? `<a class="btn outline block" style="margin-top:12px" href="${esc(pay)}" target="_blank" rel="noopener">${ic("chat")}Escribirnos por WhatsApp</a>` : ""}`;
+    return;
+  }
+  const prev = { not_authentic: "La tienda no pudo confirmar que esta carta sea original.", inconclusive: "La última revisión no tuvo un resultado claro." }[last?.status];
+  box.innerHTML = `${prev ? `<p class="notice warn" style="margin:0 0 12px">${prev}</p>` : ""}
+    <p class="sub">Llevas la carta a una tienda aliada, la revisan en persona y tu anuncio muestra “Revisada por” con el nombre de la tienda. Los compradores confían más. Cuesta ${price}.</p>
+    <label class="f" style="margin-top:12px">Tu WhatsApp para coordinar la cita<input class="input" id="authContact" maxlength="120" inputmode="tel" autocomplete="tel" placeholder="6XXX-XXXX"></label>
+    <button type="button" class="btn primary block" style="margin-top:12px" id="authReq">Pedir revisión (${price})</button>
+    <p class="xs muted" style="margin:8px 0 0">Es la opinión de la tienda, no una garantía de autenticidad. <a class="link" href="#/terminos">Ver términos</a></p>`;
+  $("#authReq").addEventListener("click", async (e) => {
+    const btn = e.currentTarget, contact = $("#authContact").value.trim();
+    if (contact.replace(/\D/g, "").length < 7) return toast("Escribe tu número de WhatsApp.", { type: "error" });
+    btn.disabled = true;
+    const { error } = await sb.from("authenticity_checks").insert({ listing_id: l.id, requester_id: session.user.id, listing_title: l.title.slice(0, 200), contact });
+    if (!box.isConnected) return;
+    if (error && error.code !== "23505") { btn.disabled = false; console.error(error); return toast("No pudimos enviar la solicitud. Intenta de nuevo.", { type: "error" }); }
+    toast("Solicitud enviada", { description: "Te escribimos por WhatsApp para el pago y la cita." });
+    renderAuthCheck(l, box);
   });
 }
 
@@ -3579,14 +3639,15 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["ordenes", "anuncios", "tiendas", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
-  const tabs = [["ordenes", "Órdenes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
+  const tab = ["ordenes", "revisiones", "anuncios", "tiendas", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["revisiones", "Revisiones"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
   app.innerHTML = `<div class="wrap admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
   const body = $("#adminBody");
   try {
     if (tab === "ordenes") await adminOrders(body);
+    else if (tab === "revisiones") await adminChecks(body);
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
     else if (tab === "tiendas") await adminShops(body);
     else if (tab === "reportes") await adminReports(body);
@@ -3889,6 +3950,60 @@ async function adminReports(body) {
   }));
 }
 
+// ------------------------------------------------------------- authenticity checks
+async function adminChecks(body) {
+  const { data: rows, error } = await sb.from("authenticity_checks").select("id, listing_id, requester_id, listing_title, contact, shop_id, status, notes, created_at, updated_at, checked_at").order("created_at", { ascending: false }).limit(100);
+  if (error) {
+    body.innerHTML = `<p class="notice bad">${["42P01", "PGRST205"].includes(error.code) ? "Falta aplicar la migración 0011 en Supabase." : "No pudimos cargar las revisiones. Recarga la página."}</p>`;
+    return;
+  }
+  const { data: shops } = await sb.from("public_profiles").select("id, display_name").eq("is_shop", true).eq("verified", true).order("display_name");
+  const people = await profilesById([...rows.map((r) => r.requester_id), ...rows.map((r) => r.shop_id)]);
+  const open = rows.filter((r) => ["requested", "paid"].includes(r.status)), closed = rows.filter((r) => !open.includes(r));
+  const price = formatUsd(toCents(CONFIG.AUTH_CHECK_USD));
+  const card = (r) => `<li class="panel order" data-id="${r.id}" data-listing="${r.listing_id ?? ""}">
+      <div class="phead">${r.listing_id ? `<a href="#/carta/${encodeURIComponent(r.listing_id)}" style="font-weight:600">${esc(r.listing_title)}</a>` : `<span style="font-weight:600">${esc(r.listing_title)} (anuncio eliminado)</span>`}<span class="b ${r.status === "authentic" ? "good" : open.includes(r) ? "prot" : "warn"}">${CHECK_STATUS[r.status] ?? esc(r.status)}</span></div>
+      <dl class="rows"><div><dt>Vendedor</dt><dd>${esc(people.get(r.requester_id)?.display_name ?? "—")}</dd></div>
+        <div><dt>WhatsApp</dt><dd>${esc(r.contact)}</dd></div><div><dt>Cobrar</dt><dd>${price}</dd></div>
+        ${r.shop_id ? `<div><dt>Tienda</dt><dd>${esc(people.get(r.shop_id)?.display_name ?? "—")}</dd></div>` : ""}
+        <div><dt>Pedida / actualizada</dt><dd>${fmtDate(r.created_at)} · ${fmtDate(r.updated_at)}</dd></div></dl>
+      <label class="f muted-label" style="margin-top:8px">Notas (ref. de pago, cita…)<textarea class="textarea order-notes" rows="2" maxlength="500">${esc(r.notes ?? "")}</textarea></label>
+      ${r.status === "paid" ? `<label class="f muted-label" style="margin-top:8px">Tienda que la revisó<select class="select chk-shop"><option value="">Elige la tienda…</option>${(shops ?? []).map((s) => `<option value="${s.id}">${esc(s.display_name)}</option>`).join("")}</select></label>` : ""}
+      <div class="order-actions">
+        ${r.status === "requested" ? `<button class="btn primary" data-act="paid">Marcar pagada</button>` : ""}
+        ${r.status === "paid" ? `<button class="btn primary" data-act="authentic">Auténtica</button><button class="btn danger" data-act="not_authentic">No auténtica</button><button class="btn" data-act="inconclusive">Sin resultado claro</button>` : ""}
+        ${open.includes(r) ? `<button class="btn danger" data-act="cancelled">${r.status === "paid" ? "Cancelar y reembolsar" : "Cancelar"}</button>` : ""}
+        <button class="btn" data-act="notes">Guardar notas</button>
+      </div><div class="order-msg"></div></li>`;
+  body.innerHTML = `<p class="small muted" style="margin:0">El vendedor paga ${price} por Yappy y lleva la carta a la tienda. Holo nunca recibe la carta. “Auténtica” muestra “Revisada por &lt;tienda&gt;” en el anuncio. ${shops?.length ? "" : "<b>Todavía no hay tiendas verificadas</b>: verifica una en la pestaña Tiendas."}</p>
+    <h2 class="h2" style="margin-top:20px">Pendientes (${open.length})</h2>
+    ${open.length ? `<ul class="admin-list">${open.map(card).join("")}</ul>` : `<p class="muted small">No hay revisiones pendientes.</p>`}
+    ${closed.length ? `<details style="margin-top:20px"><summary class="small">Cerradas (${closed.length})</summary><ul class="admin-list">${closed.map(card).join("")}</ul></details>` : ""}`;
+  body.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), msg = li.querySelector(".order-msg"), act = b.dataset.act;
+    const patch = { notes: li.querySelector(".order-notes").value.trim() || null };
+    if (act !== "notes") patch.status = act;
+    if (["authentic", "not_authentic", "inconclusive"].includes(act)) {
+      patch.shop_id = li.querySelector(".chk-shop")?.value || null;
+      if (!patch.shop_id) { msg.innerHTML = `<p class="notice bad" style="margin:0">Elige la tienda que la revisó.</p>`; return; }
+      patch.checked_at = new Date().toISOString();
+    }
+    if (act === "cancelled" && !confirm("¿Cancelar esta revisión? Si ya pagó, devuélvele el dinero por Yappy.")) return;
+    const removeListing = act === "not_authentic" && li.dataset.listing && confirm("¿Quitar también el anuncio de la página? (Recomendado si la carta es réplica.)");
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const { error } = await sb.from("authenticity_checks").update(patch).eq("id", li.dataset.id);
+    if (!error && removeListing) {
+      const { error: e2 } = await sb.from("listings").update({ status: "removed" }).eq("id", li.dataset.listing);
+      if (e2) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(e2, msg, "La revisión quedó guardada, pero no se pudo quitar el anuncio. Hazlo en Anuncios."); }
+      listingCache.delete(li.dataset.listing);
+    }
+    if (error) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(error, msg); }
+    if (act === "notes") { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); msg.innerHTML = `<p class="notice good" style="margin:0">Notas guardadas.</p>`; return; }
+    if (li.dataset.listing) listingCache.delete(li.dataset.listing);
+    route();
+  }));
+}
+
 // ------------------------------------------------------------- summary
 async function adminSummary(body) {
   const [{ data: orders, error }, { count: activeCount }, { count: shopCount }, { count: pendingShops }, { count: openReports }] = await Promise.all([
@@ -3927,7 +4042,7 @@ async function adminSummary(body) {
 // Draft written for Panamá (Ley 81 de 2019 y D.E. 285 de 2021 sobre datos personales; Ley 45 de 2007
 // de protección al consumidor; Ley 51 de 2008 de comercio electrónico). Must be reviewed by a
 // Panamanian lawyer and CONFIG.LEGAL completed before opening to the public.
-const TERMS_VERSION = "2026-09-26";
+const TERMS_VERSION = "2026-09-27";
 function legalVal(k) {
   const v = CONFIG.LEGAL?.[k];
   return v ? esc(v) : `<mark class="todo">[por completar]</mark>`;
@@ -3949,16 +4064,18 @@ function viewTerms(app) {
   const fee = `${FEES.rateBps / 100}% del precio de la carta, con un mínimo de ${formatUsd(FEES.minCents)} y un máximo de ${formatUsd(FEES.maxCents)}, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión`;
   legalPage(app, "Términos y condiciones", `Estas reglas aplican a todas las personas que usan ${esc(CONFIG.APP_NAME)}. Al crear una cuenta o usar la plataforma aceptas estos términos.`, [
     ["Quiénes somos", `<p>${esc(CONFIG.APP_NAME)} es una plataforma panameña para comprar y vender cartas coleccionables (Pokémon, NBA, NFL y otras). La opera ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Contacto: ${legalVal("EMAIL")}.</p>`],
-    ["Qué hace y qué no hace " + esc(CONFIG.APP_NAME), `<p>${esc(CONFIG.APP_NAME)} publica anuncios de vendedores y pone en contacto a compradores y vendedores. <b>No somos dueños de las cartas ni parte de la compraventa</b>, salvo cuando el comprador elige Compra Protegida (sección 6), en la que actuamos como intermediario de pago.</p>`],
+    ["Qué hace y qué no hace " + esc(CONFIG.APP_NAME), `<p>${esc(CONFIG.APP_NAME)} publica anuncios de vendedores y pone en contacto a compradores y vendedores. <b>No somos dueños de las cartas ni parte de la compraventa</b>, salvo cuando el comprador elige Compra Protegida (sección 6), en la que actuamos como intermediario de pago. <b>No revisamos las cartas que se publican</b> (sección 8).</p>`],
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
     ["Compra Protegida", `<p>Es opcional y la elige el comprador. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más la comisión de protección: ${fee}.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>El comprador tiene 3 días desde que recibe la carta para avisarnos si no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta cuando el comprador confirma que la recibió bien, o a los 3 días de la entrega si no hubo reclamo.</li></ol><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado, incluida la comisión; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe mandarnos fotos o video de la carta como la recibió. Si la venta no se concreta por causa del vendedor, también devolvemos todo. La comisión no se reembolsa si el comprador desiste por otras razones después de recibir la carta.</p><p>El vendedor recibe el 100% del precio publicado; la comisión la paga el comprador.</p>`],
     ["Compras fuera de Compra Protegida", `<p>Si compras o vendes coordinando directamente con la otra persona, el trato, el pago y la entrega son responsabilidad de ustedes. ${esc(CONFIG.APP_NAME)} no garantiza esas operaciones. Te recomendamos reunirte en lugares públicos, revisar la carta antes de pagar y nunca pagar por adelantado.</p>`],
+    ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
+    ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
     ["Conducta prohibida", `<ul><li>Estafas, suplantación de identidad o pedir pagos por adelantado fuera de Compra Protegida.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li></ul>`],
     ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios o suspender cuentas. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Marcas", `<p>Pokémon, NBA, NFL y los nombres de jugadores, equipos y fabricantes (Panini, Topps y otros) son marcas de sus dueños. ${esc(CONFIG.APP_NAME)} no está afiliado ni patrocinado por ellos. Las imágenes de catálogo se usan solo para identificar las cartas.</p>`],
-    ["Responsabilidad", `<p>Hacemos lo posible para que la plataforma funcione bien y sea segura, pero puede tener interrupciones o errores. En la medida que permita la ley, no respondemos por daños indirectos ni por operaciones entre usuarios fuera de Compra Protegida. Nada en estos términos limita los derechos que te da la Ley 45 de 2007 de protección al consumidor.</p>`],
+    ["Responsabilidad", `<p>Hacemos lo posible para que la plataforma funcione bien y sea segura, pero puede tener interrupciones o errores. En la medida que permita la ley, no respondemos por daños indirectos, por operaciones entre usuarios fuera de Compra Protegida ni por cartas falsas vendidas por usuarios (sección 8). Nada en estos términos limita los derechos que te da la Ley 45 de 2007 de protección al consumidor.</p>`],
     ["Cambios", `<p>Podemos actualizar estos términos. Si el cambio es importante, te avisaremos en la plataforma. Seguir usándola después del aviso significa que aceptas la nueva versión.</p>`],
     ["Ley aplicable", `<p>Estos términos se rigen por las leyes de la República de Panamá. Como consumidor, también puedes acudir a la Autoridad de Protección al Consumidor y Defensa de la Competencia (ACODECO).</p>`],
   ]);
@@ -3971,7 +4088,7 @@ function viewPrivacy(app) {
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Coordinar las Compras Protegidas y atender reclamos.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
-    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>WhatsApp (Meta)</b>: solo si decides contactarnos por ahí.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
+    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>Tiendas aliadas</b>: si pides una Revisión en tienda, le damos a la tienda tu nombre para mostrar y los datos de la carta para coordinar la cita.</li><li><b>WhatsApp (Meta)</b>: solo si decides contactarnos por ahí.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
     ["Cuánto tiempo los guardamos", `<p>Mientras tengas tu cuenta. Si la cierras, borramos tus datos en un plazo razonable, salvo lo que debamos conservar por obligaciones legales o contables (por ejemplo, registros de Compras Protegidas) o para resolver disputas.</p>`],
     ["Tus derechos", `<p>Tienes derecho a <b>acceder</b> a tus datos, <b>rectificarlos</b>, <b>cancelarlos</b> (borrarlos), <b>oponerte</b> a su uso y pedir su <b>portabilidad</b>. Puedes cambiar tu nombre y fotos desde <a href="#/cuenta">Mi cuenta</a>; para lo demás escribe a ${legalVal("EMAIL")} y te respondemos en los plazos de la ley. Si no quedas conforme, puedes acudir a la Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI).</p>`],
     ["Almacenamiento en tu navegador", `<p>Usamos el almacenamiento local de tu navegador para mantener tu sesión, el identificador anónimo de uso y una copia temporal de precios para que la página cargue más rápido. No usamos cookies de publicidad ni de terceros.</p>`],
