@@ -184,7 +184,8 @@ label.f .hint { font-weight: 400; color: var(--fg-2); }
 .empty-state .ico .i { width: 20px; height: 20px; }
 
 /* ---------------------------------------------------------------- home */
-.intro { padding-top: 44px; padding-bottom: 4px; }
+.intro { padding-top: 24px; padding-bottom: 4px; }
+.intro .cta { margin-top: 0; }
 .intro h1 { margin-top: 14px; max-width: 780px; font-size: clamp(32px, 5.2vw, 52px); line-height: 1.04; letter-spacing: -.035em; font-weight: 800; }
 .lead { margin-top: 14px; max-width: 620px; color: var(--fg-2); font-size: 16px; }
 .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
@@ -2254,9 +2255,7 @@ async function viewHome(app, params) {
   setTitle(f.q ? `Resultados para “${f.q}”` : undefined);
   app.innerHTML = `
     ${filtered ? "" : `<section class="wrap intro">
-      <p class="eyebrow"><span class="dot"></span>Marketplace de Panamá · Pokémon, NBA y NFL</p>
-      <h1>Cartas coleccionables en Panamá, con precio claro.</h1>
-      <p class="lead">Cada anuncio muestra un rango de precio de mercado, y con Compra Protegida el vendedor solo cobra cuando confirmas que recibiste la carta bien.</p>
+      <h1 class="sr-only">Cartas coleccionables en Panamá, con precio claro</h1>
       <div class="cta"><a class="btn primary lg" href="#/vender">Publica tu carta gratis</a><a class="btn outline lg" href="#/escanear">${ic("camera")}¿Cuánto vale tu carta?</a><a class="btn outline lg" href="#/protegida">${ic("shield")}¿Cómo funciona Compra Protegida?</a></div></section>`}
     <div class="wrap">
       <section class="panel finder"${filtered ? ' style="margin-top:24px"' : ""}>
