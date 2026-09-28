@@ -455,6 +455,7 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .daily em { font-style: normal; font-size: 10px; color: var(--ink-2); }
 /* Narrow phones (iPhone SE, 320 px): let long buttons and the seller switch wrap instead of overflowing. */
 @media (max-width: 380px) {
+  table.fees th, table.fees td { padding: 10px 8px; }
   .cta .btn { max-width: 100%; height: auto; min-height: 44px; padding-top: 8px; padding-bottom: 8px; white-space: normal; text-align: center; }
   .seller-seg { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr); }
   .seller-seg a { min-width: 0; padding: 4px 8px; font-size: 13px; white-space: normal; }
@@ -4130,7 +4131,10 @@ async function mountCaptcha(box) {
         if (t || Date.now() > until || !box.isConnected) return t || "";
       }
     };
-    return { token, reset: () => ts.reset(id), remove: () => { try { ts.remove(id); } catch { /* already gone */ } } };
+    const remove = () => { clearInterval(watch); try { ts.remove(id); } catch { /* already gone */ } };
+    // Leaving the sign-in page drops the form without telling us: clean up the widget so it stops running.
+    const watch = setInterval(() => { if (!box.isConnected) remove(); }, 1000);
+    return { token, reset: () => ts.reset(id), remove };
   } catch (e) {
     console.error(e);
     box.innerHTML = `<p class="notice bad">No se pudo cargar la verificación. Recarga la página.</p>`;
