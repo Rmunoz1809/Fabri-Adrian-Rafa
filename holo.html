@@ -73,7 +73,9 @@ kbd { font-family: var(--sans); font-size: 11px; font-weight: 600; line-height: 
 header.top { position: sticky; top: 0; z-index: 40; background: var(--glass); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
 header.top .row { position: relative; display: flex; align-items: center; gap: 8px; height: var(--header-h); }
 .logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; letter-spacing: -.02em; }
-.logo .mark { position: relative; width: 22px; height: 22px; border-radius: 7px; background: var(--fg); overflow: hidden; }
+.logo .tagline { max-width: 175px; padding-left: 10px; border-left: 1px solid var(--border); font-size: 11px; font-weight: 500; line-height: 1.25; letter-spacing: 0; color: var(--fg-2); }
+@media (max-width: 480px) { .logo .tagline { max-width: 140px; font-size: 10px; } }
+.logo .mark { flex-shrink: 0; position: relative; width: 22px; height: 22px; border-radius: 7px; background: var(--fg); overflow: hidden; }
 .logo .mark::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 25%, rgb(255 255 255 / .7) 50%, transparent 75%); transform: translate(-100%); }
 .logo:hover .mark::after { animation: shine 2s linear infinite; }
 @media (max-width: 899.98px) { header.top .logo { position: absolute; left: 50%; transform: translateX(-50%); } }
@@ -714,7 +716,7 @@ body:not(.gate) .gate-bg { display: none; }
 <header class="top">
   <div class="wrap row">
     <button class="icon-btn sm-only" id="menuBtn" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobileMenu"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
-    <a class="logo" href="#/"><i class="mark" aria-hidden="true"></i><span id="brand">Holo</span></a>
+    <a class="logo" href="#/"><i class="mark" aria-hidden="true"></i><span id="brand">Holo</span><span class="tagline">#1 marketplace de cartas coleccionables en Panamá</span></a>
     <nav class="links lg-only" id="navLinks" aria-label="Principal"></nav>
     <div class="top-right">
       <button class="search-trigger" id="searchBtn" type="button" aria-label="Buscar cartas" aria-haspopup="dialog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Buscar cartas…</span><kbd id="searchKbd">⌘K</kbd></button>
