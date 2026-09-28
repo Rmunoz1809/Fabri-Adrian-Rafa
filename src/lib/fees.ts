@@ -1,25 +1,25 @@
-// "Compra Protegida" pricing. Listing is free for sellers; the buyer pays an
-// optional protection fee (Vinted-style) when they want the platform to hold the
-// payment and verify the card. Amounts are in USD cents to avoid float drift.
+// "Compra Protegida" pricing. Listing is free. The buyer pays only the card price; when the sale
+// goes through the platform keeps a commission (plus ITBMS on it) from the seller's payout.
+// Mirrors quoteProtected() in holo.html and protected_quote() in migration 0015. USD cents.
 
 export interface FeeConfig {
   /** Percentage of the card price, in basis points (500 = 5%). */
   rateBps: number;
   /** Fixed part added to every protected order, in cents. */
   fixedCents: number;
-  /** Floor for the protection fee (before tax), in cents. */
+  /** Floor for the commission (before tax), in cents. */
   minCents: number;
-  /** Cap for the protection fee (before tax), in cents. */
+  /** Cap for the commission (before tax), in cents. */
   maxCents: number;
-  /** ITBMS applied to our service fee, in basis points (700 = 7%). */
+  /** ITBMS applied to our commission, in basis points (700 = 7%). */
   itbmsBps: number;
 }
 
 export const DEFAULT_FEES: FeeConfig = {
-  rateBps: 400,
+  rateBps: 300,
   fixedCents: 0,
-  minCents: 100,
-  maxCents: 4000,
+  minCents: 0,
+  maxCents: Number.POSITIVE_INFINITY,
   itbmsBps: 700,
 };
 
@@ -47,8 +47,8 @@ export function quoteProtected(priceCents: number, cfg: FeeConfig = DEFAULT_FEES
     priceCents,
     feeCents,
     itbmsCents,
-    buyerTotalCents: priceCents + feeCents + itbmsCents,
-    sellerPayoutCents: priceCents,
+    buyerTotalCents: priceCents,
+    sellerPayoutCents: priceCents - feeCents - itbmsCents,
     platformRevenueCents: feeCents,
   };
 }

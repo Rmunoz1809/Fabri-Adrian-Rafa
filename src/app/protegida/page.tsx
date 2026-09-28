@@ -34,17 +34,18 @@ export default function ProtectedPage() {
 
       <h2 className="mt-10 font-display text-2xl font-bold">Cuánto cuesta</h2>
       <p className="mt-1 text-sm text-ink-2">
-        {DEFAULT_FEES.rateBps / 100}%{DEFAULT_FEES.fixedCents > 0 && ` + ${formatUsd(DEFAULT_FEES.fixedCents)}`}, mínimo {formatUsd(DEFAULT_FEES.minCents)} y
-        máximo {formatUsd(DEFAULT_FEES.maxCents)}. Lo paga el comprador, más 7% de ITBMS sobre la tarifa.
+        Para el comprador, nada: paga solo el precio de la carta. Cuando se completa la venta, {APP_NAME} se queda con el{" "}
+        {DEFAULT_FEES.rateBps / 100}% del precio, más {DEFAULT_FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, y se lo
+        descuenta al vendedor de lo que recibe. Publicar sigue siendo gratis.
       </p>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-line bg-surface">
         <table className="w-full text-sm">
           <thead className="text-left text-xs text-ink-2">
             <tr className="border-b border-line">
               <th className="p-3 font-medium">Precio de la carta</th>
-              <th className="p-3 font-medium">Protección</th>
+              <th className="p-3 font-medium">Comisión ({DEFAULT_FEES.rateBps / 100}%)</th>
               <th className="p-3 font-medium">ITBMS</th>
-              <th className="p-3 font-medium">Total</th>
+              <th className="p-3 font-medium">Recibe el vendedor</th>
             </tr>
           </thead>
           <tbody>
@@ -53,7 +54,7 @@ export default function ProtectedPage() {
                 <td className="p-3">{formatUsd(q.priceCents)}</td>
                 <td className="p-3">{formatUsd(q.feeCents)}</td>
                 <td className="p-3">{formatUsd(q.itbmsCents)}</td>
-                <td className="p-3 font-semibold">{formatUsd(q.buyerTotalCents)}</td>
+                <td className="p-3 font-semibold">{formatUsd(q.sellerPayoutCents)}</td>
               </tr>
             ))}
           </tbody>

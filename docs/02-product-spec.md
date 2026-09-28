@@ -35,14 +35,14 @@
 
 ## Comisiones (Compra Protegida)
 
-La paga el **comprador**; publicar es gratis para el vendedor. Se configura en [`src/lib/fees.ts`](../src/lib/fees.ts).
+La paga el **vendedor** cuando se completa la venta; publicar es gratis y el comprador paga solo el precio de la carta. Se configura en [`src/lib/fees.ts`](../src/lib/fees.ts), en `holo.html` y en `protected_quote()` (migración 0015).
 
 | Concepto | Valor |
 |---|---|
-| Tasa | 4% del precio |
-| Mínimo / máximo | $1.00 / $40.00 |
-| ITBMS | 7% sobre la tarifa |
-| Ejemplo con una carta de $100 | $4.00 + $0.28 de ITBMS = $104.28 de total |
+| Tasa | 3% del precio de venta |
+| Mínimo / máximo | Sin mínimo ni máximo |
+| ITBMS | 7% sobre la comisión |
+| Ejemplo con una carta de $100 | El comprador paga $100.00; al vendedor se le descuentan $3.00 + $0.21 de ITBMS y recibe $96.79 |
 
 ## Funciones de IA (prioridad y costo)
 
