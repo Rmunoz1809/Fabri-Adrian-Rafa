@@ -97,8 +97,7 @@ export default async function ListingPage({ params }: PageProps<"/carta/[id]">) 
               </p>
               <dl className="mt-3 space-y-1 text-sm">
                 <div className="flex justify-between"><dt className="text-ink-2">Carta</dt><dd>{formatUsd(quote.priceCents)}</dd></div>
-                <div className="flex justify-between"><dt className="text-ink-2">Protección (3%)</dt><dd>{formatUsd(quote.feeCents)}</dd></div>
-                <div className="flex justify-between"><dt className="text-ink-2">ITBMS (7% sobre la protección)</dt><dd>{formatUsd(quote.itbmsCents)}</dd></div>
+                <div className="flex justify-between"><dt className="text-ink-2">Comisión para ti</dt><dd>{formatUsd(quote.feeCents + quote.itbmsCents)}</dd></div>
                 <div className="flex justify-between border-t border-line pt-2 font-semibold"><dt>Total</dt><dd>{formatUsd(quote.buyerTotalCents)}</dd></div>
               </dl>
               {buyProtected ? (

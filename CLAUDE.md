@@ -26,6 +26,6 @@ Repo: https://github.com/Rmunoz1809/Fabri-Adrian-Rafa (remote `origin`, rama `ma
 - Node está en `~/.local/node/bin` (sin Homebrew): `export PATH="$HOME/.local/node/bin:$PATH"`.
 - Servidor local: `npm run dev`. Sin `NEXT_PUBLIC_SUPABASE_URL` la app usa datos demo.
 - Tests obligatorios para pagos, comisiones y permisos (`src/lib/fees.ts`, `src/lib/pricing/`, RLS).
-- La comisión de Compra Protegida vive en `src/lib/fees.ts` (3% al comprador y 3% al vendedor, sin mínimo ni máximo, más 7% de ITBMS sobre cada comisión). Si cambia, actualiza también `export/holo.html`, `protected_quote()` en Supabase (migración nueva) y `docs/02-product-spec.md`.
+- La comisión de Compra Protegida vive en `src/lib/fees.ts` (5% al vendedor, descontado de lo que recibe; el comprador paga solo el precio; sin mínimo ni máximo, más 7% de ITBMS sobre la comisión). Si cambia, actualiza también `export/holo.html`, `protected_quote()` en Supabase (migración nueva) y `docs/02-product-spec.md`.
 - `export/holo.html` es la versión de un solo archivo para compartir. Nunca debe contener claves secretas.
 - `holo.html` en la raíz del repo es lo que publica GitHub Pages. Si cambias `export/holo.html`, cópialo también a la raíz (`cp export/holo.html holo.html`) en el mismo commit.

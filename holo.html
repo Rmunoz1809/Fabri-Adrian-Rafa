@@ -835,7 +835,7 @@ const CONFIG = {
   IDENTIFY_FUNCTION: "identificar-carta",
   // Datos legales que aparecen en #/terminos y #/privacidad. Completar antes de abrir al público
   // (mientras falten, las páginas muestran "[por completar]").
-  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "27 de septiembre de 2026" },
+  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "28 de septiembre de 2026" },
   // Captcha (Cloudflare Turnstile). The site key is public. Empty = no captcha.
   TURNSTILE_SITE_KEY: "0x4AAAAAAFEs9iFLgZge-5AM",
 };
@@ -870,19 +870,26 @@ const PROVINCES = [...new Set(LOCATIONS.map((l) => l.province))];
 const FLAT_LOCATIONS = LOCATIONS.flatMap((l) => l.neighborhoods.map((n) => ({ province: l.province, district: l.district, neighborhood: n })));
 
 // ============================================================= fees (Compra Protegida)
-// Both sides pay: the buyer adds 3% of the price (plus 7% ITBMS on it) and the seller receives the
-// price minus 3% (plus 7% ITBMS on it). Same numbers as protected_quote() (migration 0016). Cents.
-const FEES = { rateBps: 300, fixedCents: 0, minCents: 0, maxCents: Infinity, itbmsBps: 700 };
+// Only the seller pays: Holo keeps 5% of the sale price plus 7% ITBMS on that commission, taken from
+// the payout. The buyer pays just the card price (buyerRateBps 0). Same numbers as protected_quote()
+// (migration 0017) and src/lib/fees.ts. Cents.
+const FEES = { rateBps: 500, buyerRateBps: 0, fixedCents: 0, minCents: 0, maxCents: Infinity, itbmsBps: 700 };
 const roundHalfUp = (n) => Math.floor(n + 0.5);
+function commission(priceCents, rateBps, cfg) {
+  if (!rateBps) return [0, 0];
+  const fee = Math.min(cfg.maxCents, Math.max(cfg.minCents, roundHalfUp((priceCents * rateBps) / 10000) + cfg.fixedCents));
+  return [fee, roundHalfUp((fee * cfg.itbmsBps) / 10000)];
+}
 function quoteProtected(priceCents, cfg = FEES) {
   if (!Number.isInteger(priceCents) || priceCents <= 0) throw new RangeError("priceCents must be a positive integer");
-  const raw = roundHalfUp((priceCents * cfg.rateBps) / 10000) + cfg.fixedCents;
-  const feeCents = Math.min(cfg.maxCents, Math.max(cfg.minCents, raw));
-  const itbmsCents = roundHalfUp((feeCents * cfg.itbmsBps) / 10000);
-  // The seller's commission uses the same rate, so it equals the buyer's.
-  return { priceCents, feeCents, itbmsCents, sellerFeeCents: feeCents, sellerItbmsCents: itbmsCents,
-    buyerTotalCents: priceCents + feeCents + itbmsCents, sellerPayoutCents: priceCents - feeCents - itbmsCents };
+  const [feeCents, itbmsCents] = commission(priceCents, cfg.buyerRateBps, cfg);
+  const [sellerFeeCents, sellerItbmsCents] = commission(priceCents, cfg.rateBps, cfg);
+  return { priceCents, feeCents, itbmsCents, sellerFeeCents, sellerItbmsCents,
+    buyerTotalCents: priceCents + feeCents + itbmsCents, sellerPayoutCents: priceCents - sellerFeeCents - sellerItbmsCents };
 }
+// The buyer's lines in a price box: a fee and its ITBMS if the buyer pays one, else "$0 for you".
+const buyerFeeRows = (fee, itbms) => fee ? `<div><dt>Protección</dt><dd>${formatUsd(fee)}</dd></div><div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(itbms)}</dd></div>`
+  : `<div><dt>Comisión para ti</dt><dd>${formatUsd(0)}</dd></div>`;
 const feePct = () => `${FEES.rateBps / 100}%`;
 // An order's real amounts. fee/itbms are the buyer's commission; seller_fee/seller_itbms the seller's
 // (migration 0016). Orders opened while 0015 was live (fee_payer "seller") charged only the seller.
@@ -2580,8 +2587,8 @@ async function viewDetail(app, id) {
       <aside class="dside">
         ${quote && forSale ? `<section class="panel"><h2 class="ptitle">${ic("shield")}Compra Protegida</h2>
           <p class="sub">Pagas a ${esc(CONFIG.APP_NAME)} y guardamos el dinero hasta que confirmes que recibiste la carta bien. Si no llega o no es lo anunciado, te devolvemos todo.</p>
-          <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div><div><dt>Protección (${feePct()})</dt><dd>${formatUsd(quote.feeCents)}</dd></div>
-          <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(quote.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
+          <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div>${buyerFeeRows(quote.feeCents, quote.itbmsCents)}
+          <div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
           ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}"${CONFIG.YAPPY.ENABLED ? "" : ` target="_blank" rel="noopener"`}>${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
         ${l.isDemo ? `<section class="panel"><h2 class="ptitle">${ic("tag")}Hacer oferta</h2>
           <p class="sub">En los anuncios reales puedes ofrecer desde ${formatUsd(minOfferCents(price))} (60% del precio). El vendedor acepta, rechaza o te contraoferta, y si se ponen de acuerdo compras con Compra Protegida a ese precio.</p>
@@ -2745,8 +2752,8 @@ async function renderOffer(l, box) {
     const buy = CONFIG.YAPPY.ENABLED ? `#/pagar/${encodeURIComponent(l.id)}` // the checkout applies the accepted offer
       : waLink(`Quiero comprar con Compra Protegida: "${l.title}" (ref ${l.id.slice(0, 8)}). Oferta aceptada: ${formatUsd(q.priceCents)}. Total ${formatUsd(q.buyerTotalCents)}. Mi código Holo: ${buyerCode()}.`);
     box.innerHTML = `<p class="notice good" style="margin:0">¡El vendedor aceptó tu oferta de <b>${formatUsd(o.amount_cents)}</b>!</p>
-      <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(q.priceCents)}</dd></div><div><dt>Protección (${feePct()})</dt><dd>${formatUsd(q.feeCents)}</dd></div>
-      <div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(q.itbmsCents)}</dd></div><div class="total"><dt>Total</dt><dd>${formatUsd(q.buyerTotalCents)}</dd></div></dl>
+      <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(q.priceCents)}</dd></div>${buyerFeeRows(q.feeCents, q.itbmsCents)}
+      <div class="total"><dt>Total</dt><dd>${formatUsd(q.buyerTotalCents)}</dd></div></dl>
       ${buy ? `<a class="btn primary block" style="margin-top:12px" id="offerBuy" href="${esc(buy)}"${CONFIG.YAPPY.ENABLED ? "" : ` target="_blank" rel="noopener"`}>${ic("shield")}Comprar protegido a este precio</a>` : `<p class="notice soft center" style="margin-top:12px">Compra Protegida disponible pronto.</p>`}`;
   } else {
     box.innerHTML = form("Ofertar", o?.status === "rejected" ? `Tu oferta de ${formatUsd(o.amount_cents)} no fue aceptada. Puedes ofrecer otro monto desde ${formatUsd(min)}.` : intro);
@@ -3148,8 +3155,7 @@ async function viewCheckout(app, listingId) {
     return;
   }
   const total = orderAmounts(order).buyer;
-  const feeRows = orderAmounts(order).buyerFee ? `<div><dt>Protección</dt><dd>${formatUsd(order.fee_cents)}</dd></div><div><dt>ITBMS (7% sobre la protección)</dt><dd>${formatUsd(order.itbms_cents)}</dd></div>`
-    : `<div><dt>Protección</dt><dd>$0.00</dd></div>`;
+  const feeRows = orderAmounts(order).buyerFee ? buyerFeeRows(order.fee_cents, order.itbms_cents) : buyerFeeRows(0, 0);
   app.innerHTML = `<div class="checkout col" style="gap:16px"><h1 class="display" style="font-size:30px">Pagar con Compra Protegida</h1>
     <section class="panel"><p style="margin:0;font-weight:600">${esc(l?.title ?? "Carta")}</p>
       <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(order.price_cents)}</dd></div>${feeRows}
@@ -3373,9 +3379,9 @@ function viewProtected(app) {
     </ol>
     <section class="fees-sec" style="max-width:760px">
       <h2 class="h2">Cuánto cuesta</h2>
-      <p class="small muted" style="margin-top:6px">Cada parte paga ${feePct()} del precio, más 7% de ITBMS sobre esa comisión: el comprador lo suma al pagar y al vendedor se le descuenta de lo que recibe. Sin mínimo ni máximo. Publicar sigue siendo gratis.</p>
-      <div class="panel flush"><table class="fees"><thead><tr><th>Precio de la carta</th><th>Comisión (${feePct()} + ITBMS)</th><th>Paga el comprador</th><th>Recibe el vendedor</th></tr></thead>
-        <tbody>${rows.map((q) => `<tr><td>${formatUsd(q.priceCents)}</td><td>${formatUsd(q.feeCents + q.itbmsCents)}</td><td style="font-weight:700">${formatUsd(q.buyerTotalCents)}</td><td style="font-weight:700">${formatUsd(q.sellerPayoutCents)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="small muted" style="margin-top:6px">Para el comprador, nada: pagas solo el precio de la carta. Cuando se completa la venta, ${esc(CONFIG.APP_NAME)} se queda con el ${feePct()} del precio, más 7% de ITBMS sobre esa comisión, y se lo descuenta al vendedor de lo que recibe. Sin mínimo ni máximo. Publicar sigue siendo gratis.</p>
+      <div class="panel flush"><table class="fees"><thead><tr><th>Precio de la carta</th><th>Comisión (${feePct()})</th><th>ITBMS</th><th>Recibe el vendedor</th></tr></thead>
+        <tbody>${rows.map((q) => `<tr><td>${formatUsd(q.priceCents)}</td><td>${formatUsd(q.sellerFeeCents)}</td><td>${formatUsd(q.sellerItbmsCents)}</td><td style="font-weight:700">${formatUsd(q.sellerPayoutCents)}</td></tr>`).join("")}</tbody></table></div>
     </section>
     <div class="cta" style="margin-top:40px"><a class="btn primary lg" href="#/">Ver cartas</a><a class="btn outline lg" href="#/vender">Vender una carta</a></div></div>`;
 }
@@ -3842,7 +3848,7 @@ function sellIntro(mode = "view") {
     <h2 class="ptitle" id="sellIntroTitle">${ic("info")}Antes de publicar</h2>
     <ul class="si-list">
       <li>${ic("tag")}<div><p class="si-t">${esc(CONFIG.APP_NAME)} se queda con el ${feePct()} de cada venta</p>
-        <p class="sub">Publicar es gratis. Cuando vendes, descontamos el ${feePct()} del precio de venta, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, de lo que te pagamos. Ejemplo: vendes en ${formatUsd(ex.priceCents)} y recibes ${formatUsd(ex.sellerPayoutCents)}. El comprador, por su parte, paga ${feePct()} de protección al comprar.</p></div></li>
+        <p class="sub">Publicar es gratis. Cuando vendes, descontamos el ${feePct()} del precio de venta, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, de lo que te pagamos. Ejemplo: vendes en ${formatUsd(ex.priceCents)} y recibes ${formatUsd(ex.sellerPayoutCents)}. El comprador no paga comisión.</p></div></li>
       <li>${ic("alert")}<div><p class="si-t">Cero tolerancia con las falsificaciones</p>
         <p class="sub">Cualquier intento de vender una carta falsa, réplica o alterada será detectado: revisamos las fotos, los reportes y cada reclamo de Compra Protegida. Si pasa, retiramos el anuncio, cerramos la cuenta y tomaremos medidas legales.</p></div></li>
       <li>${ic("shield")}<div><p class="si-t">Tus responsabilidades al publicar</p>
@@ -4579,7 +4585,7 @@ async function adminOrders(body) {
 
   body.innerHTML = `
     <section class="panel col"><h2>Nueva orden protegida</h2>
-      <p class="small muted" style="margin:0">Cuando un comprador te escribe para comprar protegido, búscale el anuncio y crea la orden. El comprador paga el precio + ${feePct()} + ITBMS; al vendedor le descontamos ${feePct()} + ITBMS al pagarle.</p>
+      <p class="small muted" style="margin:0">Cuando un comprador te escribe para comprar protegido, búscale el anuncio y crea la orden. El comprador paga el precio de la carta; al vendedor le descontamos ${feePct()} + ITBMS al pagarle.</p>
       <div class="row-input"><input class="input" id="noSearch" placeholder="Busca el anuncio (título, jugador, set…)"><button class="btn" id="noFind" style="border-radius:12px">Buscar</button></div>
       <div id="noResults"></div>
     </section>
@@ -4613,7 +4619,7 @@ async function adminOrders(body) {
     out.innerHTML = `<ul class="admin-list">${data.map((l) => {
       const q2 = quoteProtected(l.price_cents);
       return `<li class="panel" data-lid="${l.id}"><div class="phead"><span style="font-weight:600">${esc(l.title)}</span><span class="small muted">${esc(sellersFound.get(l.seller_id)?.display_name ?? "")}</span></div>
-        <p class="small" style="margin:6px 0">El comprador paga <b>${formatUsd(q2.buyerTotalCents)}</b> (carta ${formatUsd(q2.priceCents)} + ${formatUsd(q2.feeCents)} + ITBMS ${formatUsd(q2.itbmsCents)}) · al vendedor le pagamos <b>${formatUsd(q2.sellerPayoutCents)}</b></p>
+        <p class="small" style="margin:6px 0">El comprador paga <b>${formatUsd(q2.buyerTotalCents)}</b> · al vendedor le pagamos <b>${formatUsd(q2.sellerPayoutCents)}</b> (carta ${formatUsd(q2.priceCents)} − comisión ${formatUsd(q2.sellerFeeCents)} − ITBMS ${formatUsd(q2.sellerItbmsCents)})</p>
         <div class="row-input"><input class="input no-buyer" maxlength="120" placeholder="Comprador: nombre y WhatsApp"></div>
         <div class="row-input" style="margin-top:8px"><input class="input no-code" maxlength="8" placeholder="Código Holo del comprador (opcional)" autocapitalize="characters"><button class="btn primary no-create" style="border-radius:12px">Crear orden</button></div><div class="no-msg"></div></li>`;
     }).join("")}</ul>`;
@@ -5002,7 +5008,7 @@ async function adminSummary(body) {
 // Draft written for Panamá (Ley 81 de 2019 y D.E. 285 de 2021 sobre datos personales; Ley 45 de 2007
 // de protección al consumidor; Ley 51 de 2008 de comercio electrónico). Must be reviewed by a
 // Panamanian lawyer and CONFIG.LEGAL completed before opening to the public.
-const TERMS_VERSION = "2026-09-27";
+const TERMS_VERSION = "2026-09-28";
 function legalVal(k) {
   const v = CONFIG.LEGAL?.[k];
   return v ? esc(v) : `<mark class="todo">[por completar]</mark>`;
@@ -5028,7 +5034,7 @@ function viewTerms(app) {
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Cuando vendes una carta, ${esc(CONFIG.APP_NAME)} se queda con una comisión de ${feePct()} del precio de venta, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, que se descuenta de lo que te pagamos.</li><li>Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
-    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más su comisión de protección: ${fee}.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>Hay una comisión para cada parte, de ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta: el comprador la paga además del precio y al vendedor se le descuenta de lo que recibe. Al vendedor solo se le cobra si la venta se completa; si la compra se reembolsa, devolvemos todo lo pagado.</p>`],
+    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta. El comprador no paga comisión.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa, el vendedor no paga comisión y al comprador le devolvemos todo lo pagado.</p>`],
     [`Pagos por fuera de ${esc(CONFIG.APP_NAME)}`, `<p>Si conociste al comprador o al vendedor en ${esc(CONFIG.APP_NAME)}, la venta se paga con Compra Protegida. <b>Está prohibido cerrar el trato por fuera</b> (por WhatsApp, en persona o en otra app) para no pagar la comisión: podemos retirar los anuncios y suspender las cuentas que lo hagan.</p><p>Si aun así pagas por fuera, ${esc(CONFIG.APP_NAME)} no puede protegerte ni devolverte el dinero. Nunca le pagues directo al vendedor.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
