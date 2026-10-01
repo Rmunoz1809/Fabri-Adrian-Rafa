@@ -592,6 +592,19 @@ details.report .i { width: 14px; height: 14px; }
 .admin-list { display: grid; gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
 .checkout { max-width: 560px; margin: 24px auto 48px; }
 .bulk-pick { max-width: 560px; }
+.icon-btn.bell { position: relative; }
+.icon-btn.bell .nbadge { position: absolute; top: -2px; right: -4px; }
+/* The bell adds one button to the header: on the narrowest phones tighten it so "Vender" still fits. */
+@media (max-width: 379.98px) { .top-right .icon-btn { width: 30px; } header.top .row, .top-right, .nav-account { gap: 4px; } }
+.notifs { max-width: 680px; margin: 24px auto 48px; }
+.notif-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
+.notif-list a { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--card); color: inherit; text-decoration: none; }
+.notif-list a:hover { background: var(--muted); }
+.notif-list li.unread a { border-color: var(--brand); }
+.notif-list .ni { flex-shrink: 0; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--muted); }
+.notif-list .ni .i { width: 16px; height: 16px; }
+.notif-list .nt { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.notif-list .ndot { flex-shrink: 0; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--brand); }
 .sealed-form { max-width: 720px; gap: 16px; }
 label.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
 label.check input { margin-top: 3px; flex-shrink: 0; }
@@ -829,6 +842,8 @@ const CONFIG = {
   // ask to buy by WhatsApp and staff create the order. Turn it on once Yappy Comercial is set up
   // and a test payment went through. CDN for Yappy's test environment:
   // https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js
+  // E-mail copies of notifications (Edge Function enviar-avisos, docs/08-avisos.md). Needs a domain.
+  EMAIL_ALERTS: false,
   YAPPY: { ENABLED: false, FUNCTION: "yappy-pago", CDN: "https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js" },
   SHOW_DEMO_LISTINGS: true,
   CATALOG_API: "https://api.pokemontcg.io/v2",
@@ -1025,6 +1040,7 @@ function setTitle(t) { document.title = t ? `${t} · ${CONFIG.APP_NAME}` : `${CO
 // search palette. Timings live in the CSS; JS only flips data-state.
 const ICONS = {
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
   chevronDown: '<path d="m6 9 6 6 6-6"/>',
@@ -1442,6 +1458,7 @@ const sb = window.supabase ? window.supabase.createClient(CONFIG.SUPABASE_URL, C
 let session = null;
 let profileName = null;
 let isStaff = false;
+let unreadCount = 0, notifOn = true; // notifications behind the bell (migration 0021)
 let pendingOffers = 0; // things waiting for this user: offers to answer and Compras Protegidas to deliver or confirm
 const LISTING_COLS = "id, seller_id, title, description, category, subject, set_name, year, number, variant, condition, grading_company, grade, cert_number, price_cents, province, district, neighborhood, status, protected_eligible, catalog_id, estimate, created_at, listing_photos (storage_path, position)";
 // ------------------------------------------------------------- analytics (migration 0007)
@@ -1662,7 +1679,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path.startsWith("/pagar/"));
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/avisos" || path.startsWith("/pagar/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -1682,6 +1699,7 @@ async function route() {
     if (path === "/vender") return viewSell(app);
     if (path === "/vender/graduadas") return viewSellGraded(app);
     if (path === "/vender/sellado") return viewSellSealed(app);
+    if (path === "/avisos") { app.innerHTML = `<div class="wrap"></div>`; return await viewNotifications(app.firstElementChild); }
     if (path.startsWith("/pagar/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewCheckout(app.firstElementChild, safeDecode(path.slice(7))); }
     // Account and staff pages render into a padded column.
     if (path === "/cuenta" || path === "/admin") {
@@ -1701,18 +1719,19 @@ async function route() {
 const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["escanear", "#/escanear", "¿Cuánto vale?", "camera"], ["protegida", "#/protegida", "Compra Protegida", "shield"], ["vender", "#/vender", "Vender", "plus"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
+  const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin", "/avisos": "avisos" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"], ...(notifOn ? [["avisos", "#/avisos", "Avisos", "bell"]] : [])] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   const badge = pendingOffers ? `<span class="nbadge" title="Tienes cosas pendientes en Mi cuenta">${pendingOffers}</span>` : "";
-  $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span>${k === "cuenta" ? badge : ""}</a>`).join("");
+  $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span>${k === "cuenta" ? badge : k === "avisos" && unreadCount ? `<span class="nbadge">${unreadCount}</span>` : ""}</a>`).join("");
   $("#sideFoot").innerHTML = session
     ? `<p class="sn-user"><span class="avatar">${initial}</span><span class="who"><span>${esc(name)}</span>${session.user.email ? `<span class="xs muted">${esc(session.user.email)}</span>` : ""}</span></p><button type="button" class="btn outline block" id="snSignOut">${ic("logout")}Salir</button>`
     : sb ? `<a class="btn primary block" href="#/entrar">Iniciar sesión</a>` : `<a class="btn primary block" href="#/vender">Publica tu carta gratis</a>`;
   const sell = `<a class="btn primary sm sell-btn" href="#/vender">${ic("plus")}Vender</a>`;
+  const bell = session && notifOn ? `<a class="icon-btn bell" href="#/avisos" aria-label="${unreadCount ? `Avisos: ${unreadCount} sin leer` : "Avisos"}">${ic("bell")}${unreadCount ? `<span class="nbadge">${unreadCount > 99 ? "99+" : unreadCount}</span>` : ""}</a>` : "";
   $("#nav").innerHTML = session
-    ? `<button type="button" class="acct" id="acctBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Tu cuenta: ${esc(name)}"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${badge}${ic("chevronDown")}</button>${sell}`
+    ? `${bell}<button type="button" class="acct" id="acctBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Tu cuenta: ${esc(name)}"><span class="avatar">${initial}</span><span class="nm">${esc(name)}</span>${badge}${ic("chevronDown")}</button>${sell}`
     : sb ? `<a class="acct" href="#/entrar" aria-label="Iniciar sesión"><span class="avatar">${ic("user")}</span><span class="nm">Iniciar sesión</span></a>${sell}` : sell;
   const signOut = async () => {
     const { error } = await sb.auth.signOut();
@@ -4575,6 +4594,81 @@ function viewSellSealed(app) {
   });
 }
 
+// ============================================================= notifications (#/avisos, migration 0021)
+// The database writes a notification for every important event (offers, Compras Protegidas, reviews,
+// shop verification…); here they show behind the bell. E-mail copies go out from the enviar-avisos
+// Edge Function once a sending domain is set up (CONFIG.EMAIL_ALERTS, docs/08-avisos.md).
+let notifTimer = null;
+async function refreshUnread() {
+  if (!sb || !session || !notifOn) { if (unreadCount) { unreadCount = 0; renderNav(); } return; }
+  const { count, error } = await sb.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null);
+  if (error) { if (["42P01", "PGRST205"].includes(error.code)) { notifOn = false; renderNav(); } return; } // migration 0021 not applied yet
+  if ((count ?? 0) !== unreadCount) { unreadCount = count ?? 0; renderNav(); }
+}
+// Check every minute while the page is visible, and right away when the visitor comes back to it.
+function startNotifPolling() {
+  clearInterval(notifTimer);
+  notifTimer = setInterval(() => { if (document.visibilityState === "visible") { refreshUnread(); refreshOfferBadge(); } }, 60000);
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshUnread(); });
+
+const timeAgo = (iso) => {
+  const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+  if (s < 60) return "ahora";
+  if (s < 3600) return `hace ${Math.floor(s / 60)} min`;
+  if (s < 86400) return `hace ${Math.floor(s / 3600)} h`;
+  if (s < 7 * 86400) { const d = Math.floor(s / 86400); return `hace ${d} ${d === 1 ? "día" : "días"}`; }
+  return new Date(iso).toLocaleDateString("es-PA", { day: "numeric", month: "short" });
+};
+const NOTIF_ICON = { offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
+const notifIcon = (kind) => NOTIF_ICON[kind.split("_")[0]] ?? "info";
+// Links come from the database triggers; only in-app hash routes are followed.
+const safeLink = (l) => (typeof l === "string" && /^#\/[\w\-/?=&.%]*$/.test(l) ? l : "#/cuenta");
+
+async function viewNotifications(app) {
+  setTitle("Avisos");
+  if (!sb || !session) return go("/entrar?next=/avisos");
+  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tus avisos…</p>`;
+  const holder = app.firstElementChild;
+  const { data, error } = await sb.from("notifications").select("id, kind, title, body, link, created_at, read_at").order("created_at", { ascending: false }).limit(60);
+  if (!holder.isConnected) return;
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code)) notifOn = false; else console.error(error);
+    app.innerHTML = `<div class="notifs"><h1 class="display" style="font-size:30px">Avisos</h1><p class="notice soft">${notifOn ? "No pudimos cargar tus avisos. Recarga la página." : "Los avisos se activan pronto."}</p></div>`;
+    return;
+  }
+  const unread = data.filter((n) => !n.read_at).length;
+  app.innerHTML = `<div class="notifs"><div class="phead"><h1 class="display" style="font-size:30px;margin:0">Avisos</h1>${unread ? `<span class="b prot">${unread} ${unread === 1 ? "nuevo" : "nuevos"}</span>` : ""}</div>
+    ${data.length ? `<ul class="notif-list">${data.map((n) => `<li class="${n.read_at ? "" : "unread"}"><a href="${esc(safeLink(n.link))}">
+      <span class="ni">${ic(notifIcon(n.kind))}</span>
+      <span class="nt"><b>${esc(n.title)}</b>${n.body ? `<span class="small muted">${esc(n.body)}</span>` : ""}<span class="xs muted">${timeAgo(n.created_at)}</span></span>
+      ${n.read_at ? "" : `<span class="ndot" aria-label="Nuevo"></span>`}</a></li>`).join("")}</ul>`
+      : `<div class="empty-state" style="margin-top:32px"><span class="ico">${ic("info")}</span><p style="font-weight:600">Todavía no tienes avisos.</p><p class="small muted" style="margin:4px 0 0">Aquí te avisamos de ofertas, ventas, entregas y pagos.</p></div>`}
+    ${CONFIG.EMAIL_ALERTS ? "" : `<p class="xs muted" style="margin-top:16px">Pronto también te llegarán por correo.</p>`}</div>`;
+  if (unread) {
+    // Seen: mark them read (the dots stay until the next visit so the visitor sees what was new).
+    const { error: e2 } = await sb.rpc("mark_notifications_read", { p_ids: null });
+    if (e2) console.error(e2); else { unreadCount = 0; renderNav(); }
+  }
+}
+
+// Mi cuenta: e-mail on/off (the bell always works).
+async function renderNotifSettings(uid, box) {
+  if (!notifOn || !sb) return;
+  const { data, error } = await sb.from("notification_settings").select("email").eq("user_id", uid).maybeSingle();
+  if (!box.isConnected) return;
+  if (error) { if (["42P01", "PGRST205"].includes(error.code)) notifOn = false; return; }
+  const on = data?.email ?? true;
+  box.innerHTML = `<section class="panel col"><h2>Avisos</h2>
+    <p class="xs muted" style="margin:0">Te avisamos en la campanita de arriba de ofertas, ventas, entregas, reclamos y pagos. <a class="link" href="#/avisos">Ver mis avisos</a></p>
+    <label class="check"><input type="checkbox" id="notifEmail"${on ? " checked" : ""}><span>Enviarme también un correo con cada aviso${CONFIG.EMAIL_ALERTS ? "" : " (empiezan a llegar pronto)"}.</span></label></section>`;
+  $("#notifEmail").addEventListener("change", async (e) => {
+    const { error: err } = await sb.from("notification_settings").upsert({ user_id: uid, email: e.target.checked, updated_at: new Date().toISOString() });
+    if (err) { console.error(err); e.target.checked = !e.target.checked; return toast("No pudimos guardar tu preferencia. Intenta de nuevo.", { type: "error" }); }
+    toast(e.target.checked ? "Te enviaremos los avisos por correo." : "Ya no te enviaremos avisos por correo.");
+  });
+}
+
 // ============================================================= scanner (#/escanear)
 // "¿Cuánto vale tu carta?": photo → card → market value. Loose Pokémon cards are read for free in the
 // browser first (OCR + catalog); the paid AI only runs for slabs, sports cards and unclear photos.
@@ -4744,6 +4838,7 @@ async function viewAccount(app) {
     <div id="dash" class="dash-body"><p class="loading"><span class="spinner"></span>Cargando tus cartas…</p></div>
     <div id="accOrders" class="col" style="margin-top:24px;gap:16px"></div>
     <div id="accActivity" class="col" style="margin-top:16px;gap:16px"></div>
+    <div id="accNotif" class="col" style="margin-top:16px"></div>
     <form id="accForm" class="col acc-form" style="margin-top:24px" novalidate>
       <section class="panel col">
         <h2>Perfil</h2>
@@ -4770,6 +4865,7 @@ async function viewAccount(app) {
 
   renderOrders(uid, $("#accOrders"));
   renderActivity(uid, $("#accActivity"));
+  renderNotifSettings(uid, $("#accNotif"));
   renderDashboard(uid, prof, $("#dash"));
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
@@ -5480,6 +5576,8 @@ async function loadProfileName() {
   isStaff = Boolean(data?.is_staff);
   renderNav();
   refreshOfferBadge();
+  refreshUnread();
+  startNotifPolling();
   if (isStaff && parseHash().path === "/admin") route(); // staff flag arrived after the first render
 }
 (async () => {
