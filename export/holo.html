@@ -504,6 +504,7 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .legal-page mark.todo { background: var(--warn-bg); color: inherit; padding: 0 4px; border-radius: 4px; }
 .legal-toc ol { columns: 2; column-gap: 24px; font-size: 14px; padding-left: 18px; margin-top: 16px; }
 @media (max-width: 640px) { .legal-toc ol { columns: 1; } }
+section[id^="legal-"] { scroll-margin-top: calc(var(--header-h) + 16px); } /* the sticky header must not cover the jumped-to title */
 label.accept { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 label.accept input { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; }
 label.accept a { text-decoration: underline; }
