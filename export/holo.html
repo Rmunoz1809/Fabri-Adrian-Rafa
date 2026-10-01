@@ -1502,13 +1502,15 @@ function trackVisitOncePerSession() {
 let photoKinds = true;
 // Migration 0020 adds product_type / sealed_kind (sealed product). Same fallback: until it runs every
 // listing reads as a card.
-let sealedCols = true;
+let sealedCols = true, lotCols = true, stockCols = true; // lotCols: migration 0024 (lot_count); stockCols: 0027 (quantity, release_date)
 const listingCols = () => (photoKinds ? LISTING_COLS.replace("listing_photos (storage_path, position)", "listing_photos (storage_path, position, kind)") : LISTING_COLS)
-  .replace(", listing_photos", sealedCols ? ", product_type, sealed_kind, listing_photos" : ", listing_photos");
+  .replace(", listing_photos", (sealedCols ? `, product_type, sealed_kind${lotCols ? ", lot_count" : ""}` : "") + (stockCols ? ", quantity, release_date" : "") + ", listing_photos");
 // A select that failed on a column a migration adds: switch that column off and say whether to retry.
 function missingCol(e) {
   if (e?.code !== "42703") return false;
   const m = e.message ?? "";
+  if (lotCols && /lot_count/.test(m)) { lotCols = false; return true; }
+  if (stockCols && /quantity|release_date/.test(m)) { stockCols = false; return true; }
   if (sealedCols && /product_type|sealed_kind/.test(m)) { sealedCols = false; return true; }
   if (photoKinds && /kind/.test(m)) { photoKinds = false; return true; }
   return false;
@@ -1533,7 +1535,8 @@ function rowToListing(r, prof) {
     location: { province: r.province, district: r.district, neighborhood: r.neighborhood },
     seller: profileToSeller(r.seller_id, prof),
     sellerId: r.seller_id, status: r.status, estimate: r.estimate, protectedEligible: true, createdAt: r.created_at, // every sale goes through Compra Protegida
-    productType: r.product_type ?? "card", sealedKind: r.sealed_kind ?? null,
+    productType: r.product_type ?? "card", sealedKind: r.sealed_kind ?? null, lotCount: r.lot_count ?? null,
+    quantity: r.quantity ?? 1, releaseDate: r.release_date ?? null, unitsLeft: null,
   };
 }
 async function withProfiles(rows) {
@@ -1544,9 +1547,22 @@ async function withProfiles(rows) {
   if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids));
   const byId = new Map((data ?? []).map((p) => [p.id, p]));
   const listings = rows.map((r) => rowToListing(r, byId.get(r.seller_id)));
-  await Promise.all([applySellerStats(listings.map((l) => l.seller)), withAuthChecks(listings)]);
+  await Promise.all([applySellerStats(listings.map((l) => l.seller)), withAuthChecks(listings), withStock(listings)]);
   return listings;
 }
+// Units left for listings with a quantity (migration 0027): counts only, never who bought.
+let stockOn = true;
+async function withStock(listings) {
+  const multi = listings.filter((l) => l.quantity > 1);
+  if (!stockOn || !multi.length) return listings;
+  const { data, error } = await sb.from("listing_stock").select("listing_id, quantity, taken").in("listing_id", multi.map((l) => l.id));
+  if (error) { if (["42P01", "PGRST205"].includes(error.code)) stockOn = false; else console.error(error); return listings; }
+  const byId = new Map((data ?? []).map((r) => [r.listing_id, r]));
+  for (const l of multi) { const r = byId.get(l.id); if (r) l.unitsLeft = Math.max(0, r.quantity - r.taken); }
+  return listings;
+}
+const isPreorder = (l) => !!l.releaseDate && l.releaseDate >= new Date().toISOString().slice(0, 10);
+const fmtRelease = (d) => new Date(`${d}T12:00:00`).toLocaleDateString("es-PA", { day: "numeric", month: "long", year: "numeric" });
 // "Revisada por <tienda>" (migration 0011). Until it runs there are simply no badges.
 let authChecksOn = true;
 async function withAuthChecks(listings) {
@@ -1597,6 +1613,7 @@ async function fetchRealListings(f) {
   if (f.graded === "graded") q = q.not("grading_company", "is", null);
   if (f.graded === "raw") q = q.is("grading_company", null);
   if (f.graded === "raw" && sealedCols) q = q.eq("product_type", "card");
+  if (f.graded === "lot") { if (!lotCols) return []; q = q.eq("product_type", "lot"); }
   if (f.graded === "sealed") { if (!sealedCols) return []; q = q.eq("product_type", "sealed"); }
   if (f.province) q = q.eq("province", f.province);
   if (f.minPrice != null) q = q.gte("price_cents", Math.round(f.minPrice * 100));
@@ -1619,7 +1636,7 @@ async function fetchSellerListings(id, prof) {
   if (missingCol(error)) return fetchSellerListings(id, prof);
   if (error) { console.error(error); return []; }
   const listings = (data ?? []).map((r) => rowToListing(r, prof));
-  await Promise.all([applySellerStats(listings.map((l) => l.seller)), withAuthChecks(listings)]);
+  await Promise.all([applySellerStats(listings.map((l) => l.seller)), withAuthChecks(listings), withStock(listings)]);
   return listings;
 }
 async function fetchRealListing(id) {
@@ -1635,7 +1652,8 @@ function matchesFilters(l, f) {
   if (f.seller === "particulares" && isVerifiedShop(l.seller)) return false;
   if (f.category && l.card.category !== f.category) return false;
   if (f.graded === "graded" && !l.grading) return false;
-  if (f.graded === "raw" && (l.grading || isSealed(l))) return false;
+  if (f.graded === "raw" && (l.grading || isSealed(l) || isLot(l))) return false;
+  if (f.graded === "lot" && !isLot(l)) return false;
   if (f.graded === "sealed" && !isSealed(l)) return false;
   if (f.province && l.location.province !== f.province) return false;
   if (f.minPrice != null && l.priceUsd < f.minPrice) return false;
@@ -1668,7 +1686,7 @@ function filtersFrom(params) {
   return {
     seller: vendedor === "tiendas" || vendedor === "particulares" ? vendedor : undefined,
     q: params.get("q")?.trim() || undefined, category: params.get("cat") || undefined,
-    graded: tipo === "raw" || tipo === "graded" || tipo === "sealed" ? tipo : undefined, province: params.get("provincia") || undefined,
+    graded: ["raw", "graded", "sealed", "lot"].includes(tipo) ? tipo : undefined, province: params.get("provincia") || undefined,
     minPrice: num("min"), maxPrice: num("max"), sort: orden === "precio-asc" || orden === "precio-desc" ? orden : "recientes",
   };
 }
@@ -1683,6 +1701,7 @@ function hrefWith(f, patch) {
 const safeDecode = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
 async function route() {
   const { path, params } = parseHash();
+  if (params.get("ref")) rememberRef(params.get("ref")); // invite link (migration 0026)
   closeLayers();
   if (keepScrollOnce) keepScrollOnce = false; // filter changes keep the user where they are
   else window.scrollTo(0, 0);
@@ -1710,6 +1729,7 @@ async function route() {
     if (path === "/vender") return viewSell(app);
     if (path === "/vender/graduadas") return viewSellGraded(app);
     if (path === "/vender/sellado") return viewSellSealed(app);
+    if (path === "/vender/lote") return viewSellLot(app);
     if (path === "/busco") { app.innerHTML = `<div class="wrap"></div>`; return await viewWanted(app.firstElementChild, params); }
     if (path === "/avisos") { app.innerHTML = `<div class="wrap"></div>`; return await viewNotifications(app.firstElementChild); }
     if (path.startsWith("/pagar/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewCheckout(app.firstElementChild, safeDecode(path.slice(7))); }
@@ -1777,7 +1797,7 @@ function sellerAvatar(s, size) {
 function sellerBadge(s) {
   if (isVerifiedShop(s)) return shopBadge();
   if (s.isShop) return `<span class="b neutral">Tienda</span>`;
-  return `<span class="b neutral">Particular</span>${s.verified ? `<span class="b prot">${ic("check")}Verificado</span>` : ""}`;
+  return `<span class="b neutral">Particular</span>${s.verified ? `<span class="b prot" title="${esc(CONFIG.APP_NAME)} verificó su identidad con su cédula">${ic("check")}Identidad verificada</span>` : ""}`;
 }
 // Cards stay short: name and badge only. The store photo and description live on the detail page.
 function tileSeller(s) {
@@ -1790,8 +1810,10 @@ const SEALED_KINDS = [
 ];
 const sealedKindName = (k) => SEALED_KINDS.find(([v]) => v === k)?.[1] ?? "Producto sellado";
 const isSealed = (l) => l.productType === "sealed";
+const isLot = (l) => l.productType === "lot";
 function conditionBadge(l) {
-  if (isSealed(l)) return `<span class="cond" title="${esc(sealedKindName(l.sealedKind))}, sellado de fábrica">Sellado</span>`;
+  if (isSealed(l)) return `<span class="cond" title="${esc(sealedKindName(l.sealedKind))}, sellado de fábrica">${isPreorder(l) ? "Preventa" : "Sellado"}</span>`;
+  if (isLot(l)) return `<span class="cond" title="Lote de ${l.lotCount} cartas">Lote · ${l.lotCount}</span>`;
   if (l.grading) return `<span class="graded">${esc(l.grading.company)} ${esc(l.grading.grade)}</span>`;
   return l.condition ? `<span class="cond" title="${esc(CONDITIONS.find((c) => c.code === l.condition)?.label ?? "")}">${esc(l.condition)}</span>` : "";
 }
@@ -2453,7 +2475,7 @@ async function viewHome(app, params) {
           <div class="drawer-head"><span class="handle" aria-hidden="true"></span><div class="drawer-title"><h2>Filtros</h2><button type="button" class="icon-btn" data-close aria-label="Cerrar filtros">${ic("x")}</button></div></div>
           <form id="filterForm">
             <div class="fsec"><h3>Tipo</h3><p class="d">Cartas sueltas o graduadas (en slab).</p>
-              <div class="radios">${[["", "Todas"], ["raw", "Sin graduar"], ["graded", "Graduadas"], ["sealed", "Producto sellado"]].map(([v, t]) => `<label class="radio"><input type="radio" name="tipo" value="${v}" ${(f.graded ?? "") === v ? "checked" : ""}>${t}</label>`).join("")}</div></div>
+              <div class="radios">${[["", "Todas"], ["raw", "Sin graduar"], ["graded", "Graduadas"], ["sealed", "Producto sellado"], ["lot", "Lotes"]].map(([v, t]) => `<label class="radio"><input type="radio" name="tipo" value="${v}" ${(f.graded ?? "") === v ? "checked" : ""}>${t}</label>`).join("")}</div></div>
             <div class="fsec"><h3>Provincia</h3><p class="d">Dónde se entrega la carta.</p>
               <select class="select" name="provincia" aria-label="Provincia"><option value="">Todo Panamá</option>${PROVINCES.map((p) => `<option ${f.province === p ? "selected" : ""}>${p}</option>`).join("")}</select></div>
             <div class="fsec"><h3>Precio</h3><p class="d">En dólares (USD).</p>
@@ -2608,7 +2630,7 @@ async function viewDetail(app, id) {
   const cond = CONDITIONS.find((c) => c.code === l.condition);
   const isOwner = session && l.sellerId === session.user.id;
   const forSale = l.isDemo || l.status === "active";
-  const statusNote = { sold: "Esta carta ya se vendió.", reserved: "Esta carta está reservada: hay una Compra Protegida en curso.", removed: "Este anuncio fue retirado.", draft: "Este anuncio todavía no está publicado." }[l.status];
+  const statusNote = { sold: l.quantity > 1 ? "Se vendieron todas las unidades." : "Esta carta ya se vendió.", reserved: l.quantity > 1 ? "Agotado: todas las unidades están pagadas." : "Esta carta está reservada: hay una Compra Protegida en curso.", removed: "Este anuncio fue retirado.", draft: "Este anuncio todavía no está publicado." }[l.status];
   const meta = [l.card.year, l.card.number, l.card.variant].filter(Boolean).map(esc).join('<span class="sep" aria-hidden="true">•</span>');
 
   app.innerHTML = `
@@ -2638,11 +2660,12 @@ async function viewDetail(app, id) {
           <p class="sub">${esc(l.authCheck.shop)} revisó esta carta en persona${l.authCheck.at ? ` el ${new Date(l.authCheck.at).toLocaleDateString("es-PA", { day: "numeric", month: "long", year: "numeric" })}` : ""} y no encontró señales de réplica. Es la opinión de la tienda, no una garantía: igual revisa la carta antes de pagar.</p></section>` : ""}
       </div>
       <div class="dmain">
-        ${isSealed(l) ? "" : `<section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
+        ${isSealed(l) || isLot(l) ? "" : `<section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
         ${estimatePanel(l.estimate, l.priceUsd)}`}
         <section class="panel"><h2 class="ptitle">${ic("text")}Descripción</h2><p class="desc">${esc(l.description) || '<span class="muted">Sin descripción.</span>'}</p>
           <dl class="facts"><div><dt>Categoría</dt><dd>${esc(categoryName(l.card.category))}</dd></div>
-          ${isSealed(l) ? `<div><dt>Producto</dt><dd>${esc(sealedKindName(l.sealedKind))} · sellado de fábrica</dd></div>`
+          ${isLot(l) ? `<div><dt>Lote</dt><dd>${l.lotCount} cartas${cond ? ` · condición general ${cond.label} (${cond.code})` : " · condición mixta"}</dd></div>`
+            : isSealed(l) ? `<div><dt>Producto</dt><dd>${esc(sealedKindName(l.sealedKind))} · sellado de fábrica</dd></div>${isPreorder(l) ? `<div><dt>Preventa</dt><dd>Sale el ${fmtRelease(l.releaseDate)}</dd></div>` : ""}${l.quantity > 1 ? `<div><dt>Disponibles</dt><dd>${l.unitsLeft ?? l.quantity} de ${l.quantity}</dd></div>` : ""}`
             : `<div><dt>${l.grading ? "Graduación" : "Condición"}</dt><dd>${l.grading ? `${esc(l.grading.company)} ${esc(l.grading.grade)}` : cond ? `${cond.label} (${cond.code})` : "—"}</dd></div>`}
           ${l.grading?.cert ? `<div><dt>Certificado</dt><dd>${esc(l.grading.cert)}</dd></div>` : ""}
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
@@ -2651,7 +2674,8 @@ async function viewDetail(app, id) {
       </div>
       <aside class="dside">
         ${quote && forSale ? `<section class="panel"><h2 class="ptitle">${ic("shield")}Compra Protegida</h2>
-          <p class="sub">Pagas a ${esc(CONFIG.APP_NAME)} y guardamos el dinero hasta que confirmes que recibiste la carta bien. Si no llega o no es lo anunciado, te devolvemos todo.</p>
+          <p class="sub">${isPreorder(l) ? `Preventa: pagas ahora y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que la tienda te entregue el producto, cuando salga el ${fmtRelease(l.releaseDate)}. Si no lo entrega, te devolvemos todo.`
+            : `Pagas a ${esc(CONFIG.APP_NAME)} y guardamos el dinero hasta que confirmes que recibiste la carta bien. Si no llega o no es lo anunciado, te devolvemos todo.`}</p>
           <dl class="rows"><div><dt>Carta</dt><dd>${formatUsd(quote.priceCents)}</dd></div>${buyerFeeRows(quote.feeCents, quote.itbmsCents)}
           <div class="total"><dt>Total</dt><dd>${formatUsd(quote.buyerTotalCents)}</dd></div></dl>
           ${buy ? `<a class="btn primary block" id="buyBtn" style="margin-top:16px" href="${esc(buy)}"${CONFIG.YAPPY.ENABLED ? "" : ` target="_blank" rel="noopener"`}>${ic("shield")}Comprar protegido</a>` : `<p class="notice soft center" style="margin-top:16px">Compra Protegida disponible pronto.</p>`}</section>` : ""}
@@ -2665,7 +2689,7 @@ async function viewDetail(app, id) {
           <p class="xs muted" style="margin:10px 0 0">En ${esc(CONFIG.APP_NAME)}, la carta se paga siempre con Compra Protegida: el vendedor cobra solo cuando confirmas que la recibiste bien. Nunca le pagues directo al vendedor.</p></section>`}
         <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
           <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
-          <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a></div></section>
+          <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a><button type="button" class="btn outline" id="shareStory">${ic("camera")}Historia</button></div></section>
         ${sellerPanel(l.seller)}
         ${isOwner && ["active", "reserved"].includes(l.status) ? `<section class="panel"><h2 class="ptitle">${ic("tag")}¿Ya no la tienes?</h2>
           <p class="sub">Márcala como vendida para que deje de aparecer. Recuerda: si el comprador te encontró en ${esc(CONFIG.APP_NAME)}, la venta va con Compra Protegida (el equipo la cierra por ti).</p>
@@ -3421,9 +3445,10 @@ function loadImg(src) {
     im.src = src + (src.includes("?") ? "&" : "?") + "canvas=1";
   });
 }
-async function shareImage(l) {
+// story = true: 1080×1920 for Instagram/WhatsApp stories (the card larger, the text lower).
+async function shareImage(l, story = false) {
   // Same look as the site: flat navy, white as the second color, no gradients.
-  const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const W = 1080, H = story ? 1920 : 1350, c = document.createElement("canvas"); c.width = W; c.height = H;
   const x = c.getContext("2d"), FG = "#f4f6fb", FG2 = "#a4aec4", pad = 80;
   await document.fonts?.ready;
   x.fillStyle = "#0b1222"; x.fillRect(0, 0, W, H);
@@ -3431,7 +3456,7 @@ async function shareImage(l) {
   const fit = (t, max = W - pad * 2) => { let s = t; while (x.measureText(s).width > max && s.length > 4) s = s.slice(0, -2); return s === t ? t : `${s.trimEnd()}…`; };
   // card
   const img = await loadImg(l.photos[0]);
-  const boxW = 560, boxH = 782, bx = (W - boxW) / 2, by = 70;
+  const boxW = story ? 720 : 560, boxH = story ? 1005 : 782, bx = (W - boxW) / 2, by = story ? 170 : 70;
   if (img) {
     const r = Math.min(boxW / img.width, boxH / img.height), w = img.width * r, h = img.height * r;
     x.save(); x.shadowColor = "rgba(0,0,0,.6)"; x.shadowBlur = 50; x.shadowOffsetY = 20;
@@ -3443,7 +3468,7 @@ async function shareImage(l) {
   }
   // text
   x.textAlign = "left"; x.fillStyle = FG;
-  let y = 930;
+  let y = story ? 1330 : 930;
   x.font = "600 44px Inter, sans-serif";
   x.fillText(fit(l.title), pad, y); y += 110;
   x.font = "800 104px Inter, sans-serif"; x.fillText(formatUsd(toCents(l.priceUsd)), pad, y);
@@ -3474,6 +3499,26 @@ async function shareImage(l) {
 function setupShare(l) {
   const url = listingUrl(l), text = `${l.title} · ${formatUsd(toCents(l.priceUsd))} en ${CONFIG.APP_NAME}`;
   const wa = $("#shareWa"); if (wa) wa.href = `https://wa.me/?text=${encodeURIComponent(`${text}\n${url}`)}`;
+  $("#shareStory")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget, label = btn.innerHTML;
+    track("compartir", l.id);
+    btn.disabled = true; btn.textContent = "Preparando…";
+    try {
+      const blob = await shareImage(l, true);
+      const file = new File([blob], `holo-historia-${l.id.slice(0, 8)}.jpg`, { type: "image/jpeg" });
+      // The link goes with the "link" sticker in the story: copy it first.
+      try { await navigator.clipboard.writeText(url); } catch { /* clipboard blocked */ }
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        toast("Copiamos el link: pégalo en la historia con el sticker de enlace.");
+      } else {
+        const a = document.createElement("a"); a.href = URL.createObjectURL(file); a.download = file.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        toast("Descargamos la imagen para tu historia y copiamos el link para el sticker de enlace.");
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") { console.error(err); toast("No pudimos preparar la imagen. Intenta de nuevo.", { type: "error" }); }
+    } finally { btn.disabled = false; btn.innerHTML = label; }
+  });
   $("#shareBtn")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget, label = btn.innerHTML;
     track("compartir", l.id);
@@ -4020,7 +4065,7 @@ function viewSell(app) {
   const locOptions = FLAT_LOCATIONS.map((l, i) => `<option value="${i}">${esc(l.neighborhood)}, ${esc(l.district)}</option>`).join("");
   app.innerHTML = `<div class="wrap page"><h1>Vende tu carta</h1>
     <p class="lead">Publicar es gratis. Toma una foto y reconocemos la carta, su versión y su precio de hoy.</p>
-    <p class="small muted" style="margin:-8px 0 16px">¿Tienes muchas cartas graduadas? <a class="link" href="#/vender/graduadas">Súbelas todas juntas</a>. ¿Vendes cajas, sobres o ETB? <a class="link" href="#/vender/sellado">Publica producto sellado</a>.</p>
+    <p class="small muted" style="margin:-8px 0 16px">¿Tienes muchas cartas graduadas? <a class="link" href="#/vender/graduadas">Súbelas todas juntas</a>. ¿Vendes cajas, sobres o ETB? <a class="link" href="#/vender/sellado">Publica producto sellado</a>. ¿Muchas cartas juntas? <a class="link" href="#/vender/lote">Vende un lote</a>.</p>
     ${sellIntro(sellTermsAccepted(session) ? "done" : "ask")}
     <div id="sellGate"${sellTermsAccepted(session) ? "" : " hidden"}>
     <form id="sellForm" class="sell" novalidate>
@@ -4560,6 +4605,35 @@ async function publishGraded(uid, r, loc) {
   return { id };
 }
 
+// Publishes a listing built by the simpler forms (sealed product, lots): draft → photos → active, and
+// undoes everything if a step fails, like the card form (nothing half-published).
+async function publishListing(uid, row, files) {
+  const id = crypto.randomUUID(), paths = [];
+  const undo = async () => { if (paths.length) await sb.storage.from("listing-photos").remove(paths); await sb.from("listings").delete().eq("id", id); };
+  const ins = await sb.from("listings").insert({ id, seller_id: uid, status: "draft", ...row });
+  if (ins.error) {
+    console.error(ins.error);
+    if (ins.error.code === "42703" || ins.error.code === "PGRST204" || /check constraint/.test(ins.error.message ?? "") && /product_type/.test(ins.error.message ?? "")) return { missingColumn: true };
+    return { error: "No pudimos guardar el anuncio. Intenta de nuevo." };
+  }
+  for (const [i, f] of files.entries()) {
+    const ext = { "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg", path = `${uid}/${id}/${i}.${ext}`;
+    let up;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt));
+      up = await sb.storage.from("listing-photos").upload(path, f, { contentType: f.type || "image/jpeg", cacheControl: "31536000", upsert: false });
+      if (!up.error || /exists|duplicate/i.test(up.error.message ?? "")) break;
+    }
+    if (up.error && !/exists|duplicate/i.test(up.error.message ?? "")) { console.error(up.error); await undo(); return { error: "No pudimos subir las fotos. Revisa tu conexión e intenta de nuevo." }; }
+    paths.push(path);
+  }
+  const pr = await sb.from("listing_photos").insert(paths.map((storage_path, position) => ({ listing_id: id, storage_path, position })));
+  if (pr.error) { console.error(pr.error); await undo(); return { error: "No pudimos guardar las fotos. Intenta de nuevo." }; }
+  const act = await sb.from("listings").update({ status: "active" }).eq("id", id).select("id");
+  if (act.error || !act.data?.length) { console.error(act.error); await undo(); return { error: "No pudimos publicar el anuncio. Intenta de nuevo." }; }
+  return { id };
+}
+
 // ============================================================= sealed product (#/vender/sellado)
 // Booster boxes, ETBs, packs, tins, hobby and blaster boxes (migration 0020). No AI and no price chart:
 // the catalogs we use price single cards. Only factory-sealed product (Términos).
@@ -4593,6 +4667,7 @@ function viewSellSealed(app) {
         <label class="f">Título<input class="input" name="title" required maxlength="80" placeholder="Elite Trainer Box 151 (inglés)"></label>
         <label class="f">Descripción<textarea class="textarea" name="description" rows="3" maxlength="1000" placeholder="Estado de la caja, dónde puedes entregarla…"></textarea></label>
         <label class="check"><input type="checkbox" name="sealed"><span>Confirmo que está <b>sellado de fábrica</b>: nunca se abrió, no se reselló y no le cambiaron ni pesaron los sobres.</span></label>
+        <div id="sdStock"></div>
       </section>
       <section class="panel col">
         <h2 class="step" style="margin:0"><span class="num-badge">3</span>Precio y ubicación</h2>
@@ -4613,6 +4688,18 @@ function viewSellSealed(app) {
   });
   const form = $("#sealedForm"), val = (n) => form.elements[n]?.value?.trim() ?? "";
   let files = [], previews = [];
+  // Verified shops can sell several units and preorders (migration 0027).
+  (async () => {
+    const { data: me } = await sb.from("profiles").select("is_shop, verified").eq("id", session.user.id).maybeSingle();
+    const box = $("#sdStock");
+    if (!box || !me?.is_shop || !me?.verified || !stockCols) return;
+    const today = new Date().toISOString().slice(0, 10), max = new Date(Date.now() + 365 * 864e5).toISOString().slice(0, 10);
+    box.innerHTML = `<div class="panel accent col" style="gap:10px"><p class="ptitle" style="font-size:15px;margin:0">${ic("store")}Solo para tiendas verificadas</p>
+      <label class="f">Unidades disponibles<input class="input" name="quantity" type="number" min="1" max="500" step="1" value="1" inputmode="numeric"></label>
+      <label class="check"><input type="checkbox" name="preorder"><span><b>Es una preventa:</b> el producto todavía no sale. El comprador paga ahora y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que lo entregues.</span></label>
+      <label class="f" id="sdRelease" hidden>Fecha de salida<input class="input" name="release" type="date" min="${today}" max="${max}"></label></div>`;
+    form.elements.preorder.addEventListener("change", (e) => { $("#sdRelease").hidden = !e.target.checked; });
+  })();
   $("#sdPhotos").addEventListener("change", async (e) => {
     const picked = [...e.target.files].slice(0, 4);
     if (!picked.length) return;
@@ -4639,40 +4726,239 @@ function viewSellSealed(app) {
     if (files.some((f) => f.size > 3 * 1024 * 1024)) return fail("Una de las fotos es muy pesada (máx. 3 MB).");
     if (!loc) return fail("Elige tu barrio o zona.");
     if (!sealedCols) return fail("La venta de producto sellado se abre pronto.");
+    const quantity = form.elements.quantity ? Number(val("quantity")) : 1;
+    const release = form.elements.preorder?.checked ? val("release") : null;
+    if (!(Number.isInteger(quantity) && quantity >= 1 && quantity <= 500)) return fail("Las unidades tienen que ser de 1 a 500.");
+    if (form.elements.preorder?.checked && !release) return fail("Elige la fecha de salida de la preventa.");
     const s = (await sb.auth.getSession()).data.session;
     if (!s) return fail("Tu sesión expiró. Vuelve a entrar para publicar.");
     btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Publicando…`; msg.innerHTML = "";
-    const uid = s.user.id, id = crypto.randomUUID(), paths = [];
-    const undo = async () => { if (paths.length) await sb.storage.from("listing-photos").remove(paths); await sb.from("listings").delete().eq("id", id); };
-    const ins = await sb.from("listings").insert({
-      id, seller_id: uid, status: "draft", product_type: "sealed", sealed_kind: val("kind"), category: val("category"),
+    const res = await publishListing(s.user.id, {
+      product_type: "sealed", sealed_kind: val("kind"), category: val("category"),
       title: val("title"), description: val("description") || null, subject: sealedKindName(val("kind")).slice(0, 80), set_name: val("setName"),
       year, variant: val("lang"), number: null, condition: null, grading_company: null, grade: null,
       price_cents: Math.round(price * 100), province: loc.province, district: loc.district, neighborhood: loc.neighborhood, catalog_id: null, estimate: null,
-    });
-    if (ins.error) {
-      console.error(ins.error);
-      if (ins.error.code === "42703" || ins.error.code === "PGRST204") { sealedCols = false; return fail("La venta de producto sellado se abre pronto."); }
-      return fail("No pudimos guardar el anuncio. Intenta de nuevo.");
-    }
-    for (const [i, f] of files.entries()) {
-      const ext = { "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg", path = `${uid}/${id}/${i}.${ext}`;
-      let up;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (attempt) await new Promise((r) => setTimeout(r, 800 * attempt));
-        up = await sb.storage.from("listing-photos").upload(path, f, { contentType: f.type || "image/jpeg", cacheControl: "31536000", upsert: false });
-        if (!up.error || /exists|duplicate/i.test(up.error.message ?? "")) break;
-      }
-      if (up.error && !/exists|duplicate/i.test(up.error.message ?? "")) { console.error(up.error); await undo(); return fail("No pudimos subir las fotos. Revisa tu conexión e intenta de nuevo."); }
-      paths.push(path);
-    }
-    const pr = await sb.from("listing_photos").insert(paths.map((storage_path, position) => ({ listing_id: id, storage_path, position })));
-    if (pr.error) { console.error(pr.error); await undo(); return fail("No pudimos guardar las fotos. Intenta de nuevo."); }
-    const act = await sb.from("listings").update({ status: "active" }).eq("id", id).select("id");
-    if (act.error || !act.data?.length) { console.error(act.error); await undo(); return fail("No pudimos publicar el anuncio. Intenta de nuevo."); }
+      ...(quantity > 1 || release ? { quantity, release_date: release } : {}),
+    }, files);
+    if (res.missingColumn) { if (quantity > 1 || release) { stockCols = false; return fail("Las preventas y las unidades se abren pronto."); } sealedCols = false; return fail("La venta de producto sellado se abre pronto."); }
+    if (res.error) return fail(res.error);
+    const id = res.id;
     track("publicar", id);
     toast("Anuncio publicado", { description: "Ya está visible para los compradores." });
     go(`/carta/${id}`);
+  });
+}
+
+// ============================================================= lots (#/vender/lote, migration 0024)
+// Several cards sold together ("50 comunes de 151"): a count, an optional overall condition, photos.
+function viewSellLot(app) {
+  setTitle("Vender un lote");
+  if (!sb) { app.innerHTML = `<div class="wrap"><p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p></div>`; return; }
+  if (!session) return go("/entrar?next=/vender/lote");
+  const accepted = sellTermsAccepted(session);
+  const locOptions = FLAT_LOCATIONS.map((l, i) => `<option value="${i}">${esc(l.neighborhood)}, ${esc(l.district)}</option>`).join("");
+  app.innerHTML = `<div class="wrap page"><h1>Vender un lote</h1>
+    <p class="lead">Varias cartas juntas por un solo precio: comunes, repetidas, energías, una colección completa. Publicar es gratis.</p>
+    <p class="small muted" style="margin:-8px 0 16px">¿Es una sola carta? <a class="link" href="#/vender">Usa el formulario de cartas</a>.</p>
+    ${sellIntro(accepted ? "done" : "ask")}
+    <div id="sellGate"${accepted ? "" : " hidden"}>
+    <form id="lotForm" class="col sealed-form" novalidate>
+      <section class="panel col">
+        <h2 class="step" style="margin:0"><span class="num-badge">1</span>Fotos reales</h2>
+        <p class="xs muted" style="margin:0">Hasta 4 fotos: el lote completo extendido y de cerca las cartas más importantes.</p>
+        <label class="btn outline block">${ic("camera")}<span id="ltLbl">Elegir fotos</span><input type="file" id="ltPhotos" accept="image/jpeg,image/png,image/webp" multiple class="sr-only"></label>
+        <div id="ltThumbs" class="thumbs" style="justify-content:flex-start"></div>
+      </section>
+      <section class="panel col">
+        <h2 class="step" style="margin:0"><span class="num-badge">2</span>El lote</h2>
+        <div class="grid2">
+          <label class="f">Categoría<select class="select" name="category">${CATEGORIES.map((c) => `<option value="${c.slug}">${c.name}</option>`).join("")}</select></label>
+          <label class="f">Cantidad de cartas<input class="input" name="count" type="number" min="2" max="5000" step="1" inputmode="numeric" required placeholder="50"></label>
+          <label class="f">Set o colección<input class="input" name="setName" required maxlength="80" placeholder="151, Varios sets, Prizm 2023…"></label>
+          <label class="f">Condición general<select class="select" name="condition"><option value="">Mixta</option>${CONDITIONS.map((c) => `<option value="${c.code}">${c.label} (${c.code})</option>`).join("")}</select></label>
+        </div>
+        <label class="f">Título<input class="input" name="title" required maxlength="80" placeholder="Lote de 50 comunes y poco comunes de 151"></label>
+        <label class="f">Qué trae el lote<textarea class="textarea" name="description" rows="5" maxlength="1000" required placeholder="Lista las cartas más importantes, cuántas holo o reverse holo, si hay repetidas, en qué estado vienen…"></textarea></label>
+      </section>
+      <section class="panel col">
+        <h2 class="step" style="margin:0"><span class="num-badge">3</span>Precio y ubicación</h2>
+        <div class="grid2">
+          <label class="f">Precio del lote (USD)<input class="input" name="price" type="number" min="1" step="0.01" inputmode="decimal" required></label>
+          <label class="f">Barrio / zona<select class="select" name="location">${locOptions}</select></label>
+        </div>
+        <p class="xs muted" style="margin:0">Solo mostramos el barrio, nunca tu dirección.</p>
+        <div id="ltMsg" aria-live="polite"></div>
+        <button class="btn primary block" id="ltPublish">Publicar gratis</button>
+      </section>
+    </form></div></div>`;
+  $("#sellAcceptBtn")?.addEventListener("click", () => {
+    acceptSellTerms(session);
+    $("#sellAccept").innerHTML = sellAcceptedNote();
+    $("#sellGate").hidden = false;
+    $("#sellGate").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  const form = $("#lotForm"), val = (n) => form.elements[n]?.value?.trim() ?? "";
+  let files = [], previews = [];
+  $("#ltPhotos").addEventListener("change", async (e) => {
+    const picked = [...e.target.files].slice(0, 4);
+    if (!picked.length) return;
+    $("#ltThumbs").innerHTML = `<span class="xs muted"><span class="spinner"></span> Preparando fotos…</span>`;
+    files = await Promise.all(picked.map(compressImage));
+    previews.forEach((u) => URL.revokeObjectURL(u));
+    previews = files.map((f) => URL.createObjectURL(f));
+    $("#ltThumbs").innerHTML = previews.map((u, i) => `<img src="${u}" alt="Foto ${i + 1}">`).join("");
+    $("#ltLbl").textContent = "Cambiar fotos";
+    if (picked.length < e.target.files.length) toast("Solo se usan las primeras 4 fotos.", { type: "info" });
+  });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = $("#ltMsg"), btn = $("#ltPublish");
+    const fail = (t) => { msg.innerHTML = `<p class="notice bad">${esc(t)}</p>`; btn.disabled = false; btn.textContent = "Publicar gratis"; };
+    const price = Number(val("price")), count = Number(val("count"));
+    const loc = FLAT_LOCATIONS[Number(val("location"))];
+    if (!files.length) return fail("Agrega al menos una foto real del lote.");
+    if (!(Number.isInteger(count) && count >= 2 && count <= 5000)) return fail("Escribe cuántas cartas trae el lote (de 2 a 5,000).");
+    if (!val("setName")) return fail("Escribe el set o la colección (o “Varios sets”).");
+    if (val("title").length < 5) return fail("El título es muy corto.");
+    if (val("description").length < 20) return fail("Cuenta qué trae el lote (al menos 20 letras): los compradores lo necesitan para decidir.");
+    if (!(price >= 1 && price <= 100000)) return fail("Escribe un precio entre $1 y $100,000.");
+    if (files.some((f) => f.size > 3 * 1024 * 1024)) return fail("Una de las fotos es muy pesada (máx. 3 MB).");
+    if (!loc) return fail("Elige tu barrio o zona.");
+    if (!lotCols) return fail("La venta de lotes se abre pronto.");
+    const s = (await sb.auth.getSession()).data.session;
+    if (!s) return fail("Tu sesión expiró. Vuelve a entrar para publicar.");
+    btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Publicando…`; msg.innerHTML = "";
+    const res = await publishListing(s.user.id, {
+      product_type: "lot", lot_count: count, category: val("category"),
+      title: val("title"), description: val("description"), subject: `Lote de ${count} cartas`, set_name: val("setName"),
+      year: null, variant: null, number: null, condition: val("condition") || null, grading_company: null, grade: null,
+      price_cents: Math.round(price * 100), province: loc.province, district: loc.district, neighborhood: loc.neighborhood, catalog_id: null, estimate: null,
+    }, files);
+    if (res.missingColumn) { lotCols = false; return fail("La venta de lotes se abre pronto."); }
+    if (res.error) return fail(res.error);
+    track("publicar", res.id);
+    toast("Lote publicado", { description: "Ya está visible para los compradores." });
+    go(`/carta/${res.id}`);
+  });
+}
+
+// ============================================================= identity check (migration 0025)
+// Individuals send their full name, a photo of their cédula and a selfie holding it; staff approve
+// and the photos are deleted right after the decision. Shops use the shop verification instead.
+async function renderIdentity(uid, prof, box) {
+  if (!sb || prof.is_shop) return;
+  if (prof.verified) {
+    box.innerHTML = `<section class="panel col"><h2>Identidad verificada</h2><p class="notice good" style="margin:0">${ic("check")} Tu identidad está verificada: tus anuncios llevan el sello.</p></section>`;
+    return;
+  }
+  const { data, error } = await sb.from("identity_checks").select("status, note, submitted_at").eq("user_id", uid).maybeSingle();
+  if (!box.isConnected) return;
+  if (error) { if (!["42P01", "PGRST205"].includes(error.code)) console.error(error); return; } // migration 0025 not applied yet
+  if (data?.status === "pending") {
+    box.innerHTML = `<section class="panel col"><h2>Identidad verificada</h2><p class="notice soft" style="margin:0">Recibimos tus fotos el ${new Date(data.submitted_at).toLocaleDateString("es-PA", { day: "numeric", month: "long" })}. Las revisamos y te avisamos en la campanita.</p></section>`;
+    return;
+  }
+  box.innerHTML = `<section class="panel col"><h2>Verifica tu identidad</h2>
+    <p class="small muted" style="margin:0">Los compradores confían más en vendedores con el sello <b>Identidad verificada</b>. Es gratis.</p>
+    ${data?.status === "rejected" ? `<p class="notice warn" style="margin:0">No pudimos verificarte la vez anterior${data.note ? `: ${esc(data.note)}` : "."} Puedes enviarlas de nuevo.</p>` : ""}
+    <label class="f">Nombre completo, como aparece en tu cédula<input class="input" id="idName" maxlength="80" autocomplete="name"></label>
+    <label class="f">Foto del frente de tu cédula<input type="file" id="idDoc" accept="image/jpeg,image/png,image/webp"></label>
+    <label class="f">Selfie sosteniendo tu cédula junto a tu cara<input type="file" id="idSelfie" accept="image/jpeg,image/png,image/webp"></label>
+    <p class="xs muted" style="margin:0">Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para comparar tu cara y tu nombre, y <b>las borramos apenas terminamos la revisión</b>. No guardamos tu número de cédula.</p>
+    <button type="button" class="btn primary" id="idSend">Enviar para verificar</button></section>`;
+  $("#idSend").addEventListener("click", async (e) => {
+    const btn = e.currentTarget, name = $("#idName").value.trim().replace(/\s+/g, " ");
+    const doc = $("#idDoc").files[0], selfie = $("#idSelfie").files[0];
+    if (name.length < 4) return toast("Escribe tu nombre completo.", { type: "error" });
+    if (!doc || !selfie) return toast("Sube las dos fotos: la cédula y la selfie con la cédula.", { type: "error" });
+    btn.disabled = true; btn.textContent = "Enviando…";
+    const paths = [];
+    try {
+      for (const [k, f] of [["cedula", doc], ["selfie", selfie]]) {
+        const img = await compressImage(f), ext = { "image/png": "png", "image/webp": "webp" }[img.type] ?? "jpg";
+        const path = `${uid}/${Date.now()}-${k}.${ext}`;
+        const up = await sb.storage.from("identity-docs").upload(path, img, { contentType: img.type || "image/jpeg", upsert: false });
+        if (up.error) throw up.error;
+        paths.push(path);
+      }
+      const { error: err } = await sb.rpc("submit_identity", { p_full_name: name, p_doc_path: paths[0], p_selfie_path: paths[1] });
+      if (err) throw err;
+      toast("Recibimos tus fotos. Te avisamos cuando revisemos.");
+      renderIdentity(uid, prof, box);
+    } catch (err) {
+      console.error(err);
+      if (paths.length) sb.storage.from("identity-docs").remove(paths);
+      btn.disabled = false; btn.textContent = "Enviar para verificar";
+      toast(/already pending/.test(err?.message ?? "") ? "Ya tienes una verificación en revisión." : err?.statusCode === "413" || /size/i.test(err?.message ?? "") ? "Una foto es muy pesada (máximo 5 MB)." : "No pudimos enviar tus fotos. Intenta de nuevo.", { type: "error" });
+    }
+  });
+}
+
+// Staff: pending identity checks. Approving or rejecting deletes the photos right away.
+async function adminIdentity(body) {
+  const { data, error } = await sb.from("identity_checks").select("user_id, full_name, doc_path, selfie_path, status, submitted_at").eq("status", "pending").order("submitted_at", { ascending: true });
+  if (error) {
+    if (["42P01", "PGRST205"].includes(error.code)) { body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0025 en Supabase.</p>`; return; }
+    throw error;
+  }
+  const people = await profilesById(data.map((c) => c.user_id));
+  body.innerHTML = `<p class="small muted" style="margin:0 0 12px">Compara la cara de la selfie con la de la cédula y el nombre con el que escribió. Al decidir, las fotos se borran.</p>
+    ${data.length ? `<ul class="admin-list">${data.map((c) => `<li class="panel" data-u="${c.user_id}">
+      <div class="phead"><span style="font-weight:600">${esc(c.full_name)}</span><a class="small link" href="#/vendedor/${encodeURIComponent(c.user_id)}">${esc(people.get(c.user_id)?.display_name ?? "perfil")}</a></div>
+      <p class="xs muted" style="margin:4px 0 8px">Enviada ${fmtDate(c.submitted_at)}</p>
+      <div class="claim-photos" data-photos="${esc(JSON.stringify([c.doc_path, c.selfie_path].filter(Boolean)))}"></div>
+      <input class="input id-note" maxlength="300" placeholder="Motivo si la rechazas (lo verá la persona)" style="margin-top:10px">
+      <div class="order-actions"><button class="btn primary" data-id="ok">Aprobar</button><button class="btn danger" data-id="no">Rechazar</button></div><div class="order-msg"></div></li>`).join("")}</ul>`
+      : `<p class="muted small">No hay verificaciones pendientes.</p>`}`;
+  body.querySelectorAll(".claim-photos").forEach(async (el) => {
+    const paths = JSON.parse(el.dataset.photos || "[]");
+    if (!paths.length) return;
+    const { data: urls } = await sb.storage.from("identity-docs").createSignedUrls(paths, 600);
+    el.innerHTML = (urls ?? []).filter((x) => x.signedUrl).map((x) => `<a href="${esc(x.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(x.signedUrl)}" alt="Foto de verificación" style="width:140px;height:140px"></a>`).join("");
+  });
+  body.querySelectorAll("[data-id]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), approve = b.dataset.id === "ok", note = li.querySelector(".id-note").value.trim();
+    if (!approve && !note && !confirm("¿Rechazar sin explicar el motivo?")) return;
+    li.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const { data: paths, error: err } = await sb.rpc("review_identity", { p_user: li.dataset.u, p_approve: approve, p_note: note || null });
+    if (err) { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); return adminFail(err, li.querySelector(".order-msg")); }
+    if (paths?.length) { const rm = await sb.storage.from("identity-docs").remove(paths); if (rm.error) console.error("identity photos not deleted", rm.error); }
+    route();
+  }));
+}
+
+// ============================================================= referrals (migration 0026)
+// "Invita y gana": the invite link carries the person's code; whoever signs up with it is linked to
+// them, and when the new account publishes 3 listings both get a month of the Plan Coleccionista.
+const REF_KEY = "holo.ref";
+const inviteUrl = () => `${location.origin}${location.pathname}#/entrar?ref=${buyerCode()}`;
+function rememberRef(code) {
+  if (!/^[0-9a-f]{8}$/i.test(code ?? "")) return;
+  try { localStorage.setItem(REF_KEY, code.toLowerCase()); } catch { /* storage blocked */ }
+}
+async function claimPendingRef() {
+  let code = null;
+  try { code = localStorage.getItem(REF_KEY); } catch { return; }
+  if (!code || !sb || !session) return;
+  if (session.user.id.startsWith(code)) { try { localStorage.removeItem(REF_KEY); } catch { /* */ } return; }
+  const { data, error } = await sb.rpc("claim_referral", { p_code: code });
+  if (error) { if (error.code !== "PGRST202") console.error(error); return; } // keep it if 0026 isn't applied yet
+  try { localStorage.removeItem(REF_KEY); } catch { /* */ }
+  if (data === "ok") toast("¡Bienvenido! Publica tus primeras 3 cartas y tú y quien te invitó reciben 1 mes del Plan Coleccionista.");
+}
+async function renderReferrals(box) {
+  if (!sb || !session) return;
+  const { data, error } = await sb.rpc("my_referrals");
+  if (!box.isConnected) return;
+  if (error) { if (error.code !== "PGRST202") console.error(error); return; }
+  const url = inviteUrl();
+  box.innerHTML = `<section class="panel col"><h2>Invita y gana</h2>
+    <p class="small muted" style="margin:0">Invita a una tienda o a un amigo. Cuando publique sus primeras 3 cartas, <b>los dos reciben 1 mes del Plan Coleccionista</b> (escaneos sin límite y hasta 50 búsquedas en “Busco…”).</p>
+    <div class="row-input"><input class="input" id="refUrl" readonly value="${esc(url)}" aria-label="Tu link de invitación"><button type="button" class="btn" id="refCopy" style="border-radius:12px">Copiar</button></div>
+    <a class="btn outline" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Te invito a Holo, para comprar y vender cartas en Panamá con pago protegido: ${url}`)}">${ic("chat")}Enviar por WhatsApp</a>
+    <p class="xs muted" style="margin:0">Invitaste a ${data?.invited ?? 0} · ${data?.rewarded ?? 0} ya publicaron sus 3 cartas.</p></section>`;
+  $("#refCopy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(url); toast("Link copiado."); } catch { $("#refUrl").select(); toast("Copia el link seleccionado."); }
   });
 }
 
@@ -4997,6 +5283,8 @@ async function viewAccount(app) {
     <div id="accOrders" class="col" style="margin-top:24px;gap:16px"></div>
     <div id="accActivity" class="col" style="margin-top:16px;gap:16px"></div>
     <div id="accNotif" class="col" style="margin-top:16px"></div>
+    <div id="accIdentity" class="col" style="margin-top:16px"></div>
+    <div id="accRef" class="col" style="margin-top:16px"></div>
     <form id="accForm" class="col acc-form" style="margin-top:24px" novalidate>
       <section class="panel col">
         <h2>Perfil</h2>
@@ -5024,6 +5312,8 @@ async function viewAccount(app) {
   renderOrders(uid, $("#accOrders"));
   renderActivity(uid, $("#accActivity"));
   renderNotifSettings(uid, $("#accNotif"));
+  renderIdentity(uid, prof, $("#accIdentity"));
+  renderReferrals($("#accRef"));
   renderDashboard(uid, prof, $("#dash"));
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
@@ -5090,8 +5380,8 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["ordenes", "revisiones", "planes", "anuncios", "tiendas", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
-  const tabs = [["ordenes", "Órdenes"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
+  const tab = ["ordenes", "revisiones", "planes", "anuncios", "tiendas", "identidad", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["identidad", "Identidad"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
   app.innerHTML = `<div class="wrap admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
@@ -5102,6 +5392,7 @@ async function viewAdmin(app, params) {
     else if (tab === "planes") await adminPlans(body, params.get("q") ?? "");
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
     else if (tab === "tiendas") await adminShops(body);
+    else if (tab === "identidad") await adminIdentity(body);
     else if (tab === "reportes") await adminReports(body);
     else if (tab === "analitica") await adminAnalytics(body, Number(params.get("dias")) || 7);
     else await adminSummary(body);
@@ -5638,7 +5929,7 @@ function viewTerms(app) {
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>El producto sellado (cajas de sobres, Elite Trainer Box, sobres, latas y similares) tiene que estar sellado de fábrica. Está prohibido vender producto abierto, resellado o con sobres cambiados, pesados o seleccionados; si el comprador lo reclama dentro del plazo, aplica el reembolso de Compra Protegida.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Cuando vendes una carta, ${esc(CONFIG.APP_NAME)} se queda con una comisión de ${feePct()} del precio de venta, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, que se descuenta de lo que te pagamos.</li><li>Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
-    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta. El comprador no paga comisión.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa, el vendedor no paga comisión y al comprador le devolvemos todo lo pagado.</p>`],
+    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta. El comprador no paga comisión.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Preventas y varias unidades:</b> solo las tiendas verificadas pueden publicar producto sellado en preventa o con varias unidades. En una preventa el comprador paga al reservar y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que la tienda entrega; si no entrega dentro de los 15 días siguientes a la fecha de salida anunciada, devolvemos todo lo pagado.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa, el vendedor no paga comisión y al comprador le devolvemos todo lo pagado.</p>`],
     [`Pagos por fuera de ${esc(CONFIG.APP_NAME)}`, `<p>Si conociste al comprador o al vendedor en ${esc(CONFIG.APP_NAME)}, la venta se paga con Compra Protegida. <b>Está prohibido cerrar el trato por fuera</b> (por WhatsApp, en persona o en otra app) para no pagar la comisión: podemos retirar los anuncios y suspender las cuentas que lo hagan.</p><p>Si aun así pagas por fuera, ${esc(CONFIG.APP_NAME)} no puede protegerte ni devolverte el dinero. Nunca le pagues directo al vendedor.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
@@ -5656,7 +5947,7 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, la referencia del pago, cuándo se entregó y confirmó la carta, y los reclamos con sus fotos (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Cobro de ventas:</b> si vendes, tu número de Yappy y el nombre del titular, para enviarte tu dinero. Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, la referencia del pago, cuándo se entregó y confirmó la carta, y los reclamos con sus fotos (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Cobro de ventas:</b> si vendes, tu número de Yappy y el nombre del titular, para enviarte tu dinero. Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Coordinar las Compras Protegidas y atender reclamos.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
@@ -5745,6 +6036,7 @@ async function loadProfileName() {
   refreshOfferBadge();
   refreshUnread();
   startNotifPolling();
+  claimPendingRef();
   if (isStaff && parseHash().path === "/admin") route(); // staff flag arrived after the first render
 }
 (async () => {
