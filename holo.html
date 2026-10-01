@@ -2839,7 +2839,7 @@ function bindOfferActions(box, done) {
 }
 
 // Mi cuenta: the seller's dashboard. Their cards, the offers they received and, per card and in total,
-// how many people saw them. Only counts from our own events (migrations 0007 and 0017): no AI, and no
+// how many people saw them. Only counts from our own events (migrations 0007 and 0018): no AI, and no
 // visitor ids leave the database. The seller's own visits and the staff's are not counted.
 let listingStatsOn = true;
 async function loadListingStats(uid, ids) {
@@ -2848,9 +2848,9 @@ async function loadListingStats(uid, ids) {
     const { data, error } = await sb.rpc("my_listing_stats");
     if (!error && data) return { totals: data.totals ?? {}, byId: new Map((data.listings ?? []).map((r) => [r.id, r])) };
     if (!["PGRST202", "42883"].includes(error?.code)) { console.error(error); return null; }
-    listingStatsOn = false; // migration 0017 not applied yet
+    listingStatsOn = false; // migration 0018 not applied yet
   }
-  // Until 0017 runs, staff can read the raw events (0007 policy) and count them the same way here.
+  // Until 0018 runs, staff can read the raw events (0007 policy) and count them the same way here.
   if (!isStaff) return null;
   const [ev, own, team] = await Promise.all([
     sb.from("events").select("name, visitor_id, user_id, listing_ref, created_at").in("listing_ref", ids)

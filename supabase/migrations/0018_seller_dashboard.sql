@@ -1,4 +1,4 @@
--- 0017: seller dashboard in "Mi cuenta" (holo.html). Run once in Supabase ▸ SQL Editor after 0016
+-- 0018: seller dashboard in "Mi cuenta" (holo.html). Run once in Supabase ▸ SQL Editor after 0017
 -- (safe to re-run). holo.html works before and after it: until it runs, only staff see view counts.
 --
 -- A seller sees, per card and in total, how many times their cards were viewed, by how many distinct
