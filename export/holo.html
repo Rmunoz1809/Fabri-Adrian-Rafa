@@ -597,6 +597,10 @@ details.report .i { width: 14px; height: 14px; }
 /* The bell adds one button to the header: on the narrowest phones tighten it so "Vender" still fits. */
 @media (max-width: 379.98px) { .top-right .icon-btn { width: 30px; } header.top .row, .top-right, .nav-account { gap: 4px; } }
 .notifs { max-width: 680px; margin: 24px auto 48px; }
+.wanted { max-width: 680px; margin: 24px auto 48px; }
+/* Search results with "Avisarme de nuevas": the header tools wrap under the title on phones. */
+@media (max-width: 639.98px) { .rhead { flex-wrap: wrap; } .rtools { flex-wrap: wrap; } }
+.empty-state .btn { max-width: 100%; white-space: normal; height: auto; min-height: 32px; text-align: center; }
 .notif-list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; }
 .notif-list a { display: flex; gap: 12px; align-items: flex-start; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); background: var(--card); color: inherit; text-decoration: none; }
 .notif-list a:hover { background: var(--muted); }
@@ -1679,7 +1683,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/avisos" || path.startsWith("/pagar/"));
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/avisos" || path === "/busco" || path.startsWith("/pagar/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -1699,6 +1703,7 @@ async function route() {
     if (path === "/vender") return viewSell(app);
     if (path === "/vender/graduadas") return viewSellGraded(app);
     if (path === "/vender/sellado") return viewSellSealed(app);
+    if (path === "/busco") { app.innerHTML = `<div class="wrap"></div>`; return await viewWanted(app.firstElementChild, params); }
     if (path === "/avisos") { app.innerHTML = `<div class="wrap"></div>`; return await viewNotifications(app.firstElementChild); }
     if (path.startsWith("/pagar/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewCheckout(app.firstElementChild, safeDecode(path.slice(7))); }
     // Account and staff pages render into a padded column.
@@ -1719,8 +1724,8 @@ async function route() {
 const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["escanear", "#/escanear", "¿Cuánto vale?", "camera"], ["protegida", "#/protegida", "Compra Protegida", "shield"], ["vender", "#/vender", "Vender", "plus"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin", "/avisos": "avisos" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"], ...(notifOn ? [["avisos", "#/avisos", "Avisos", "bell"]] : [])] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
+  const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin", "/avisos": "avisos", "/busco": "busco" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"], ["busco", "#/busco", "Busco…", "search"], ...(notifOn ? [["avisos", "#/avisos", "Avisos", "bell"]] : [])] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   const badge = pendingOffers ? `<span class="nbadge" title="Tienes cosas pendientes en Mi cuenta">${pendingOffers}</span>` : "";
@@ -2450,7 +2455,7 @@ async function viewHome(app, params) {
           </form>
         </aside>
         <section aria-labelledby="resultsTitle">
-          <div class="rhead"><h2 id="resultsTitle">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : f.category ? esc(categoryName(f.category)) : "Recién publicadas"}</h2><div class="rtools">${f.q ? `<a class="btn ghost sm" href="${hrefWith(f, { q: undefined })}">${ic("x")}Quitar búsqueda</a>` : ""}<p class="small muted num" id="count" aria-live="polite"></p></div></div>
+          <div class="rhead"><h2 id="resultsTitle">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : f.category ? esc(categoryName(f.category)) : "Recién publicadas"}</h2><div class="rtools">${f.q ? `<a class="btn ghost sm" href="${esc(wantedHref(f.q, f.category, f.graded))}">${ic("bell")}Avisarme de nuevas</a><a class="btn ghost sm" href="${hrefWith(f, { q: undefined })}">${ic("x")}Quitar búsqueda</a>` : ""}<p class="small muted num" id="count" aria-live="polite"></p></div></div>
           <div id="list">${skeletonGrid(8)}</div>
         </section>
       </div>
@@ -2483,7 +2488,7 @@ async function viewHome(app, params) {
     ? `<ul class="grid live">${list.map(tile).join("")}</ul>`
     : f.seller === "tiendas" && !f.q && !f.category
     ? `<div class="empty-state"><span class="ico">${ic("store")}</span><p style="font-weight:600">Todavía no hay tiendas verificadas con cartas publicadas.</p><p class="small muted" style="margin-top:4px">Estamos sumando las primeras tiendas de Panamá.</p></div>`
-    : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos cartas con esos filtros.</p><p class="small muted" style="margin-top:4px">Prueba con otra búsqueda o <a class="link" href="#/">ve todo</a>.</p></div>`;
+    : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos cartas con esos filtros.</p><p class="small muted" style="margin-top:4px">Prueba con otra búsqueda o <a class="link" href="#/">ve todo</a>.</p>${f.q ? `<a class="btn primary sm" style="margin-top:14px" href="${esc(wantedHref(f.q, f.category, f.graded))}">${ic("bell")}Avísame cuando alguien la publique</a>` : ""}</div>`;
 }
 
 function sellerPanel(s) {
@@ -4620,7 +4625,7 @@ const timeAgo = (iso) => {
   if (s < 7 * 86400) { const d = Math.floor(s / 86400); return `hace ${d} ${d === 1 ? "día" : "días"}`; }
   return new Date(iso).toLocaleDateString("es-PA", { day: "numeric", month: "short" });
 };
-const NOTIF_ICON = { offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
+const NOTIF_ICON = { wanted: "search", offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
 const notifIcon = (kind) => NOTIF_ICON[kind.split("_")[0]] ?? "info";
 // Links come from the database triggers; only in-app hash routes are followed.
 const safeLink = (l) => (typeof l === "string" && /^#\/[\w\-/?=&.%]*$/.test(l) ? l : "#/cuenta");
@@ -4667,6 +4672,82 @@ async function renderNotifSettings(uid, box) {
     if (err) { console.error(err); e.target.checked = !e.target.checked; return toast("No pudimos guardar tu preferencia. Intenta de nuevo.", { type: "error" }); }
     toast(e.target.checked ? "Te enviaremos los avisos por correo." : "Ya no te enviaremos avisos por correo.");
   });
+}
+
+// ============================================================= "Busco…" (#/busco, migration 0022)
+// Saved searches: when a listing goes live and matches, the database sends a notification (0021).
+// 3 searches on a free account, 50 with the Plan Coleccionista (enforced in the database).
+const WANTED_KINDS = [["any", "Cualquiera"], ["raw", "Sin graduar"], ["graded", "Graduada"], ["sealed", "Producto sellado"]];
+const wantedHref = (q, cat, kind) => `#/busco?${new URLSearchParams(Object.entries({ q, cat, tipo: kind }).filter(([, v]) => v)).toString()}`;
+const wantedSearchHref = (w) => hrefWith({ sort: "recientes" }, { q: w.query, cat: w.category ?? undefined, tipo: w.kind === "any" ? undefined : w.kind });
+
+async function viewWanted(app, params) {
+  setTitle("Busco…");
+  if (!sb || !session) return go("/entrar?next=/busco");
+  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tus búsquedas…</p>`;
+  const holder = app.firstElementChild, uid = session.user.id;
+  const [{ data, error }, plan] = await Promise.all([
+    sb.from("wanted").select("id, query, category, kind, max_price_cents, created_at").order("created_at", { ascending: false }),
+    sb.from("subscriptions").select("active_until").eq("user_id", uid).maybeSingle(),
+  ]);
+  if (!holder.isConnected) return;
+  if (error) {
+    const soon = ["42P01", "PGRST205"].includes(error.code);
+    if (!soon) console.error(error);
+    app.innerHTML = `<div class="wanted"><h1 class="display" style="font-size:30px">Busco…</h1><p class="notice soft">${soon ? "“Busco…” se abre pronto: vas a poder guardar las cartas que buscas y te avisamos cuando alguien las publique." : "No pudimos cargar tus búsquedas. Recarga la página."}</p></div>`;
+    return;
+  }
+  const hasPlan = plan.data?.active_until && new Date(plan.data.active_until) > new Date();
+  const limit = hasPlan ? 50 : 3, full = data.length >= limit;
+  const pre = { q: params.get("q") ?? "", cat: params.get("cat") ?? "", tipo: params.get("tipo") ?? "any" };
+  const describe = (w) => [w.category ? categoryName(w.category) : null, w.kind !== "any" ? WANTED_KINDS.find(([k]) => k === w.kind)?.[1] : null,
+    w.max_price_cents ? `hasta ${formatUsd(w.max_price_cents)}` : null].filter(Boolean).join(" · ");
+  app.innerHTML = `<div class="wanted col" style="gap:16px">
+    <div><h1 class="display" style="font-size:30px;margin:0">Busco…</h1>
+      <p class="muted" style="margin:6px 0 0">Guarda la carta que buscas y te avisamos en la campanita${CONFIG.EMAIL_ALERTS ? " y por correo" : ""} apenas alguien la publique.</p></div>
+    <form id="wForm" class="panel col" novalidate>
+      <label class="f">¿Qué buscas?<input class="input" name="q" maxlength="80" required placeholder="Ej.: Charizard 151, Wembanyama Prizm, ETB Prismatic" value="${esc(pre.q)}"></label>
+      <div class="grid2">
+        <label class="f">Categoría<select class="select" name="cat"><option value="">Todas</option>${CATEGORIES.map((c) => `<option value="${c.slug}"${pre.cat === c.slug ? " selected" : ""}>${c.name}</option>`).join("")}</select></label>
+        <label class="f">Tipo<select class="select" name="kind">${WANTED_KINDS.map(([k, t]) => `<option value="${k}"${pre.tipo === k ? " selected" : ""}>${t}</option>`).join("")}</select></label>
+        <label class="f">Precio máximo (opcional)<input class="input" name="max" type="number" min="1" step="1" inputmode="numeric" placeholder="USD"></label>
+      </div>
+      <p class="xs muted" style="margin:0">Te avisamos cuando se publique una carta que tenga todas esas palabras. Usa pocas palabras clave: el nombre y el set suelen bastar.</p>
+      <div id="wMsg" aria-live="polite"></div>
+      <button class="btn primary" id="wSave"${full ? " disabled" : ""}>${ic("bell")}Avisarme</button>
+      <p class="xs muted" style="margin:0">${data.length} de ${limit} búsquedas guardadas.${hasPlan ? "" : ` Con el <a class="link" href="#/escanear">Plan Coleccionista</a> puedes guardar hasta 50.`}</p>
+    </form>
+    ${data.length ? `<section class="panel col"><h2>Mis búsquedas</h2><ul class="admin-list">${data.map((w) => `<li class="panel" data-id="${w.id}">
+      <div class="phead"><span style="font-weight:600">“${esc(w.query)}”</span><button type="button" class="btn ghost sm w-del">${ic("trash")}Quitar</button></div>
+      ${describe(w) ? `<p class="xs muted" style="margin:4px 0 0">${esc(describe(w))}</p>` : ""}
+      <a class="link small" href="${esc(wantedSearchHref(w))}">Ver lo que hay ahora</a></li>`).join("")}</ul></section>` : ""}
+  </div>`;
+  const form = $("#wForm");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const msg = $("#wMsg"), btn = $("#wSave"), q = form.q.value.trim().replace(/\s+/g, " ");
+    const max = form.max.value ? Math.round(Number(form.max.value) * 100) : null;
+    if (q.replace(/[^\p{L}\p{N}]/gu, "").length < 2) { msg.innerHTML = `<p class="notice bad" style="margin:0">Escribe qué carta buscas.</p>`; return; }
+    if (max != null && !(max >= 100 && max <= 10000000)) { msg.innerHTML = `<p class="notice bad" style="margin:0">El precio máximo tiene que estar entre $1 y $100,000.</p>`; return; }
+    btn.disabled = true;
+    const { error: err } = await sb.from("wanted").insert({ user_id: uid, query: q.slice(0, 80), category: form.cat.value || null, kind: form.kind.value, max_price_cents: max });
+    if (err) {
+      btn.disabled = false;
+      if (!/limit/.test(err.message ?? "")) console.error(err);
+      msg.innerHTML = `<p class="notice bad" style="margin:0">${/limit/.test(err.message ?? "") ? `Ya tienes ${limit} búsquedas guardadas. Quita alguna${hasPlan ? "" : " o activa el Plan Coleccionista"}.` : "No pudimos guardar tu búsqueda. Intenta de nuevo."}</p>`;
+      return;
+    }
+    toast("Listo. Te avisamos cuando la publiquen.");
+    go("/busco");
+    route();
+  });
+  app.querySelectorAll(".w-del").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li");
+    b.disabled = true;
+    const { error: err } = await sb.from("wanted").delete().eq("id", li.dataset.id);
+    if (err) { b.disabled = false; console.error(err); return toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
+    route();
+  }));
 }
 
 // ============================================================= scanner (#/escanear)
@@ -5244,7 +5325,16 @@ async function adminAnalytics(body, days) {
       ${(data.top_listings ?? []).length ? `<table class="fees"><thead><tr><th>Carta</th><th>Vistas</th><th>Personas</th><th>Contactos</th></tr></thead><tbody>${data.top_listings.map((t) => {
         const title = t.title ?? DEMO.find((d) => d.id === t.ref)?.title ?? "Anuncio eliminado";
         return `<tr><td><a href="#/carta/${encodeURIComponent(t.ref)}">${esc(title)}</a></td><td>${t.views}</td><td>${t.visitors}</td><td>${t.clicks}</td></tr>`;
-      }).join("")}</tbody></table>` : `<p class="muted small" style="margin:0">Todavía nadie ha abierto una carta.</p>`}</section>`;
+      }).join("")}</tbody></table>` : `<p class="muted small" style="margin:0">Todavía nadie ha abierto una carta.</p>`}</section>
+    <section class="panel col" id="wantedTop"><h2>Lo más buscado (“Busco…”)</h2><p class="muted small" style="margin:0"><span class="spinner"></span></p></section>`;
+  // What people want and nobody sells yet: what to ask the shops to bring (migration 0022).
+  const { data: wanted, error: wErr } = await sb.rpc("wanted_summary");
+  const box = $("#wantedTop");
+  if (!box) return;
+  if (wErr) { box.remove(); if (wErr.code !== "PGRST202") console.error(wErr); return; }
+  box.innerHTML = `<h2>Lo más buscado (“Busco…”)</h2>${wanted.length ? `<table class="fees"><thead><tr><th>Búsqueda</th><th>Personas</th><th>Avisos enviados</th></tr></thead><tbody>${wanted.map((w) =>
+    `<tr><td><a href="${esc(hrefWith({ sort: "recientes" }, { q: w.query }))}">${esc(w.query)}</a></td><td>${w.people}</td><td>${w.hits}</td></tr>`).join("")}</tbody></table>
+    <p class="xs muted" style="margin:0">Las búsquedas con 0 avisos son cartas que nadie ha publicado todavía: pídeselas a las tiendas.</p>` : `<p class="muted small" style="margin:0">Nadie ha guardado una búsqueda todavía.</p>`}`;
 }
 
 // ------------------------------------------------------------- reports
