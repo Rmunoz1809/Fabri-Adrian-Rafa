@@ -598,6 +598,13 @@ details.report .i { width: 14px; height: 14px; }
 @media (max-width: 379.98px) { .top-right .icon-btn { width: 30px; } header.top .row, .top-right, .nav-account { gap: 4px; } }
 .notifs { max-width: 680px; margin: 24px auto 48px; }
 .wanted { max-width: 680px; margin: 24px auto 48px; }
+.qa-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.qa-list .q { display: flex; gap: 8px; margin: 0; font-weight: 600; }
+.qa-list .q .i { flex-shrink: 0; width: 16px; height: 16px; margin-top: 3px; color: var(--fg-2); }
+.qa-list .a { margin: 8px 0 0 24px; padding: 8px 12px; border-left: 2px solid var(--border); font-size: 14px; }
+.qa-list .qa-hide { margin: 4px 0 0 24px; background: none; border: 0; padding: 0; cursor: pointer; color: var(--fg-2); }
+#qaBox { margin-top: 12px; }
+@media (max-width: 479.98px) { .qa-answer { flex-direction: column; align-items: stretch; } .qa-answer .input { flex: none; } .qa-answer .btn { width: 100%; } }
 /* Search results with "Avisarme de nuevas": the header tools wrap under the title on phones. */
 @media (max-width: 639.98px) { .rhead { flex-wrap: wrap; } .rtools { flex-wrap: wrap; } }
 .empty-state .btn { max-width: 100%; white-space: normal; height: auto; min-height: 32px; text-align: center; }
@@ -2639,6 +2646,8 @@ async function viewDetail(app, id) {
             : `<div><dt>${l.grading ? "Graduación" : "Condición"}</dt><dd>${l.grading ? `${esc(l.grading.company)} ${esc(l.grading.grade)}` : cond ? `${cond.label} (${cond.code})` : "—"}</dd></div>`}
           ${l.grading?.cert ? `<div><dt>Certificado</dt><dd>${esc(l.grading.cert)}</dd></div>` : ""}
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
+        ${l.isDemo ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><p class="sub">En los anuncios reales puedes preguntarle al vendedor aquí mismo (estado, centrado, entrega…). Él responde en el anuncio y todos ven la respuesta.</p></section>`
+          : sb ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><div id="qaBox"><p class="loading"><span class="spinner"></span></p></div></section>` : ""}
       </div>
       <aside class="dside">
         ${quote && forSale ? `<section class="panel"><h2 class="ptitle">${ic("shield")}Compra Protegida</h2>
@@ -2683,6 +2692,7 @@ async function viewDetail(app, id) {
   setupShare(l);
   if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
   if ($("#offerBody")) renderOffer(l, $("#offerBody"));
+  if ($("#qaBox")) renderQuestions(l, $("#qaBox"));
   const needAccount = (e) => {
     if (session || !sb) return false;
     e.preventDefault();
@@ -2833,6 +2843,73 @@ async function renderOffer(l, box) {
   $("#offerTake")?.addEventListener("click", () => act("respond_offer", { p_offer: o.id, p_action: "accept_counter" }, "¡Listo! Ya puedes comprar a ese precio."));
   $("#offerDecline")?.addEventListener("click", () => act("respond_offer", { p_offer: o.id, p_action: "decline_counter" }, "Contraoferta rechazada."));
   $("#offerBuy")?.addEventListener("click", () => track("click_protegida", l.id));
+}
+
+// Listing page: public questions and answers (migration 0023). Contact details are refused by the
+// database; this regex only gives the friendly message before sending.
+const CONTACT_RE = /(\+?\b507\b|\b6\d{3}[-. ]?\d{4}\b|[\w.%+-]+@[\w.-]+\.[a-z]{2,}|https?:\/\/|www\.|wa\.me|\.com\b|whats?app|wh?atsap|wasa+p|telegram|instagram|\binsta\b|\big:)/i;
+const qaError = (e) => /contact info/.test(e?.message ?? "") ? "Por seguridad no se permiten teléfonos, correos, enlaces ni redes sociales: toda la venta va por Holo con Compra Protegida."
+  : /own listing/.test(e?.message ?? "") ? "No puedes preguntar en tu propio anuncio."
+  : /not available/.test(e?.message ?? "") ? "Esta carta ya no está disponible."
+  : /too many/.test(e?.message ?? "") ? "Hiciste muchas preguntas hoy. Intenta mañana."
+  : "No pudimos guardar. Revisa tu conexión e intenta de nuevo.";
+let questionsOn = true;
+async function renderQuestions(l, box) {
+  if (!questionsOn || !sb) { box.closest("section")?.remove(); return; }
+  const { data, error } = await sb.from("listing_questions").select("id, asker_id, question, answer, answered_at, hidden, created_at").eq("listing_id", l.id).order("created_at", { ascending: true }).limit(100);
+  if (!box.isConnected) return;
+  if (error) { if (["42P01", "PGRST205"].includes(error.code)) questionsOn = false; else console.error(error); box.closest("section")?.remove(); return; }
+  const me = session?.user.id ?? null, isOwner = me && l.sellerId === me;
+  const shown = data.filter((q) => !q.hidden || isStaff);
+  const names = await profilesById(shown.map((q) => q.asker_id));
+  if (!box.isConnected) return;
+  const item = (q) => {
+    const who = esc(names.get(q.asker_id)?.display_name ?? "Un comprador");
+    return `<li data-q="${q.id}">
+      <p class="q">${ic("chat")}<span>${esc(q.question)}</span></p>
+      <p class="xs muted" style="margin:2px 0 0 24px">${who} · ${timeAgo(q.created_at)}${q.hidden ? " · <b>oculta</b>" : ""}</p>
+      ${q.answer ? `<p class="a"><b>Respuesta del vendedor:</b> ${esc(q.answer)}</p>`
+        : isOwner ? `<div class="row-input qa-answer" style="margin:8px 0 0 24px"><input class="input" maxlength="500" placeholder="Escribe tu respuesta" aria-label="Respuesta"><button type="button" class="btn primary sm" data-qa="answer" style="border-radius:12px">Responder</button></div>`
+        : `<p class="xs muted" style="margin:6px 0 0 24px">Esperando la respuesta del vendedor.</p>`}
+      ${!q.hidden && (isOwner || isStaff || q.asker_id === me) ? `<button type="button" class="link xs qa-hide" data-qa="hide">${q.asker_id === me && !isOwner && !isStaff ? "Retirar mi pregunta" : "Ocultar"}</button>` : ""}
+    </li>`;
+  };
+  const canAsk = !l.isDemo && !isOwner && l.status === "active";
+  box.innerHTML = `${shown.length ? `<ul class="qa-list">${shown.map(item).join("")}</ul>` : `<p class="small muted" style="margin:0">Todavía no hay preguntas.${canAsk ? " Haz la primera: el vendedor responde aquí y todos ven la respuesta." : ""}</p>`}
+    ${canAsk ? (session
+      ? `<div class="row-input" style="margin-top:12px"><input class="input" id="qaIn" maxlength="300" placeholder="Pregunta sobre la carta (estado, centrado, entrega…)" aria-label="Tu pregunta"><button type="button" class="btn primary" id="qaSend">Preguntar</button></div>
+        <p class="xs muted" style="margin:6px 0 0">No pongas teléfonos ni redes: la venta va siempre por ${esc(CONFIG.APP_NAME)}.</p>`
+      : `<a class="btn outline block" style="margin-top:12px" href="#/entrar?next=${encodeURIComponent(`/carta/${l.id}`)}">Entrar para preguntar</a>`) : ""}`;
+  const send = async () => {
+    const input = $("#qaIn"), text = input.value.trim().replace(/\s+/g, " ");
+    if (text.length < 5) return toast("Escribe tu pregunta (al menos 5 letras).", { type: "error" });
+    if (CONTACT_RE.test(text)) return toast(qaError({ message: "contact info" }), { type: "error" });
+    $("#qaSend").disabled = true;
+    const { error: e } = await sb.from("listing_questions").insert({ listing_id: l.id, asker_id: me, question: text.slice(0, 300) });
+    if (!box.isConnected) return;
+    if (e) { $("#qaSend").disabled = false; if (!/contact info|too many/.test(e.message ?? "")) console.error(e); return toast(qaError(e), { type: "error" }); }
+    toast("Pregunta enviada. Te avisamos cuando el vendedor responda.");
+    renderQuestions(l, box);
+  };
+  $("#qaSend")?.addEventListener("click", send);
+  $("#qaIn")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } });
+  box.querySelectorAll("[data-qa]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), id = li.dataset.q;
+    if (b.dataset.qa === "answer") {
+      const text = li.querySelector(".qa-answer input").value.trim();
+      if (!text) return toast("Escribe tu respuesta.", { type: "error" });
+      if (CONTACT_RE.test(text)) return toast(qaError({ message: "contact info" }), { type: "error" });
+      b.disabled = true;
+      const { error: e } = await sb.rpc("answer_question", { p_question: id, p_answer: text.slice(0, 500) });
+      if (e) { b.disabled = false; if (!/contact info/.test(e.message ?? "")) console.error(e); return toast(qaError(e), { type: "error" }); }
+      toast("Respuesta publicada.");
+    } else {
+      if (!(await confirmDialog({ title: "¿Ocultar esta pregunta?", body: "Deja de verse en el anuncio.", confirm: "Ocultar" }))) return;
+      const { error: e } = await sb.rpc("hide_question", { p_question: id });
+      if (e) { console.error(e); return toast("No pudimos ocultarla. Intenta de nuevo.", { type: "error" }); }
+    }
+    renderQuestions(l, box);
+  }));
 }
 
 // Mi cuenta: offers received and made, reviews to write, and the buyer code for Compra Protegida.
@@ -4625,7 +4702,7 @@ const timeAgo = (iso) => {
   if (s < 7 * 86400) { const d = Math.floor(s / 86400); return `hace ${d} ${d === 1 ? "día" : "días"}`; }
   return new Date(iso).toLocaleDateString("es-PA", { day: "numeric", month: "short" });
 };
-const NOTIF_ICON = { wanted: "search", offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
+const NOTIF_ICON = { question: "chat", wanted: "search", offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
 const notifIcon = (kind) => NOTIF_ICON[kind.split("_")[0]] ?? "info";
 // Links come from the database triggers; only in-app hash routes are followed.
 const safeLink = (l) => (typeof l === "string" && /^#\/[\w\-/?=&.%]*$/.test(l) ? l : "#/cuenta");
@@ -5567,7 +5644,7 @@ function viewTerms(app) {
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
     ["Plan Coleccionista", `<p>Es una suscripción opcional de ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes. Sin el plan, cada cuenta puede escanear 3 cartas al día en “¿Cuánto vale tu carta?”; con el plan, sin límite para uso personal (ponemos un tope diario alto para evitar abusos).</p><ul><li>Cada pago activa el plan por 30 días. No se renueva solo: si no vuelves a pagar, tu cuenta regresa al plan gratis.</li><li>Los valores que muestra el escáner son referencias de mercado, no tasaciones (sección 5).</li><li>Podemos cambiar el precio o lo que incluye el plan; los cambios aplican desde tu siguiente pago.</li></ul>`],
     ["Reembolsos", `<ul><li><b>Compra Protegida:</b> devolvemos todo lo pagado si la carta no llega, no es original o no coincide con el anuncio y el comprador reclama dentro de los 3 días de recibirla (sección 6). El reembolso se hace por el mismo medio de pago, en un máximo de 5 días hábiles desde que lo aprobamos.</li><li><b>Revisión en tienda:</b> se devuelve si la revisión no se puede hacer por causa nuestra o de la tienda, no según el resultado (sección 9).</li><li><b>Plan Coleccionista:</b> no se reembolsa una vez activado, salvo que el servicio no funcione por causa nuestra (sección 10).</li><li><b>Pagos hechos por fuera de ${esc(CONFIG.APP_NAME)}:</b> no los podemos reembolsar (sección 7).</li><li>Para pedir un reembolso escríbenos a ${legalVal("EMAIL")} o por WhatsApp con la referencia de tu compra.</li></ul>`],
-    ["Conducta prohibida", `<ul><li>Estafas o suplantación de identidad.</li><li>Pedir o hacer pagos por fuera de Compra Protegida.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li><li>Hacer ofertas sin intención de comprar, o publicar reseñas falsas u ofensivas (o pedir u ofrecer algo a cambio de una reseña).</li></ul>`],
+    ["Conducta prohibida", `<ul><li>Estafas o suplantación de identidad.</li><li>Pedir o hacer pagos por fuera de Compra Protegida.</li><li>Poner teléfonos, correos, enlaces o redes sociales en anuncios, preguntas o respuestas para cerrar el trato por fuera.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li><li>Hacer ofertas sin intención de comprar, o publicar reseñas falsas u ofensivas (o pedir u ofrecer algo a cambio de una reseña).</li></ul>`],
     ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios, ocultar reseñas que incumplan estas reglas o suspender cuentas. Las reseñas solo las puede dejar quien compró con Compra Protegida. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Marcas", `<p>Pokémon, NBA, NFL y los nombres de jugadores, equipos y fabricantes (Panini, Topps y otros) son marcas de sus dueños. ${esc(CONFIG.APP_NAME)} no está afiliado ni patrocinado por ellos. Las imágenes de catálogo se usan solo para identificar las cartas. Si tienes derechos sobre una imagen y quieres que la retiremos, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Responsabilidad", `<p>Hacemos lo posible para que la plataforma funcione bien y sea segura, pero puede tener interrupciones o errores. En la medida que permita la ley, no respondemos por daños indirectos, por operaciones entre usuarios fuera de Compra Protegida ni por cartas falsas vendidas por usuarios (sección 8). Nada en estos términos limita los derechos que te da la Ley 45 de 2007 de protección al consumidor.</p>`],
