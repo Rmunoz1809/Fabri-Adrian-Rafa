@@ -619,6 +619,32 @@ details.report .i { width: 14px; height: 14px; }
 .notif-list .ndot { flex-shrink: 0; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--brand); }
 .sealed-form { max-width: 720px; gap: 16px; }
 label.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
+.shop-place { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.shop-place li { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
+.shop-place .i { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; color: var(--fg-2); }
+.shop-place a, .shop-place span { overflow-wrap: anywhere; }
+.events-page { max-width: 760px; margin: 24px auto 48px; }
+.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.event { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); min-width: 0; }
+.event.off { opacity: .6; }
+.ev-date { flex-shrink: 0; display: grid; place-items: center; align-content: center; width: 52px; height: 56px; border-radius: var(--radius-md); background: var(--muted); line-height: 1.1; }
+.ev-date span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); }
+.ev-date b { font-size: 22px; }
+.ev-body { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.ev-body h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
+.ev-body p { margin: 0; }
+.ev-kind { font-size: 12px; font-weight: 600; color: var(--fg-2); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ev-desc { white-space: pre-line; overflow-wrap: anywhere; color: var(--fg-2); }
+.ev-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.ev-form .grid2 { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
+.ev-form .input { min-width: 0; }
+.home-events { margin-top: 20px; }
+.home-events .rhead { margin-bottom: 10px; }
+.pickup-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
+.dlv { display: grid; gap: 12px; }
+.dlv .radio { align-items: flex-start; }
+.dlv .radio input { margin-top: 2px; flex-shrink: 0; }
+.dlv .radio span { display: grid; gap: 2px; }
 label.check input { margin-top: 3px; flex-shrink: 0; }
 .bulk-row { display: flex; gap: 12px; align-items: flex-start; }
 .bulk-row > img { width: 72px; aspect-ratio: 63 / 88; object-fit: contain; border-radius: 8px; background: var(--muted); flex-shrink: 0; }
@@ -1052,6 +1078,8 @@ function setTitle(t) { document.title = t ? `${t} · ${CONFIG.APP_NAME}` : `${CO
 // search palette. Timings live in the CSS; JS only flips data-state.
 const ICONS = {
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
@@ -1518,11 +1546,20 @@ function missingCol(e) {
 }
 const photoUrl = (path) => `${CONFIG.SUPABASE_URL}/storage/v1/object/public/listing-photos/${path.split("/").map(encodeURIComponent).join("/")}`;
 
+// Shop address, province, hours and pickup (migration 0028). Until it runs, profiles load without them.
+let shopCols = true;
+const profileCols = (base) => shopCols ? `${base}, shop_address, shop_province, shop_hours, shop_pickup` : base;
+async function selectProfiles(base, build) {
+  let res = await build(profileCols(base));
+  if (shopCols && res.error?.code === "42703" && /shop_(address|province|hours|pickup)/.test(res.error.message ?? "")) { shopCols = false; res = await build(base); }
+  return res;
+}
 const profilePhotoUrl = (path) => path ? `${CONFIG.SUPABASE_URL}/storage/v1/object/public/profile-photos/${path.split("/").map(encodeURIComponent).join("/")}` : null;
 function profileToSeller(id, prof) {
   return {
     id, displayName: prof?.display_name ?? "Vendedor", isShop: prof?.is_shop ?? false, verified: prof?.verified ?? false, rating: null, salesCount: 0,
     avatarUrl: profilePhotoUrl(prof?.avatar_path), shopDescription: prof?.shop_description ?? "", shopPhotoUrl: profilePhotoUrl(prof?.shop_photo_path),
+    shopAddress: prof?.shop_address ?? "", shopProvince: prof?.shop_province ?? "", shopHours: prof?.shop_hours ?? "", shopPickup: !!prof?.shop_pickup,
   };
 }
 function rowToListing(r, prof) {
@@ -1543,7 +1580,7 @@ function rowToListing(r, prof) {
 async function withProfiles(rows) {
   if (!rows.length) return [];
   const ids = [...new Set(rows.map((r) => r.seller_id))];
-  let { data, error } = await sb.from("public_profiles").select("id, display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path").in("id", ids);
+  let { data, error } = await selectProfiles("id, display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path", (c) => sb.from("public_profiles").select(c).in("id", ids));
   // Until migration 0004 runs the shop columns don't exist; fall back to the basics.
   if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified").in("id", ids));
   const byId = new Map((data ?? []).map((p) => [p.id, p]));
@@ -1592,6 +1629,16 @@ const searchFilter = (t, cols) => {
 
 // "Tienda verificada" = shop flag + verified by Holo staff. Everyone else is a "particular".
 const isVerifiedShop = (seller) => Boolean(seller?.isShop && seller?.verified);
+const offersPickup = (s) => isVerifiedShop(s) && s.shopPickup && !!s.shopAddress;
+const mapsHref = (s) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([s.shopAddress, s.shopProvince, "Panamá"].filter(Boolean).join(", "))}`;
+// Where the shop is and when it opens (migration 0028), with the address linked to Google Maps.
+function shopPlace(s) {
+  if (!s.isShop || !(s.shopAddress || s.shopHours)) return "";
+  return `<ul class="shop-place">
+    ${s.shopAddress ? `<li>${ic("pin")}<a class="link" href="${esc(mapsHref(s))}" target="_blank" rel="noopener">${esc(s.shopAddress)}${s.shopProvince ? `, ${esc(s.shopProvince)}` : ""}</a></li>` : ""}
+    ${s.shopHours ? `<li>${ic("clock")}<span>${esc(s.shopHours)}</span></li>` : ""}
+    ${offersPickup(s) ? `<li>${ic("store")}<span>Puedes retirar tu compra en la tienda</span></li>` : ""}</ul>`;
+}
 async function verifiedShopIds() {
   const { data, error } = await sb.from("public_profiles").select("id").eq("is_shop", true).eq("verified", true);
   if (error) { console.error(error); return []; }
@@ -1628,7 +1675,7 @@ async function fetchRealListings(f) {
   return withProfiles(data ?? []);
 }
 async function fetchSellerProfile(id) {
-  let { data, error } = await sb.from("public_profiles").select("id, display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path, created_at").eq("id", id).maybeSingle();
+  let { data, error } = await selectProfiles("id, display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path, created_at", (c) => sb.from("public_profiles").select(c).eq("id", id).maybeSingle());
   if (error) ({ data } = await sb.from("public_profiles").select("id, display_name, is_shop, verified, created_at").eq("id", id).maybeSingle());
   return data ?? null;
 }
@@ -1723,6 +1770,7 @@ async function route() {
     if (path.startsWith("/carta/")) return await viewDetail(app, safeDecode(path.slice(7)));
     if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)), params);
     if (path === "/protegida") return viewProtected(app);
+    if (path === "/eventos") { app.innerHTML = `<div class="wrap"></div>`; return await viewEvents(app.firstElementChild, params); }
     if (path === "/escanear") return viewScan(app);
     if (path === "/terminos") return viewTerms(app);
     if (path === "/privacidad") return viewPrivacy(app);
@@ -1749,10 +1797,10 @@ async function route() {
   }
 }
 
-const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["escanear", "#/escanear", "¿Cuánto vale?", "camera"], ["protegida", "#/protegida", "Compra Protegida", "shield"], ["vender", "#/vender", "Vender", "plus"]];
+const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["escanear", "#/escanear", "¿Cuánto vale?", "camera"], ["protegida", "#/protegida", "Compra Protegida", "shield"], ["eventos", "#/eventos", "Eventos", "calendar"], ["vender", "#/vender", "Vender", "plus"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/escanear": "escanear", "/protegida": "protegida", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin", "/avisos": "avisos", "/busco": "busco" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const current = { "/escanear": "escanear", "/protegida": "protegida", "/eventos": "eventos", "/vender": "vender", "/cuenta": "cuenta", "/admin": "admin", "/avisos": "avisos", "/busco": "busco" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
   const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"], ["busco", "#/busco", "Busco…", "search"], ...(notifOn ? [["avisos", "#/avisos", "Avisos", "bell"]] : [])] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
@@ -2452,7 +2500,8 @@ async function viewHome(app, params) {
   app.innerHTML = `
     ${filtered ? "" : `<section class="wrap intro">
       <h1 class="sr-only">Cartas coleccionables en Panamá, con precio claro</h1>
-      <div class="cta"><a class="btn primary lg" href="#/vender">Publica tu carta gratis</a><a class="btn outline lg" href="#/escanear">${ic("camera")}¿Cuánto vale tu carta?</a><a class="btn outline lg" href="#/protegida">${ic("shield")}¿Cómo funciona Compra Protegida?</a></div></section>`}
+      <div class="cta"><a class="btn primary lg" href="#/vender">Publica tu carta gratis</a><a class="btn outline lg" href="#/escanear">${ic("camera")}¿Cuánto vale tu carta?</a><a class="btn outline lg" href="#/protegida">${ic("shield")}¿Cómo funciona Compra Protegida?</a></div></section>
+    <section class="wrap home-events" id="homeEvents" aria-labelledby="homeEventsTitle" hidden></section>`}
     <div class="wrap">
       <nav class="seller-seg"${filtered ? ' style="margin-top:24px"' : ""} aria-label="Tipo de vendedor">
         ${[[undefined, "Todos"], ["tiendas", `${ic("store")}Tiendas verificadas`], ["particulares", "Particulares"]].map(([v, t]) => `<a class="${f.seller === v ? "on" : ""}" href="${hrefWith(f, { vendedor: v })}"${f.seller === v ? ' aria-current="true"' : ""}>${t}</a>`).join("")}
@@ -2507,6 +2556,7 @@ async function viewHome(app, params) {
   $("#fpanel [data-close]").addEventListener("click", () => $("#fpanel")._close?.());
   enableDrawerDrag($("#fpanel"));
 
+  if (!filtered) renderHomeEvents($("#homeEvents"));
   const listEl = $("#list"), countEl = $("#count");
   const demo = CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => matchesFilters(l, f)) : [];
   const real = await fetchRealListings(f).catch(() => []);
@@ -2532,6 +2582,7 @@ function sellerPanel(s) {
         <p class="xs muted">${sellerScore(s)}</p>
         <div class="tbadges" style="margin-top:6px">${sellerBadge(s)}</div></div>${s.id ? `${ic("chevronRight")}</a>` : "</div>"}
       ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
+      ${shopPlace(s)}
       ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} confirmó que la tienda existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
       ${s.id ? `<a class="btn block" href="#/vendedor/${encodeURIComponent(s.id)}">Ver ${shop ? "la tienda" : "perfil"} y sus cartas en venta ${ic("arrowRight")}</a>` : ""}
     </div></section>`;
@@ -2580,9 +2631,11 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
           <p class="xs muted" style="margin-top:2px">${meta}</p>
           <div class="tbadges" style="margin-top:8px">${sellerBadge(s)}</div></div></div>
         ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
+        ${shopPlace(s)}
         ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} confirmó que la tienda existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
         ${isMe ? `<a class="btn" href="#/cuenta">Editar mi perfil</a>` : ""}
       </div></section>
+    <section class="panel col" id="shopEvents" hidden></section>
     <section class="panel" id="sellerReviews" hidden></section></aside>
     <section class="seller-cards" aria-labelledby="forSaleTitle">
     <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
@@ -2600,6 +2653,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   };
   renderList();
   if (!demo && sb) renderSellerReviews(id, isMe);
+  if (!demo && sb && isVerifiedShop(s)) renderShopEventsPublic(id, $("#shopEvents"));
   app.querySelector(".seller-cards").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-cat]");
     if (!b) return;
@@ -3163,12 +3217,27 @@ async function renderOrders(uid, box) {
     box.innerHTML = ""; return;
   }
   const orders = res.data ?? [], payout = pay.error ? null : pay.data;
+  // Pickup at the shop (migration 0028): the buyer needs the shop's address.
+  const shopIds = [...new Set(orders.map((o) => o.pickup_shop).filter(Boolean))], shops = new Map();
+  if (shopIds.length) {
+    const { data } = await selectProfiles("id, display_name, is_shop, verified", (c) => sb.from("public_profiles").select(c).in("id", shopIds));
+    for (const p of data ?? []) shops.set(p.id, profileToSeller(p.id, p));
+    if (!box.isConnected) return;
+  }
+  const code = (o) => `<b class="pickup-code">${esc(o.pickup_code ?? "")}</b>`;
+  const pickupAt = (o) => {
+    const s = shops.get(o.pickup_shop);
+    if (!s) return "la tienda";
+    const where = [s.shopAddress ? `<a class="link" href="${esc(mapsHref(s))}" target="_blank" rel="noopener">${esc(s.shopAddress)}</a>` : "", s.shopHours ? `horario: ${esc(s.shopHours)}` : ""].filter(Boolean).join("; ");
+    return `<a class="link" href="#/vendedor/${encodeURIComponent(s.id)}">${esc(s.displayName)}</a>${where ? ` (${where})` : ""}`;
+  };
   const link = (o) => `<a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Carta")}</a>`;
   const buyerText = (o) => ({
     awaiting_payment: o.hold_until && new Date(o.hold_until) > new Date()
       ? `Tu pago está pendiente. <a class="link" href="#/pagar/${encodeURIComponent(o.listing_id)}">Terminar el pago</a>`
       : `Paga como te indicó el equipo de ${esc(CONFIG.APP_NAME)}. Cuando confirmemos tu pago, lo verás aquí.`,
-    paid: `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. El vendedor te entrega la carta; el equipo de ${esc(CONFIG.APP_NAME)} coordina la entrega contigo.`,
+    paid: o.pickup ? `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. Retírala en ${pickupAt(o)}. Muestra el código ${code(o)} y revísala ahí mismo antes de irte.`
+      : `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. El vendedor te entrega la carta; el equipo de ${esc(CONFIG.APP_NAME)} coordina la entrega contigo.`,
     delivered: `El vendedor marcó la carta como entregada. Revísala: tienes hasta el <b>${fmtDeadline(o.claim_deadline)}</b> para reportar un problema. Si todo está bien, confírmalo.`,
     claim: `Recibimos tu reclamo y lo estamos revisando. Si corresponde, te devolvemos todo en un máximo de 5 días hábiles.`,
     ready: o.claim_outcome === "rejected" ? `Revisamos tu reclamo y no correspondía un reembolso. Si tienes dudas, escríbenos.`
@@ -3178,7 +3247,8 @@ async function renderOrders(uid, box) {
     cancelled: "Esta compra se canceló.",
   }[o.stage] ?? "");
   const sellerText = (o) => ({
-    paid: `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. Entrégasela al comprador: el equipo de ${esc(CONFIG.APP_NAME)} te escribe para coordinar. Cuando la tenga en sus manos, márcala como entregada.`,
+    paid: o.pickup ? `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. El comprador la retira en tu tienda: entrégasela cuando te muestre el código ${code(o)} y márcala como entregada.`
+      : `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. Entrégasela al comprador: el equipo de ${esc(CONFIG.APP_NAME)} te escribe para coordinar. Cuando la tenga en sus manos, márcala como entregada.`,
     delivered: `Entregada. Si el comprador no reporta problemas, te pagamos ${formatUsd(o.amount_cents)} cuando termine su plazo para revisarla: ${fmtDeadline(o.claim_deadline)}`,
     claim: "El comprador reportó un problema con la carta. Lo estamos revisando y te escribimos.",
     ready: `Todo salió bien: te enviamos ${formatUsd(o.amount_cents)} por Yappy.${payout ? "" : " <b>Agrega abajo tu número de Yappy para poder pagarte.</b>"}`,
@@ -3189,7 +3259,7 @@ async function renderOrders(uid, box) {
   const card = (o) => {
     const [label, cls] = (o.role === "buyer" ? BUYER_STAGE : SELLER_STAGE)[o.stage] ?? [o.stage, "neutral"];
     const buyerCan = o.role === "buyer" && ["paid", "delivered"].includes(o.stage);
-    return `<li class="panel" data-order="${o.id}"><div class="phead">${link(o)}<span class="b ${cls}">${label}</span></div>
+    return `<li class="panel" data-order="${o.id}"><div class="phead">${link(o)}<span class="b ${cls}">${label}</span>${o.pickup ? `<span class="b neutral">${ic("store")}Retiro en tienda</span>` : ""}</div>
       <p class="small" style="margin:6px 0 0">${o.role === "buyer" ? buyerText(o) : sellerText(o)}</p>
       ${buyerCan ? `<div class="order-actions"><button class="btn primary sm" data-ord="confirm">Ya recibí mi carta</button><button class="btn outline sm" data-ord="claim">Tengo un problema</button></div>` : ""}
       ${o.role === "seller" && o.stage === "paid" ? `<div class="order-actions"><button class="btn primary sm" data-ord="delivered">Ya la entregué</button></div>` : ""}
@@ -3304,7 +3374,7 @@ async function viewCheckout(app, listingId) {
   const holder = app.firstElementChild;
   const [{ data: order, error }, { data: l }] = await Promise.all([
     sb.rpc("start_checkout", { p_listing: listingId }),
-    sb.from("listings").select("title").eq("id", listingId).maybeSingle(),
+    sb.from("listings").select("title, seller_id").eq("id", listingId).maybeSingle(),
   ]);
   if (!holder.isConnected) return;
   if (error || !order) {
@@ -3313,16 +3383,36 @@ async function viewCheckout(app, listingId) {
     return;
   }
   const total = orderAmounts(order).buyer;
+  // Retiro en tienda (migration 0028): only verified shops that offer it.
+  const sellerProf = "pickup" in order && l?.seller_id ? await fetchSellerProfile(l.seller_id) : null;
+  if (!holder.isConnected) return;
+  const shop = sellerProf ? profileToSeller(l.seller_id, sellerProf) : null;
+  const dlv = shop && offersPickup(shop) ? `<section class="panel col"><h2 style="font-size:16px;margin:0">¿Cómo recibes tu compra?</h2>
+      <div class="dlv radios"><label class="radio"><input type="radio" name="dlv" value="pickup"${order.pickup ? " checked" : ""}><span><b>Retirar en ${esc(shop.displayName)}</b><span class="xs muted">${esc(shop.shopAddress)}${shop.shopProvince ? `, ${esc(shop.shopProvince)}` : ""}${shop.shopHours ? ` · ${esc(shop.shopHours)}` : ""}. Al pagar te damos un código para mostrar en la tienda.</span></span></label>
+      <label class="radio"><input type="radio" name="dlv" value="coordinate"${order.pickup ? "" : " checked"}><span><b>Coordinar la entrega</b><span class="xs muted">El equipo de ${esc(CONFIG.APP_NAME)} te escribe para acordar dónde y cuándo.</span></span></label></div></section>` : "";
   const feeRows = orderAmounts(order).buyerFee ? buyerFeeRows(order.fee_cents, order.itbms_cents) : buyerFeeRows(0, 0);
   app.innerHTML = `<div class="checkout col" style="gap:16px"><h1 class="display" style="font-size:30px">Pagar con Compra Protegida</h1>
     <section class="panel"><p style="margin:0;font-weight:600">${esc(l?.title ?? "Carta")}</p>
       <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(order.price_cents)}</dd></div>${feeRows}
       <div class="total"><dt>Total</dt><dd>${formatUsd(total)}</dd></div></dl>
       <p class="xs muted" style="margin:12px 0 0">Te guardamos la carta 15 minutos mientras pagas. ${esc(CONFIG.APP_NAME)} guarda tu dinero: el vendedor cobra cuando confirmas que recibiste la carta bien, o 3 días después de la entrega si no reportas nada.</p></section>
+    ${dlv}
     <section class="panel center" id="payBox"><p class="loading"><span class="spinner"></span>Cargando Yappy…</p></section>
     <p class="xs muted" style="margin:0">Al pagar aceptas los <a class="link" href="#/terminos">Términos</a> de Compra Protegida.</p>
     <div>${back}</div></div>`;
   const box = $("#payBox");
+  app.querySelectorAll('input[name="dlv"]').forEach((r) => r.addEventListener("change", async () => {
+    const pickup = r.value === "pickup";
+    app.querySelectorAll('input[name="dlv"]').forEach((x) => (x.disabled = true));
+    const { error: e } = await sb.rpc("set_order_pickup", { p_order: order.id, p_pickup: pickup });
+    app.querySelectorAll('input[name="dlv"]').forEach((x) => (x.disabled = false));
+    if (e) {
+      console.error(e);
+      app.querySelector(`input[name="dlv"][value="${pickup ? "coordinate" : "pickup"}"]`).checked = true;
+      return toast(/no pickup/.test(e.message ?? "") ? "Esta tienda ya no ofrece retiro en el local." : "No pudimos guardar tu elección. Intenta de nuevo.", { type: "error" });
+    }
+    order.pickup = pickup;
+  }));
   try { await loadYappy(); } catch { if (box.isConnected) box.innerHTML = `<p class="notice bad" style="margin:0">No pudimos cargar Yappy. Revisa tu conexión y recarga la página.</p>`; return; }
   if (!box.isConnected) return;
   box.innerHTML = `<btn-yappy theme="blue" rounded="true"></btn-yappy><div id="payMsg" style="margin-top:12px"></div>`;
@@ -4989,7 +5079,7 @@ const timeAgo = (iso) => {
   if (s < 7 * 86400) { const d = Math.floor(s / 86400); return `hace ${d} ${d === 1 ? "día" : "días"}`; }
   return new Date(iso).toLocaleDateString("es-PA", { day: "numeric", month: "short" });
 };
-const NOTIF_ICON = { question: "chat", wanted: "search", offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
+const NOTIF_ICON = { event: "calendar", question: "chat", wanted: "search", offer: "tag", order: "shield", claim: "alert", review: "check", shop: "check", check: "check", plan: "camera", staff: "layout" };
 const notifIcon = (kind) => NOTIF_ICON[kind.split("_")[0]] ?? "info";
 // Links come from the database triggers; only in-app hash routes are followed.
 const safeLink = (l) => (typeof l === "string" && /^#\/[\w\-/?=&.%]*$/.test(l) ? l : "#/cuenta");
@@ -5122,6 +5212,191 @@ let pendingSellFiles = null;
 const quotaText = (q) => q.plan_until
   ? `Plan Coleccionista activo hasta el ${new Date(q.plan_until).toLocaleDateString("es-PA", { day: "numeric", month: "long" })}: escaneos sin límite.`
   : `Te ${q.limit - q.used === 1 ? "queda" : "quedan"} ${Math.max(0, q.limit - q.used)} de ${q.limit} escaneos gratis hoy.`;
+// ============================================================= shop events (#/eventos, migration 0028)
+// Verified shops publish tournaments, leagues and launches. "Me interesa" gets a reminder the day before
+// (remind_events in the database) and a notice if the shop cancels.
+let eventsOn = true;
+const EVENT_GAMES = [["pokemon", "Pokémon"], ["one_piece", "One Piece"], ["magic", "Magic"], ["yugioh", "Yu-Gi-Oh!"], ["lorcana", "Lorcana"], ["deportivas", "Cartas deportivas"], ["otro", "Otro juego"]];
+const EVENT_KINDS = [["torneo", "Torneo"], ["liga", "Liga"], ["prerelease", "Prerelease"], ["lanzamiento", "Lanzamiento"], ["intercambio", "Intercambio"], ["otro", "Evento"]];
+const optName = (list, v) => list.find(([k]) => k === v)?.[1] ?? v;
+const PA_TZ = "America/Panama";
+const paDate = (ts) => new Intl.DateTimeFormat("en-CA", { timeZone: PA_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
+const paTime = (ts) => new Intl.DateTimeFormat("en-GB", { timeZone: PA_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
+const fmtEventTime = (ts) => new Date(ts).toLocaleTimeString("es-PA", { hour: "numeric", minute: "2-digit", timeZone: PA_TZ });
+async function fetchEvents(shop = null) {
+  if (!eventsOn || !sb) return [];
+  const { data, error } = await sb.rpc("upcoming_events", shop ? { p_shop: shop } : {});
+  if (error) { if (["PGRST202", "42883"].includes(error.code)) eventsOn = false; else console.error(error); return []; }
+  return data ?? [];
+}
+function eventCard(e, { showShop = true, manage = false, compact = false } = {}) {
+  const d = new Date(e.starts_at);
+  const day = d.toLocaleDateString("es-PA", { day: "numeric", timeZone: PA_TZ });
+  const month = d.toLocaleDateString("es-PA", { month: "short", timeZone: PA_TZ }).replace(".", "");
+  const when = `${d.toLocaleDateString("es-PA", { weekday: "long", day: "numeric", month: "long", timeZone: PA_TZ })}, ${fmtEventTime(e.starts_at)}${e.ends_at ? ` a ${fmtEventTime(e.ends_at)}` : ""}`;
+  const facts = [when, e.fee_cents ? `Inscripción ${formatUsd(e.fee_cents)}` : "Gratis", e.capacity ? `Cupo para ${e.capacity}` : ""].filter(Boolean);
+  const people = e.interested ? `${e.interested} ${e.interested === 1 ? "persona interesada" : "personas interesadas"}` : "";
+  const action = manage ? (e.cancelled ? "" : `<button type="button" class="btn outline sm" data-ev="edit">Editar</button><button type="button" class="btn ghost sm" data-ev="cancel">Cancelar evento</button>`)
+    : e.cancelled ? "" : `<button type="button" class="btn ${e.mine ? "primary" : "outline"} sm" data-ev="interest" aria-pressed="${e.mine}">${ic(e.mine ? "check" : "bell")}${e.mine ? "Te interesa" : "Me interesa"}</button>`;
+  return `<li class="event${e.cancelled ? " off" : ""}" data-event="${esc(e.id)}">
+    <div class="ev-date" aria-hidden="true"><span>${esc(month)}</span><b>${esc(day)}</b></div>
+    <div class="ev-body"><p class="ev-kind">${esc(optName(EVENT_KINDS, e.kind))} · ${esc(optName(EVENT_GAMES, e.game))}${e.cancelled ? `<span class="b warn">Cancelado</span>` : ""}</p>
+      <h3>${esc(e.title)}</h3>
+      <p class="xs muted">${facts.map(esc).join(" · ")}</p>
+      ${showShop ? `<p class="small"><a class="link" href="#/vendedor/${encodeURIComponent(e.shop_id)}">${esc(e.shop_name)}</a>${e.shop_address ? ` · ${esc(e.shop_address)}` : e.shop_province ? ` · ${esc(e.shop_province)}` : ""}</p>` : ""}
+      ${e.description && !compact ? `<p class="small ev-desc">${esc(e.description)}</p>` : ""}
+      ${action || people ? `<div class="ev-actions">${action}${people ? `<span class="xs muted">${people}</span>` : ""}</div>` : ""}</div></li>`;
+}
+// "Me interesa" on any list of event cards; redraw() re-renders that list.
+function bindInterest(listEl, events, redraw) {
+  listEl.addEventListener("click", async (ev) => {
+    const b = ev.target.closest('[data-ev="interest"]');
+    if (!b) return;
+    if (!session) return go(`/entrar?next=${encodeURIComponent(location.hash.replace(/^#/, "") || "/eventos")}`);
+    const e = events.find((x) => x.id === b.closest("[data-event]").dataset.event);
+    if (!e) return;
+    b.disabled = true;
+    const { error } = e.mine
+      ? await sb.from("event_interest").delete().eq("event_id", e.id).eq("user_id", session.user.id)
+      : await sb.from("event_interest").insert({ event_id: e.id, user_id: session.user.id });
+    if (error && error.code !== "23505") { b.disabled = false; console.error(error); return toast("No pudimos guardarlo. Intenta de nuevo.", { type: "error" }); }
+    if (!error) e.interested += e.mine ? -1 : 1;
+    e.mine = !e.mine;
+    if (e.mine) toast("Listo. Te recordamos un día antes.");
+    redraw();
+  });
+}
+async function viewEvents(app, params) {
+  setTitle("Eventos");
+  let game = EVENT_GAMES.some(([k]) => k === params.get("juego")) ? params.get("juego") : null;
+  app.innerHTML = `<div class="events-page col" style="gap:16px">
+    <div><h1 class="display" style="font-size:30px;margin:0">Eventos en tiendas</h1>
+      <p class="muted" style="margin:6px 0 0">Torneos, ligas y lanzamientos en las tiendas verificadas de Panamá. Marca “Me interesa” y te recordamos un día antes.</p></div>
+    <nav class="chips" id="evChips" aria-label="Juegos"></nav>
+    <div id="evList"><p class="loading"><span class="spinner"></span>Cargando eventos…</p></div>
+    <p class="small muted" style="margin:8px 0 0">¿Tienes una tienda? Con la tienda verificada publicas tus eventos desde <a class="link" href="#/cuenta">Mi cuenta</a>.</p></div>`;
+  const listEl = $("#evList");
+  const events = (await fetchEvents()).filter((e) => !e.cancelled || e.mine);
+  if (!listEl.isConnected) return;
+  const draw = () => {
+    const games = EVENT_GAMES.filter(([k]) => events.some((e) => e.game === k));
+    $("#evChips").innerHTML = games.length > 1 ? [[null, "Todos"], ...games].map(([k, n]) => `<button type="button" class="chip ${game === k ? "on" : ""}" data-game="${k ?? ""}" aria-pressed="${game === k}">${n}</button>`).join("") : "";
+    const list = events.filter((e) => !game || e.game === game);
+    listEl.innerHTML = list.length ? `<ul class="events">${list.map((e) => eventCard(e)).join("")}</ul>`
+      : `<div class="empty-state"><span class="ico">${ic("calendar")}</span><p style="font-weight:600">${eventsOn ? "Todavía no hay eventos publicados." : "Los eventos se abren pronto."}</p><p class="small muted" style="margin-top:4px">Las tiendas verificadas publican aquí sus torneos y lanzamientos.</p></div>`;
+  };
+  draw();
+  $("#evChips").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-game]");
+    if (!b) return;
+    game = b.dataset.game || null;
+    history.replaceState(null, "", `#/eventos${game ? `?juego=${game}` : ""}`);
+    draw();
+  });
+  bindInterest(listEl, events, draw);
+}
+// Home: the next 3 events, only when there are any.
+async function renderHomeEvents(box) {
+  if (!box) return;
+  const events = (await fetchEvents()).filter((e) => !e.cancelled).slice(0, 3);
+  if (!box.isConnected || !events.length) return;
+  const draw = () => {
+    box.innerHTML = `<div class="rhead"><h2 id="homeEventsTitle">Próximos eventos en tiendas</h2><a class="btn ghost sm" href="#/eventos">Ver todos${ic("arrowRight")}</a></div>
+      <ul class="events">${events.map((e) => eventCard(e, { compact: true })).join("")}</ul>`;
+  };
+  draw();
+  box.hidden = false;
+  bindInterest(box, events, draw);
+}
+// Shop page: that shop's upcoming events.
+async function renderShopEventsPublic(id, box) {
+  if (!box) return;
+  const isMe = session?.user.id === id;
+  const events = (await fetchEvents(id)).filter((e) => !e.cancelled || e.mine);
+  if (!box.isConnected || (!events.length && !isMe)) return;
+  const draw = () => {
+    box.innerHTML = `<div class="phead"><h2>Próximos eventos</h2>${isMe ? `<a class="btn ghost sm" href="#/cuenta">Administrar</a>` : ""}</div>
+      ${events.length ? `<ul class="events">${events.map((e) => eventCard(e, { showShop: false, compact: true })).join("")}</ul>` : `<p class="small muted" style="margin:0">No tienes eventos próximos. Publícalos desde Mi cuenta.</p>`}`;
+  };
+  draw();
+  box.hidden = false;
+  bindInterest(box, events, draw);
+}
+const eventError = (e) => /contact info/.test(e?.message ?? "") ? "Quita teléfonos, enlaces o redes del texto. La gente marca “Me interesa” y te encuentra en tu página de tienda."
+  : /date/.test(e?.message ?? "") ? "La fecha debe ser desde hoy y hasta 6 meses."
+  : /too many/.test(e?.message ?? "") ? "Ya tienes 40 eventos próximos, el máximo."
+  : /verified shops/.test(e?.message ?? "") ? "Solo las tiendas verificadas pueden publicar eventos."
+  : "No pudimos guardar el evento. Revisa tu conexión e intenta de nuevo.";
+// Mi cuenta (verified shops): publish, edit and cancel events.
+async function renderShopEvents(uid, box) {
+  if (!box || !eventsOn) return;
+  const events = await fetchEvents(uid);
+  if (!box.isConnected) return;
+  if (!eventsOn) { box.innerHTML = ""; return; }
+  box.innerHTML = `<section class="panel col"><div class="phead"><h2>Eventos de tu tienda</h2><button type="button" class="btn primary sm" id="evNew">${ic("plus")}Publicar evento</button></div>
+    <p class="xs muted" style="margin:0">Salen en Eventos, en tu página de tienda y en la portada. Quien marca “Me interesa” recibe un recordatorio un día antes.</p>
+    <div id="evForm"></div>
+    ${events.length ? `<ul class="events" id="evMine">${events.map((e) => eventCard(e, { showShop: false, manage: true })).join("")}</ul>` : `<p class="small muted" style="margin:0">No tienes eventos próximos.</p>`}</section>`;
+  const reload = () => renderShopEvents(uid, box);
+  const opts = (list, v) => list.map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(n)}</option>`).join("");
+  const openForm = (e = null) => {
+    const f = $("#evForm");
+    f.innerHTML = `<form class="col ev-form" style="gap:10px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-lg)" novalidate>
+      <h3 style="margin:0;font-size:16px">${e ? "Editar evento" : "Nuevo evento"}</h3>
+      <label class="f">Nombre del evento<input class="input" name="evTitle" maxlength="80" required placeholder="Ej.: Liga Pokémon de los sábados" value="${esc(e?.title ?? "")}"></label>
+      <div class="grid2"><label class="f">Juego<select class="select" name="game">${opts(EVENT_GAMES, e?.game ?? "pokemon")}</select></label>
+        <label class="f">Tipo<select class="select" name="kind">${opts(EVENT_KINDS, e?.kind ?? "torneo")}</select></label></div>
+      <label class="f">Día<input class="input" type="date" name="day" required value="${e ? paDate(e.starts_at) : ""}" min="${paDate(Date.now())}"></label>
+      <div class="grid2"><label class="f">Empieza<input class="input" type="time" name="start" required value="${e ? paTime(e.starts_at) : ""}"></label>
+        <label class="f">Termina (opcional)<input class="input" type="time" name="end" value="${e?.ends_at ? paTime(e.ends_at) : ""}"></label></div>
+      <div class="grid2"><label class="f">Inscripción (USD)<input class="input" type="number" name="fee" min="0" max="1000" step="0.01" inputmode="decimal" placeholder="0 = gratis" value="${e?.fee_cents ? (e.fee_cents / 100).toFixed(2) : ""}"></label>
+        <label class="f">Cupo (opcional)<input class="input" type="number" name="capacity" min="1" max="1000" step="1" inputmode="numeric" value="${e?.capacity ?? ""}"></label></div>
+      <label class="f">Detalles (opcional)<textarea class="textarea" name="description" rows="3" maxlength="600" placeholder="Formato, premios, qué traer…">${esc(e?.description ?? "")}</textarea></label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary sm">${e ? "Guardar cambios" : "Publicar evento"}</button><button type="button" class="btn ghost sm" data-close>Cerrar</button></div></form>`;
+    const form = f.querySelector("form");
+    const fe = form.elements;
+    fe.evTitle.focus();
+    form.querySelector("[data-close]").addEventListener("click", () => (f.innerHTML = ""));
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const title = fe.evTitle.value.trim(), day = fe.day.value, start = fe.start.value, end = fe.end.value;
+      const fee = fe.fee.value.trim() ? Math.round(Number(fe.fee.value) * 100) : 0, cap = fe.capacity.value.trim() ? Number(fe.capacity.value) : null;
+      const bad = (t) => toast(t, { type: "error" });
+      if (title.length < 3) return bad("Escribe el nombre del evento.");
+      if (!day || !start) return bad("Elige el día y la hora de inicio.");
+      if (!(fee >= 0 && fee <= 100000)) return bad("La inscripción debe ser entre $0 y $1,000.");
+      if (cap != null && !(Number.isInteger(cap) && cap >= 1 && cap <= 1000)) return bad("El cupo debe ser un número entre 1 y 1,000.");
+      const startsAt = new Date(`${day}T${start}:00-05:00`); // Panamá: UTC-5 all year
+      let endsAt = end ? new Date(`${day}T${end}:00-05:00`) : null;
+      if (endsAt && endsAt <= startsAt) endsAt = new Date(endsAt.getTime() + 86400000); // ends after midnight
+      if (startsAt < new Date(Date.now() - 3600000)) return bad("Esa hora ya pasó.");
+      const row = { title, game: fe.game.value, kind: fe.kind.value, starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
+        fee_cents: fee, capacity: cap, description: fe.description.value.trim() || null };
+      const btn = form.querySelector("button.primary");
+      btn.disabled = true;
+      const { error } = e ? await sb.from("shop_events").update(row).eq("id", e.id) : await sb.from("shop_events").insert({ ...row, shop_id: uid });
+      btn.disabled = false;
+      if (error) { console.error(error); return bad(eventError(error)); }
+      toast(e ? "Evento actualizado." : "¡Evento publicado!");
+      reload();
+    });
+  };
+  $("#evNew").addEventListener("click", () => openForm());
+  $("#evMine")?.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-ev]");
+    if (!b) return;
+    const e = events.find((x) => x.id === b.closest("[data-event]").dataset.event);
+    if (!e) return;
+    if (b.dataset.ev === "edit") { openForm(e); $("#evForm").scrollIntoView({ block: "nearest" }); return; }
+    if (b.dataset.ev !== "cancel") return;
+    if (!(await confirmDialog({ title: "¿Cancelar este evento?", body: e.interested ? `Les avisamos a las ${e.interested} personas interesadas. No se puede deshacer.` : "No se puede deshacer.", confirm: "Sí, cancelarlo", cancel: "No, mantenerlo", danger: true }))) return;
+    const { error } = await sb.from("shop_events").update({ cancelled_at: new Date().toISOString() }).eq("id", e.id);
+    if (error) { console.error(error); return toast(eventError(error), { type: "error" }); }
+    toast("Evento cancelado.");
+    reload();
+  });
+}
+
 function planOffer(q) {
   const pay = waLink(`Quiero el Plan Coleccionista (${formatUsd(toCents(CONFIG.PLAN_USD))} al mes).`);
   return `<section class="panel accent" style="margin-top:16px"><h2 class="ptitle">${ic("trend")}Usaste tus ${q.limit} escaneos gratis de hoy</h2>
@@ -5269,7 +5544,7 @@ async function viewAccount(app) {
   if (!sb || !session) return go("/entrar?next=/cuenta");
   app.innerHTML = `<p class="muted small" style="margin-top:24px"><span class="spinner"></span> Cargando…</p>`;
   const uid = session.user.id;
-  const { data: prof, error } = await sb.from("profiles").select(PROFILE_COLS).eq("id", uid).maybeSingle();
+  const { data: prof, error } = await selectProfiles(PROFILE_COLS, (c) => sb.from("profiles").select(c).eq("id", uid).maybeSingle());
   if (error || !prof) {
     console.error(error);
     app.innerHTML = `<p class="notice bad" style="margin-top:24px">No pudimos cargar tu perfil. ${error?.code === "42703" ? "Falta aplicar la migración 0004 en Supabase." : "Recarga la página."}</p>`;
@@ -5286,6 +5561,7 @@ async function viewAccount(app) {
     <div id="accNotif" class="col" style="margin-top:16px"></div>
     <div id="accIdentity" class="col" style="margin-top:16px"></div>
     <div id="accRef" class="col" style="margin-top:16px"></div>
+    <div id="accEvents" class="col" style="margin-top:16px"></div>
     <form id="accForm" class="col acc-form" style="margin-top:24px" novalidate>
       <section class="panel col">
         <h2>Perfil</h2>
@@ -5303,6 +5579,10 @@ async function viewAccount(app) {
           <label class="acc-shop" title="Cambiar foto del local">${pic(profilePhotoUrl(prof.shop_photo_path), "shp", "Sube una foto de la fachada o del mostrador")}
             <input type="file" id="shopIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
           <span class="xs muted" style="font-weight:400">Una foto real del local da confianza: la gente ve que existes.</span></div>
+        ${shopCols ? `<label class="f">Dirección del local<input class="input" name="shopAddress" maxlength="160" placeholder="Ej.: Multiplaza, segundo piso, local 210" value="${esc(prof.shop_address ?? "")}"><span class="xs muted" style="font-weight:400">Sale en tu página con un enlace a Google Maps.</span></label>
+        <div class="grid2"><label class="f">Provincia<select class="select" name="shopProvince"><option value="">Elige</option>${PROVINCES.map((v) => `<option ${prof.shop_province === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
+          <label class="f">Horario<input class="input" name="shopHours" maxlength="200" placeholder="Lun a sáb, 10 a. m. a 8 p. m." value="${esc(prof.shop_hours ?? "")}"></label></div>
+        <label class="check"><input type="checkbox" name="shopPickup"${prof.shop_pickup ? " checked" : ""}><span><b>Retiro en tienda:</b> quien te compra puede pasar a buscar su compra al local. Le damos tu dirección y un código que te muestra al retirarla.${prof.verified ? "" : " Se activa cuando tu tienda esté verificada."}</span></label>` : ""}
         ${prof.verified ? `<p class="notice good" style="margin:0">✓ Tu tienda está verificada.</p>`
           : `<p class="notice soft" style="margin:0"><b style="color:var(--ink)">Tu tienda está en revisión.</b> Sube la foto del local: nos ayuda a verificar que existe. Te avisamos cuando tengas el sello.</p>`}
       </section>` : ""}
@@ -5315,6 +5595,7 @@ async function viewAccount(app) {
   renderNotifSettings(uid, $("#accNotif"));
   renderIdentity(uid, prof, $("#accIdentity"));
   renderReferrals($("#accRef"));
+  if (prof.is_shop && prof.verified) renderShopEvents(uid, $("#accEvents"));
   renderDashboard(uid, prof, $("#dash"));
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
@@ -5350,9 +5631,15 @@ async function viewAccount(app) {
     try {
       const patch = { display_name: displayName };
       if (prof.is_shop) patch.shop_description = desc.value.trim() || null;
+      if (prof.is_shop && form.shopAddress) {
+        const address = form.shopAddress.value.trim().replace(/\s+/g, " ");
+        if (address && address.length < 5) throw Object.assign(new Error("address"), { userMsg: "Escribe la dirección completa del local." });
+        if (form.shopPickup.checked && !address) throw Object.assign(new Error("address"), { userMsg: "Para ofrecer retiro en tienda, escribe la dirección del local." });
+        Object.assign(patch, { shop_address: address || null, shop_province: form.shopProvince.value || null, shop_hours: form.shopHours.value.trim() || null, shop_pickup: form.shopPickup.checked });
+      }
       if (st.avatar) patch.avatar_path = await upload(st.avatar, "avatar");
       if (st.shopPhoto) patch.shop_photo_path = await upload(st.shopPhoto, "local");
-      const res = await sb.from("profiles").update(patch).eq("id", uid).select(PROFILE_COLS).single();
+      const res = await sb.from("profiles").update(patch).eq("id", uid).select(profileCols(PROFILE_COLS)).single();
       if (res.error) throw res.error;
       // Replaced photos are no longer referenced anywhere: remove them.
       const old = [st.avatar && prof.avatar_path, st.shopPhoto && prof.shop_photo_path].filter(Boolean);
@@ -5363,7 +5650,7 @@ async function viewAccount(app) {
     } catch (err) {
       console.error(err);
       if (uploaded.length) sb.storage.from("profile-photos").remove(uploaded);
-      say("bad", err?.statusCode === "413" || /size/i.test(err?.message ?? "") ? "La foto es muy pesada (máximo 5 MB)." : "No pudimos guardar los cambios. Revisa tu conexión e intenta de nuevo.");
+      say("bad", err?.userMsg ?? (err?.statusCode === "413" || /size/i.test(err?.message ?? "") ? "La foto es muy pesada (máximo 5 MB)." : "No pudimos guardar los cambios. Revisa tu conexión e intenta de nuevo."));
     } finally { btn.disabled = false; btn.textContent = "Guardar cambios"; }
   });
 }
@@ -5436,6 +5723,9 @@ async function adminOrders(body) {
     if (["PGRST202", "42883"].includes(error.code)) { body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0014 en Supabase.</p>`; return; }
     throw error;
   }
+  const pickups = new Set();
+  const pk = await sb.from("protected_orders").select("id").eq("pickup", true).order("created_at", { ascending: false }).limit(300);
+  if (!pk.error) for (const r of pk.data ?? []) pickups.add(r.id); // migration 0028
   const payNow = orders.filter((o) => o.stage === "ready");
   const claims = orders.filter((o) => o.stage === "claim");
   const open = orders.filter((o) => ["awaiting_payment", "paid", "delivered"].includes(o.stage));
@@ -5446,7 +5736,7 @@ async function adminOrders(body) {
     const amt = orderAmounts(o), total = amt.buyer;
     const alert = /ATENCIÓN/.test(o.notes ?? "");
     return `<li class="panel order" data-id="${o.id}">
-      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Anuncio")}</a><span class="b ${cls}">${label}</span></div>
+      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Anuncio")}</a><span class="b ${cls}">${label}</span>${pickups.has(o.id) ? `<span class="b neutral">${ic("store")}Retiro en tienda</span>` : ""}</div>
       ${alert ? `<p class="notice bad" style="margin:8px 0 0">${esc((o.notes ?? "").split("\n").filter((x) => /ATENCIÓN/.test(x)).join(" "))}</p>` : ""}
       ${o.stage === "claim" ? `<div class="notice warn" style="margin:8px 0 0"><b>Reclamo del comprador</b> (${fmtDate(o.claimed_at)}):<br>${esc(o.claim_reason ?? "")}<div class="claim-photos" data-photos="${esc(JSON.stringify(o.claim_photos ?? []))}"></div></div>` : ""}
       <dl class="rows">
@@ -5904,7 +6194,7 @@ async function adminSummary(body) {
 // Draft written for Panamá (Ley 81 de 2019 y D.E. 285 de 2021 sobre datos personales; Ley 45 de 2007
 // de protección al consumidor; Ley 51 de 2008 de comercio electrónico). Must be reviewed by a
 // Panamanian lawyer and CONFIG.LEGAL completed before opening to the public.
-const TERMS_VERSION = "2026-09-30";
+const TERMS_VERSION = "2026-10-01";
 function legalVal(k) {
   const v = CONFIG.LEGAL?.[k];
   return v ? esc(v) : `<mark class="todo">[por completar]</mark>`;
@@ -5930,7 +6220,7 @@ function viewTerms(app) {
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>El producto sellado (cajas de sobres, Elite Trainer Box, sobres, latas y similares) tiene que estar sellado de fábrica. Está prohibido vender producto abierto, resellado o con sobres cambiados, pesados o seleccionados; si el comprador lo reclama dentro del plazo, aplica el reembolso de Compra Protegida.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Cuando vendes una carta, ${esc(CONFIG.APP_NAME)} se queda con una comisión de ${feePct()} del precio de venta, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, que se descuenta de lo que te pagamos.</li><li>Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
-    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta. El comprador no paga comisión.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Preventas y varias unidades:</b> solo las tiendas verificadas pueden publicar producto sellado en preventa o con varias unidades. En una preventa el comprador paga al reservar y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que la tienda entrega; si no entrega dentro de los 15 días siguientes a la fecha de salida anunciada, devolvemos todo lo pagado.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa, el vendedor no paga comisión y al comprador le devolvemos todo lo pagado.</p>`],
+    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta. El comprador no paga comisión.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador. Si el vendedor es una tienda verificada que ofrece retiro en tienda, el comprador puede elegir retirarla en el local mostrando el código de su compra; conviene revisarla ahí mismo.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Preventas y varias unidades:</b> solo las tiendas verificadas pueden publicar producto sellado en preventa o con varias unidades. En una preventa el comprador paga al reservar y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que la tienda entrega; si no entrega dentro de los 15 días siguientes a la fecha de salida anunciada, devolvemos todo lo pagado.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa, el vendedor no paga comisión y al comprador le devolvemos todo lo pagado.</p>`],
     [`Pagos por fuera de ${esc(CONFIG.APP_NAME)}`, `<p>Si conociste al comprador o al vendedor en ${esc(CONFIG.APP_NAME)}, la venta se paga con Compra Protegida. <b>Está prohibido cerrar el trato por fuera</b> (por WhatsApp, en persona o en otra app) para no pagar la comisión: podemos retirar los anuncios y suspender las cuentas que lo hagan.</p><p>Si aun así pagas por fuera, ${esc(CONFIG.APP_NAME)} no puede protegerte ni devolverte el dinero. Nunca le pagues directo al vendedor.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
@@ -5948,7 +6238,7 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción y foto del local.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, la referencia del pago, cuándo se entregó y confirmó la carta, y los reclamos con sus fotos (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Cobro de ventas:</b> si vendes, tu número de Yappy y el nombre del titular, para enviarte tu dinero. Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Eventos:</b> los eventos de tiendas que marcas con “Me interesa”, para recordártelos. La tienda solo ve cuántas personas están interesadas, no quiénes.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Compra Protegida:</b> el nombre y el contacto que nos das para coordinar, la referencia del pago, cuándo se entregó y confirmó la carta, y los reclamos con sus fotos (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Cobro de ventas:</b> si vendes, tu número de Yappy y el nombre del titular, para enviarte tu dinero. Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Ofertas y reseñas:</b> los montos que ofreces y las reseñas que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Coordinar las Compras Protegidas y atender reclamos.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
