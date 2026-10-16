@@ -18,7 +18,7 @@
 1. **Vender:** foto → la IA identifica la carta y llena el formulario → el vendedor ve el rango estimado → elige precio y barrio → publica.
 2. **Comprar:** navega o busca → filtra → abre el anuncio → ve el rango y la etiqueta de precio → elige:
    - **Preguntar por WhatsApp** (al número de la plataforma, no al del vendedor), o
-   - **Comprar protegido:** paga a la plataforma por Yappy → nosotros verificamos la carta en persona → entregamos → liberamos el pago al vendedor.
+   - **Comprar protegido:** el vendedor confirma → paga a la plataforma por Yappy → Holo recoge la carta (con fotos) y la entrega con un código → 48 h para revisar → el dinero pasa al saldo del vendedor (detalle en [09](09-flujo-ordenes.md)).
 3. **Calificar:** después de una orden liberada.
 
 ## MVP / v2 / después
@@ -35,14 +35,15 @@
 
 ## Comisiones (Compra Protegida)
 
-La paga **solo el vendedor**, descontada de lo que recibe; el comprador paga solo el precio de la carta y publicar es gratis. Se configura en [`src/lib/fees.ts`](../src/lib/fees.ts), en `holo.html` y en `protected_quote()` (migración 0017).
+La paga **solo el vendedor**, descontada de lo que recibe; el comprador paga el precio de la carta más el envío (gratis con retiro en tienda) y publicar es gratis. Los valores vivos están en `holo_settings` (migración 0029). Se configura en [`src/lib/fees.ts`](../src/lib/fees.ts), en `holo.html` y en `protected_quote()` (migración 0017).
 
 | Concepto | Valor |
 |---|---|
 | Tasa | 5% del precio, al vendedor (el comprador no paga comisión) |
 | Mínimo / máximo | Sin mínimo ni máximo |
 | ITBMS | 7% sobre la comisión |
-| Ejemplo con una carta de $100 | El comprador paga $100; el vendedor recibe $94.65; Holo cobra $5.00 + $0.35 de ITBMS |
+| Envío (lo paga el comprador) | $4 (configurable; $0 con retiro en tienda) |
+| Ejemplo con una carta de $100 | El comprador paga $104 ($100 + $4 de envío); el vendedor recibe $94.65; Holo cobra $5.00 + $0.35 de ITBMS + el envío |
 
 ## Funciones de IA (prioridad y costo)
 

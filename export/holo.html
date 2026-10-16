@@ -655,6 +655,10 @@ label.check input { margin-top: 3px; flex-shrink: 0; }
 @media (min-width: 900px) { .admin-list { grid-template-columns: 1fr 1fr; } }
 .order-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
 .order-actions .btn { height: 36px; }
+.recon { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.recon th, .recon td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.recon th:first-child, .recon td:first-child { text-align: left; }
+.order-actions .f.xs { display: inline-flex; flex-direction: column; gap: 2px; }
 .order-msg:not(:empty) { margin-top: 8px; }
 .admin-closed summary { margin-top: 16px; font-weight: 600; cursor: pointer; }
 .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -876,13 +880,15 @@ const CONFIG = {
   WHATSAPP: "", // platform WhatsApp, international format without "+", e.g. "5076XXXXXXX"
   PLAN_USD: 4, // Plan Coleccionista per month (scans: 3/day free, "sin límite" with the plan; enforced in the database, migration 0012)
   AUTH_CHECK_USD: 5, // "Revisión en tienda": a partner shop checks the card in person (migration 0011)
-  // Botón de Pago Yappy (migration 0014 + Edge Function yappy-pago). While ENABLED is false, buyers
+  // Botón de Pago Yappy (migration 0029 + Edge Function yappy-pago). While ENABLED is false, buyers
   // ask to buy by WhatsApp and staff create the order. Turn it on once Yappy Comercial is set up
   // and a test payment went through. CDN for Yappy's test environment:
   // https://bt-cdn-uat.yappycloud.com/v1/cdn/web-component-btn-yappy.js
+  // SIMULATOR: true only while the Edge Function runs the mock provider (PAYMENT_PROVIDER=mock and
+  // PAYMENT_DEV_SIMULATOR=true): the checkout shows E/R/C/X buttons instead of Yappy's. Never in production.
   // E-mail copies of notifications (Edge Function enviar-avisos, docs/08-avisos.md). Needs a domain.
   EMAIL_ALERTS: false,
-  YAPPY: { ENABLED: false, FUNCTION: "yappy-pago", CDN: "https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js" },
+  YAPPY: { ENABLED: false, SIMULATOR: false, FUNCTION: "yappy-pago", CDN: "https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js" },
   SHOW_DEMO_LISTINGS: true,
   CATALOG_API: "https://api.pokemontcg.io/v2",
   // Opcional: poner true sólo si se corrió supabase/price_snapshots.sql (suma un precio diario
@@ -894,7 +900,7 @@ const CONFIG = {
   IDENTIFY_FUNCTION: "identificar-carta",
   // Datos legales que aparecen en #/terminos y #/privacidad. Completar antes de abrir al público
   // (mientras falten, las páginas muestran "[por completar]").
-  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "30 de septiembre de 2026" },
+  LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "15 de octubre de 2026" },
   // Captcha (Cloudflare Turnstile). The site key is public. Empty = no captcha.
   TURNSTILE_SITE_KEY: "0x4AAAAAAFEs9iFLgZge-5AM",
 };
@@ -930,9 +936,11 @@ const FLAT_LOCATIONS = LOCATIONS.flatMap((l) => l.neighborhoods.map((n) => ({ pr
 
 // ============================================================= fees (Compra Protegida)
 // Only the seller pays: Holo keeps 5% of the sale price plus 7% ITBMS on that commission, taken from
-// the payout. The buyer pays just the card price (buyerRateBps 0). Same numbers as protected_quote()
-// (migration 0017) and src/lib/fees.ts. Cents.
+// the payout. The buyer pays the card price plus shipping (none with pickup at the shop). Same numbers
+// as order_quote() (migration 0029) and src/lib/fees.ts. Cents. The live values are in holo_settings:
+// these are for showing estimates; every order's real amounts come from the database.
 const FEES = { rateBps: 500, buyerRateBps: 0, fixedCents: 0, minCents: 0, maxCents: Infinity, itbmsBps: 700 };
+const SHIPPING_CENTS = 400; // holo_settings.shipping_cents
 const roundHalfUp = (n) => Math.floor(n + 0.5);
 function commission(priceCents, rateBps, cfg) {
   if (!rateBps) return [0, 0];
@@ -952,10 +960,12 @@ const buyerFeeRows = (fee, itbms) => fee ? `<div><dt>Protección</dt><dd>${forma
 const feePct = () => `${FEES.rateBps / 100}%`;
 // An order's real amounts. fee/itbms are the buyer's commission; seller_fee/seller_itbms the seller's
 // (migration 0016). Orders opened while 0015 was live (fee_payer "seller") charged only the seller.
+// Shipping (migration 0029) is part of what the buyer pays.
 function orderAmounts(o) {
-  if (o.fee_payer === "seller") return { buyer: o.price_cents, payout: o.price_cents - o.fee_cents - o.itbms_cents, buyerFee: 0, sellerFee: o.fee_cents + o.itbms_cents };
+  const shipping = o.shipping_cents ?? 0;
+  if (o.fee_payer === "seller") return { buyer: o.price_cents + shipping, payout: o.price_cents - o.fee_cents - o.itbms_cents, buyerFee: 0, sellerFee: o.fee_cents + o.itbms_cents, shipping };
   const sellerFee = (o.seller_fee_cents ?? 0) + (o.seller_itbms_cents ?? 0);
-  return { buyer: o.price_cents + o.fee_cents + o.itbms_cents, payout: o.price_cents - sellerFee, buyerFee: o.fee_cents + o.itbms_cents, sellerFee };
+  return { buyer: o.price_cents + o.fee_cents + o.itbms_cents + shipping, payout: o.price_cents - sellerFee, buyerFee: o.fee_cents + o.itbms_cents, sellerFee, shipping };
 }
 const toCents = (usd) => Math.round(usd * 100);
 function formatUsd(cents) {
@@ -1757,7 +1767,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/avisos" || path === "/busco" || path.startsWith("/pagar/"));
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/avisos" || path === "/busco" || path.startsWith("/pagar/") || path.startsWith("/reintento/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -1782,6 +1792,7 @@ async function route() {
     if (path === "/busco") { app.innerHTML = `<div class="wrap"></div>`; return await viewWanted(app.firstElementChild, params); }
     if (path === "/avisos") { app.innerHTML = `<div class="wrap"></div>`; return await viewNotifications(app.firstElementChild); }
     if (path.startsWith("/pagar/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewCheckout(app.firstElementChild, safeDecode(path.slice(7))); }
+    if (path.startsWith("/reintento/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewRetry(app.firstElementChild, safeDecode(path.slice(11))); }
     // Account and staff pages render into a padded column.
     if (path === "/cuenta" || path === "/admin") {
       app.innerHTML = `<div class="wrap"></div>`;
@@ -2681,7 +2692,7 @@ async function viewDetail(app, id) {
   const ref = `ref ${l.id.slice(0, 8)}`;
   const contact = waLink(`Hola, me interesa "${l.title}" (${formatUsd(price)}, ${ref}).`);
   const buy = !quote ? null : CONFIG.YAPPY.ENABLED ? `#/pagar/${encodeURIComponent(l.id)}`
-    : waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents)}.${session ? ` Mi código Holo: ${buyerCode()}.` : ""}`);
+    : waLink(`Quiero comprar con Compra Protegida: "${l.title}" (${ref}). Total ${formatUsd(quote.buyerTotalCents + SHIPPING_CENTS)} con envío.${session ? ` Mi código Holo: ${buyerCode()}.` : ""}`);
   const cond = CONDITIONS.find((c) => c.code === l.condition);
   const isOwner = session && l.sellerId === session.user.id;
   const forSale = l.isDemo || l.status === "active";
@@ -2998,7 +3009,7 @@ async function renderActivity(uid, box) {
     <p class="xs muted" style="margin:6px 0 0">Va en tu mensaje cuando compras con Compra Protegida. Así la compra queda en tu cuenta, se respeta el precio de tus ofertas aceptadas y puedes dejar una reseña.</p></section>`;
   const [mine, orders, done] = await Promise.all([
     sb.from("offers").select("id, listing_id, amount_cents, counter_cents, status, updated_at").eq("buyer_id", uid).order("updated_at", { ascending: false }).limit(20),
-    sb.from("protected_orders").select("id, listing_id, seller_id").eq("buyer_id", uid).eq("status", "released").limit(50),
+    sb.from("protected_orders").select("id, listing_id, seller_id").eq("buyer_id", uid).eq("status", "completada").limit(50),
     sb.from("reviews").select("order_id").eq("reviewer_id", uid).limit(200),
   ]);
   if (!box.isConnected) return;
@@ -3185,38 +3196,54 @@ async function renderDashboard(uid, prof, box) {
   bindOfferActions(box, () => renderDashboard(uid, prof, box));
 }
 
-// Mi cuenta: my purchases and sales (migration 0014). The stage and the 3-day window come from the
-// database (my_orders), so the page and the payout rules can't disagree.
+// Mi cuenta: my purchases and sales (migration 0029). Status, deadlines, amounts and the delivery
+// code come from the database (my_orders), so the page and the escrow rules can't disagree.
 let ordersOn = true;
-const BUYER_STAGE = {
-  awaiting_payment: ["Esperando pago", "prot"], paid: ["Pagada", "prot"], delivered: ["Entregada", "prot"],
-  claim: ["Reclamo en revisión", "warn"], ready: ["Completada", "good"], released: ["Completada", "good"],
-  refunded: ["Reembolsada", "warn"], cancelled: ["Cancelada", "neutral"],
+const ORDER_LABEL = { // status → [buyer label, seller label, badge class]
+  esperando_confirmacion_vendedor: ["Esperando al vendedor", "Confirma si la tienes", "warn"],
+  pendiente_pago: ["Por pagar", "Esperando el pago", "prot"],
+  pagada_retenida: ["Pagada", "Pagada", "prot"],
+  esperando_entrega_vendedor: ["Pagada", "Por entregar", "prot"],
+  en_custodia: ["Con Holo", "Holo la tiene", "prot"],
+  en_camino: ["En camino", "En camino", "prot"],
+  entregada: ["Entregada", "Entregada", "prot"],
+  en_revision: ["Revísala", "Entregada", "prot"],
+  en_disputa: ["En revisión", "En disputa", "warn"],
+  completada: ["Completada", "Completada ✓", "good"],
+  cancelada: ["Cancelada", "Cancelada", "neutral"],
+  reembolsada: ["Reembolsada", "Reembolsada", "warn"],
+  fallida: ["Pago no completado", "Pago no completado", "neutral"],
 };
-const SELLER_STAGE = {
-  paid: ["Por entregar", "prot"], delivered: ["Entregada", "prot"], claim: ["Reclamo en revisión", "warn"],
-  ready: ["Lista para cobrar", "good"], released: ["Cobrada ✓", "good"], refunded: ["Reembolsada", "warn"], cancelled: ["Cancelada", "neutral"],
+const fmtDeadline = (s) => s ? new Date(s).toLocaleDateString("es-PA", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }) : "";
+const orderError = (e) => {
+  const m = e?.message ?? "";
+  return /window closed/.test(m) ? "El plazo para reportar un problema ya terminó."
+    : /reason length/.test(m) ? "Cuéntanos qué pasó en al menos 10 letras."
+    : /photo/.test(m) ? "Sube entre 1 y 6 fotos de la carta como la recibiste."
+    : /payment is in progress/.test(m) ? "Hay un pago en curso. Espera unos minutos antes de cancelar."
+    : /locked/.test(m) ? "El código quedó bloqueado por demasiados intentos. Escríbenos."
+    : /not allowed|can't|not ready|not out/.test(m) ? "Esta compra cambió de estado. Recarga la página."
+    : "No pudimos guardar. Revisa tu conexión e intenta de nuevo.";
 };
-const fmtDeadline = (s) => new Date(s).toLocaleDateString("es-PA", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" });
-const orderError = (e) => /window closed/.test(e?.message ?? "") ? "El plazo de 3 días para reclamar ya terminó."
-  : /already open/.test(e?.message ?? "") ? "Ya tienes un reclamo abierto para esta compra."
-  : /reason length/.test(e?.message ?? "") ? "Cuéntanos qué pasó en al menos 10 letras."
-  : /not allowed|can't/.test(e?.message ?? "") ? "Esta compra cambió de estado. Recarga la página."
-  : "No pudimos guardar. Revisa tu conexión e intenta de nuevo.";
-const orderTask = (o) => (o.role === "seller" && o.stage === "paid") || (o.role === "buyer" && o.stage === "delivered");
+// Something waiting on this user: the seller confirms or hands over at the shop; the buyer pays,
+// reviews the card, or pays the second delivery attempt.
+const orderTask = (o) => o.role === "seller"
+  ? o.status === "esperando_confirmacion_vendedor" || (o.status === "esperando_entrega_vendedor" && o.pickup)
+  : ["pendiente_pago", "en_revision"].includes(o.status) || (o.status === "en_custodia" && o.retry_fee_cents > 0 && !o.retry_paid_at);
 
 async function renderOrders(uid, box) {
   if (!ordersOn || !sb) return;
-  const [res, pay] = await Promise.all([
+  const [res, pay, bal] = await Promise.all([
     sb.rpc("my_orders"),
     sb.from("payout_accounts").select("yappy_phone, holder_name").eq("user_id", uid).maybeSingle(),
+    sb.rpc("my_seller_balance"),
   ]);
   if (!box.isConnected) return;
-  if (res.error) { // migration 0014 not applied yet
-    if (["PGRST202", "42883"].includes(res.error.code)) ordersOn = false; else console.error(res.error);
+  if (res.error) { // migration 0029 not applied yet
+    if (["PGRST202", "42883", "42703"].includes(res.error.code)) ordersOn = false; else console.error(res.error);
     box.innerHTML = ""; return;
   }
-  const orders = res.data ?? [], payout = pay.error ? null : pay.data;
+  const orders = res.data ?? [], payout = pay.error ? null : pay.data, balance = bal.error ? null : bal.data;
   // Pickup at the shop (migration 0028): the buyer needs the shop's address.
   const shopIds = [...new Set(orders.map((o) => o.pickup_shop).filter(Boolean))], shops = new Map();
   if (shopIds.length) {
@@ -3224,7 +3251,7 @@ async function renderOrders(uid, box) {
     for (const p of data ?? []) shops.set(p.id, profileToSeller(p.id, p));
     if (!box.isConnected) return;
   }
-  const code = (o) => `<b class="pickup-code">${esc(o.pickup_code ?? "")}</b>`;
+  const code = (o) => o.delivery_code ? `<b class="pickup-code">${esc(o.delivery_code)}</b>` : "";
   const pickupAt = (o) => {
     const s = shops.get(o.pickup_shop);
     if (!s) return "la tienda";
@@ -3232,94 +3259,141 @@ async function renderOrders(uid, box) {
     return `<a class="link" href="#/vendedor/${encodeURIComponent(s.id)}">${esc(s.displayName)}</a>${where ? ` (${where})` : ""}`;
   };
   const link = (o) => `<a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Carta")}</a>`;
+  const app = esc(CONFIG.APP_NAME);
   const buyerText = (o) => ({
-    awaiting_payment: o.hold_until && new Date(o.hold_until) > new Date()
-      ? `Tu pago está pendiente. <a class="link" href="#/pagar/${encodeURIComponent(o.listing_id)}">Terminar el pago</a>`
-      : `Paga como te indicó el equipo de ${esc(CONFIG.APP_NAME)}. Cuando confirmemos tu pago, lo verás aquí.`,
-    paid: o.pickup ? `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. Retírala en ${pickupAt(o)}. Muestra el código ${code(o)} y revísala ahí mismo antes de irte.`
-      : `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. El vendedor te entrega la carta; el equipo de ${esc(CONFIG.APP_NAME)} coordina la entrega contigo.`,
-    delivered: `El vendedor marcó la carta como entregada. Revísala: tienes hasta el <b>${fmtDeadline(o.claim_deadline)}</b> para reportar un problema. Si todo está bien, confírmalo.`,
-    claim: `Recibimos tu reclamo y lo estamos revisando. Si corresponde, te devolvemos todo en un máximo de 5 días hábiles.`,
-    ready: o.claim_outcome === "rejected" ? `Revisamos tu reclamo y no correspondía un reembolso. Si tienes dudas, escríbenos.`
-      : o.buyer_confirmed_at ? "Confirmaste que recibiste la carta bien. ¡Gracias!" : "Pasaron los 3 días sin reclamos y la compra quedó cerrada.",
-    released: "Compra completada.",
-    refunded: `Te devolvimos ${formatUsd(o.amount_cents)}.`,
-    cancelled: "Esta compra se canceló.",
-  }[o.stage] ?? "");
+    esperando_confirmacion_vendedor: `Le pedimos al vendedor que confirme que aún la tiene (hasta el ${fmtDeadline(o.deadline)}). Todavía no se te cobra nada.`,
+    pendiente_pago: `El vendedor confirmó. Paga ${formatUsd(o.amount_cents)} antes del ${fmtDeadline(o.deadline)}.`,
+    pagada_retenida: `Recibimos tu pago de ${formatUsd(o.amount_cents)} y lo guardamos.`,
+    esperando_entrega_vendedor: o.pickup
+      ? `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. Retírala en ${pickupAt(o)} y da tu código de entrega ${code(o)}. Revísala ahí mismo.`
+      : `Pagaste ${formatUsd(o.amount_cents)} y guardamos tu dinero. ${app} recoge la carta y te la lleva. Tu código de entrega es ${code(o)}: dáselo solo al mensajero cuando tengas la carta en la mano.`,
+    en_custodia: o.retry_fee_cents > 0 && !o.retry_paid_at
+      ? `No te encontramos para entregarte la carta. Paga ${formatUsd(o.retry_fee_cents)} para un segundo intento; si no, la devolvemos al vendedor y te reembolsamos todo menos el envío.`
+      : `${app} ya tiene tu carta y la fotografió. Te avisamos cuando salga. Tu código de entrega: ${code(o)}.`,
+    en_camino: `Tu carta va en camino. Ten a mano tu código de entrega: ${code(o)}.`,
+    entregada: "Entregada.",
+    en_revision: `Revísala bien. Tienes hasta el <b>${fmtDeadline(o.deadline)}</b> para reportar un problema; después le pagamos al vendedor.`,
+    en_disputa: "Recibimos tu reporte y lo estamos revisando. Si corresponde, te devolvemos el dinero en un máximo de 5 días hábiles.",
+    completada: "Compra completada. ¡Gracias!",
+    cancelada: `${esc(o.close_reason ?? "Se canceló")}. ${o.paid_at ? `Te devolvemos ${formatUsd(o.amount_cents)}.` : "No se te cobró nada."}`,
+    reembolsada: `Te devolvemos el dinero${o.close_reason ? ` (${esc(o.close_reason)})` : ""}. Llega por Yappy en un máximo de 5 días hábiles.`,
+    fallida: "El pago no se completó y la compra se cerró. Puedes intentarlo de nuevo desde la carta.",
+  }[o.status] ?? "");
   const sellerText = (o) => ({
-    paid: o.pickup ? `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. El comprador la retira en tu tienda: entrégasela cuando te muestre el código ${code(o)} y márcala como entregada.`
-      : `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. Entrégasela al comprador: el equipo de ${esc(CONFIG.APP_NAME)} te escribe para coordinar. Cuando la tenga en sus manos, márcala como entregada.`,
-    delivered: `Entregada. Si el comprador no reporta problemas, te pagamos ${formatUsd(o.amount_cents)} cuando termine su plazo para revisarla: ${fmtDeadline(o.claim_deadline)}`,
-    claim: "El comprador reportó un problema con la carta. Lo estamos revisando y te escribimos.",
-    ready: `Todo salió bien: te enviamos ${formatUsd(o.amount_cents)} por Yappy.${payout ? "" : " <b>Agrega abajo tu número de Yappy para poder pagarte.</b>"}`,
-    released: `Te pagamos ${formatUsd(o.amount_cents)}${o.released_at ? ` el ${new Date(o.released_at).toLocaleDateString("es-PA", { day: "numeric", month: "long" })}` : ""}.`,
-    refunded: "La compra se reembolsó al comprador.",
-    cancelled: "La compra se canceló.",
-  }[o.stage] ?? "");
+    esperando_confirmacion_vendedor: `Alguien quiere comprarla por ${formatUsd(o.price_cents)}. ¿Aún la tienes? Confirma antes del <b>${fmtDeadline(o.deadline)}</b>; si no, la compra se cancela.`,
+    pagada_retenida: "El comprador pagó.",
+    esperando_entrega_vendedor: o.pickup
+      ? `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. El comprador la retira en tu tienda antes del ${fmtDeadline(o.deadline)}: pídele su código de 4 dígitos y escríbelo aquí al entregarla.`
+      : `¡Vendiste esta carta! Recibirás ${formatUsd(o.amount_cents)}. Tenla lista: ${app} la recoge antes del <b>${fmtDeadline(o.deadline)}</b>. Si no la entregas a tiempo, se le devuelve el dinero al comprador y recibes una penalización.`,
+    en_custodia: `${app} recogió la carta y se la lleva al comprador.`,
+    en_camino: "La carta va en camino al comprador.",
+    en_revision: `Entregada. Si el comprador no reporta problemas antes del ${fmtDeadline(o.deadline)}, ${formatUsd(o.amount_cents)} pasan a tu saldo.`,
+    en_disputa: "El comprador reportó un problema. Lo estamos revisando y te escribimos; el pago queda en espera.",
+    completada: `${formatUsd(o.amount_cents)} están en tu saldo. Pagamos los saldos por Yappy cada lunes.`,
+    cancelada: esc(o.close_reason ?? "La compra se canceló."),
+    reembolsada: `Se le devolvió el dinero al comprador${o.close_reason ? ` (${esc(o.close_reason)})` : ""}.`,
+    fallida: "El comprador no completó el pago. La carta sigue a la venta.",
+  }[o.status] ?? "");
+  const btn = (k, t, st = "outline") => `<button class="btn ${st} sm" data-ord="${k}">${t}</button>`;
+  const actions = (o) => {
+    if (o.role === "buyer") {
+      if (o.status === "esperando_confirmacion_vendedor") return btn("cancel", "Cancelar compra");
+      if (o.status === "pendiente_pago") return `<a class="btn primary sm" href="#/pagar/${encodeURIComponent(o.listing_id)}">Pagar ahora</a>${btn("cancel", "Cancelar compra")}`;
+      if (o.status === "en_revision") return btn("confirm", "Todo bien", "primary") + btn("claim", "Tengo un problema");
+      if (o.status === "en_custodia" && o.retry_fee_cents > 0 && !o.retry_paid_at) return `<a class="btn primary sm" href="#/reintento/${encodeURIComponent(o.id)}">Pagar segundo intento</a>`;
+      return "";
+    }
+    if (o.status === "esperando_confirmacion_vendedor") return btn("sconfirm", "Sí, la tengo", "primary") + btn("decline", "Ya no la tengo");
+    if (o.status === "esperando_entrega_vendedor" && o.pickup) {
+      return `<input class="input code-in" inputmode="numeric" maxlength="4" placeholder="Código" aria-label="Código de entrega del comprador" style="width:110px;height:36px">${btn("handover", "Entregar", "primary")}`;
+    }
+    return "";
+  };
   const card = (o) => {
-    const [label, cls] = (o.role === "buyer" ? BUYER_STAGE : SELLER_STAGE)[o.stage] ?? [o.stage, "neutral"];
-    const buyerCan = o.role === "buyer" && ["paid", "delivered"].includes(o.stage);
-    return `<li class="panel" data-order="${o.id}"><div class="phead">${link(o)}<span class="b ${cls}">${label}</span>${o.pickup ? `<span class="b neutral">${ic("store")}Retiro en tienda</span>` : ""}</div>
+    const [bl, sl, cls] = ORDER_LABEL[o.status] ?? [o.status, o.status, "neutral"];
+    const acts = actions(o);
+    return `<li class="panel" data-order="${o.id}"><div class="phead">${link(o)}<span class="b ${cls}">${o.role === "buyer" ? bl : sl}</span>${o.pickup ? `<span class="b neutral">${ic("store")}Retiro en tienda</span>` : ""}</div>
       <p class="small" style="margin:6px 0 0">${o.role === "buyer" ? buyerText(o) : sellerText(o)}</p>
-      ${buyerCan ? `<div class="order-actions"><button class="btn primary sm" data-ord="confirm">Ya recibí mi carta</button><button class="btn outline sm" data-ord="claim">Tengo un problema</button></div>` : ""}
-      ${o.role === "seller" && o.stage === "paid" ? `<div class="order-actions"><button class="btn primary sm" data-ord="delivered">Ya la entregué</button></div>` : ""}
+      ${o.role === "buyer" && o.shipping_cents ? `<p class="xs muted" style="margin:4px 0 0">Carta ${formatUsd(o.price_cents)} + envío ${formatUsd(o.shipping_cents)}</p>` : ""}
+      ${acts ? `<div class="order-actions">${acts}</div>` : ""}
       <div class="claim-box"></div></li>`;
   };
   const buys = orders.filter((o) => o.role === "buyer"), sales = orders.filter((o) => o.role === "seller");
+  const blocked = balance?.blocked_until && new Date(balance.blocked_until) > new Date();
+  const balancePanel = balance && (sales.length || balance.balance_cents || balance.banned || blocked) ? `<section class="panel col"><h2>Tu saldo de vendedor</h2>
+      <dl class="rows" style="margin:0"><div><dt>Disponible para la próxima liquidación</dt><dd>${formatUsd(Math.max(0, balance.available_cents))}</dd></div>
+      ${balance.pending_payout_cents ? `<div><dt>En liquidación (se paga esta semana)</dt><dd>${formatUsd(balance.pending_payout_cents)}</dd></div>` : ""}
+      <div><dt>Retenido en ventas en curso</dt><dd>${formatUsd(balance.held_cents)}</dd></div>
+      <div><dt>Ventas completadas</dt><dd>${balance.completed_sales}</dd></div></dl>
+      ${balance.banned ? `<p class="notice bad" style="margin:0">Tu cuenta de vendedor está cerrada por ventas sin entregar.</p>`
+        : blocked ? `<p class="notice warn" style="margin:0">Tus anuncios están pausados hasta el ${fmtDeadline(balance.blocked_until)} por una venta sin entregar.</p>` : ""}
+      ${balance.balance_cents < 0 ? `<p class="xs muted" style="margin:0">Tienes una penalización de ${formatUsd(-balance.balance_cents)}: se descuenta de tus próximas ventas.</p>` : ""}
+      <p class="xs muted" style="margin:0">Tu saldo sale de tus ventas completadas, menos la comisión de ${feePct()} + ITBMS. Lo pagamos por Yappy cada lunes.</p></section>` : "";
   box.innerHTML = `${buys.length ? `<section class="panel col"><h2>Mis compras</h2><ul class="admin-list">${buys.map(card).join("")}</ul></section>` : ""}
     ${sales.length ? `<section class="panel col"><h2>Mis ventas</h2><ul class="admin-list">${sales.map(card).join("")}</ul></section>` : ""}
+    ${balancePanel}
     ${pay.error ? "" : `<section class="panel col"><h2>Dónde te pagamos tus ventas</h2>
-      <p class="xs muted" style="margin:0">Cuando vendes una carta con Compra Protegida, te enviamos el dinero por Yappy a este número. Solo lo ve el equipo de ${esc(CONFIG.APP_NAME)}.</p>
+      <p class="xs muted" style="margin:0">Cuando vendes una carta con Compra Protegida, te enviamos el dinero por Yappy a este número. Solo lo ve el equipo de ${app}.</p>
       <div class="row-input"><input class="input" id="payPhone" inputmode="numeric" maxlength="9" placeholder="Número de Yappy (6000-0000)" aria-label="Número de Yappy" value="${esc(payout?.yappy_phone ?? "")}"></div>
       <div class="row-input"><input class="input" id="payName" maxlength="80" placeholder="Nombre del titular" aria-label="Nombre del titular de la cuenta Yappy" value="${esc(payout?.holder_name ?? "")}"><button type="button" class="btn" id="paySave" style="border-radius:12px">Guardar</button></div></section>`}`;
 
-  const act = async (li, fn, ok) => {
+  const act = async (li, fn, args, ok) => {
     li.querySelectorAll("button").forEach((b) => (b.disabled = true));
-    const { error } = await sb.rpc(fn, { p_order: li.dataset.order });
-    if (!box.isConnected) return;
-    if (error) { li.querySelectorAll("button").forEach((b) => (b.disabled = false)); console.error(error); return toast(orderError(error), { type: "error" }); }
-    toast(ok);
-    refreshOfferBadge();
-    renderOrders(uid, box);
+    const { data, error } = await sb.rpc(fn, { p_order: li.dataset.order, ...args });
+    if (!box.isConnected) return null;
+    li.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    if (error) { console.error(error); toast(orderError(error), { type: "error" }); return null; }
+    if (ok) { toast(ok); refreshOfferBadge(); renderOrders(uid, box); }
+    return data ?? true;
   };
   box.querySelectorAll("[data-ord]").forEach((b) => b.addEventListener("click", async () => {
     const li = b.closest("li"), what = b.dataset.ord;
     if (what === "confirm") {
-      if (await confirmDialog({ title: "¿Recibiste la carta bien?", body: "Al confirmar, le pagamos al vendedor y ya no se puede reclamar esta compra.", confirm: "Sí, todo bien" })) act(li, "buyer_confirm_received", "¡Listo! Gracias por confirmar.");
-    } else if (what === "delivered") {
-      if (await confirmDialog({ title: "¿Ya entregaste la carta?", body: "Márcala solo cuando el comprador la tenga en sus manos. Desde ese momento tiene 3 días para revisarla; después te pagamos.", confirm: "Sí, ya la entregué" })) act(li, "seller_mark_delivered", "Marcada como entregada.");
+      if (await confirmDialog({ title: "¿Está todo bien con tu carta?", body: "Al confirmar, le pagamos al vendedor y ya no puedes reportar un problema con esta compra.", confirm: "Sí, todo bien" })) act(li, "buyer_confirm_received", {}, "¡Listo! Gracias por confirmar.");
+    } else if (what === "cancel") {
+      if (await confirmDialog({ title: "¿Cancelar esta compra?", body: "No se te cobró nada. La carta vuelve a estar disponible para otros.", confirm: "Cancelar compra" })) act(li, "buyer_cancel_order", {}, "Compra cancelada.");
+    } else if (what === "sconfirm") {
+      act(li, "seller_confirm_order", {}, "Confirmado. Le avisamos al comprador para que pague.");
+    } else if (what === "decline") {
+      if (await confirmDialog({ title: "¿Ya no tienes esta carta?", body: "La compra se cancela y no se le cobra nada al comprador. Retira el anuncio si ya la vendiste.", confirm: "Ya no la tengo" })) act(li, "seller_decline_order", { p_reason: null }, "Listo, cancelamos la compra.");
+    } else if (what === "handover") {
+      const val = li.querySelector(".code-in").value.trim();
+      if (!/^\d{4}$/.test(val)) return toast("Escribe el código de 4 dígitos que te da el comprador.", { type: "error" });
+      const r = await act(li, "deliver_with_code", { p_code: val }, null);
+      if (r?.ok) { toast("Entregada. El comprador tiene unas horas para revisarla."); refreshOfferBadge(); renderOrders(uid, box); }
+      else if (r) toast(`Ese código no es. Intento ${r.failures} de ${r.max}.`, { type: "error" });
     } else {
       openClaim(uid, li, () => renderOrders(uid, box));
     }
   }));
   $("#paySave")?.addEventListener("click", async (e) => {
-    const btn = e.currentTarget;
+    const b = e.currentTarget;
     const phone = $("#payPhone").value.replace(/\D/g, ""), name = $("#payName").value.trim();
     if (!/^6\d{7}$/.test(phone)) return toast("Escribe un número de celular de 8 dígitos que empiece con 6.", { type: "error" });
     if (name.length < 2) return toast("Escribe el nombre del titular de la cuenta Yappy.", { type: "error" });
-    btn.disabled = true;
+    b.disabled = true;
     const { error } = await sb.from("payout_accounts").upsert({ user_id: uid, yappy_phone: phone, holder_name: name });
-    btn.disabled = false;
+    b.disabled = false;
     if (error) { console.error(error); return toast("No pudimos guardar tu número. Intenta de nuevo.", { type: "error" }); }
     toast("Listo, ahí te pagaremos tus ventas.");
   });
 }
 
-// "Tengo un problema": reason plus up to 4 photos in the private claim-photos bucket.
+// "Tengo un problema": a dispute with a reason and 1–6 photos in the private claim-photos bucket.
 function openClaim(uid, li, done) {
   const box = li.querySelector(".claim-box");
   if (box.innerHTML) { box.innerHTML = ""; return; }
   box.innerHTML = `<div class="col" style="gap:8px;margin-top:12px">
-    <label class="f">¿Qué pasó?<textarea class="textarea cl-reason" rows="3" maxlength="1000" placeholder="Ej.: no me llegó, no es la carta de las fotos, llegó doblada…"></textarea></label>
-    <label class="f">Fotos de la carta como la recibiste (hasta 4)<input type="file" class="cl-photos" accept="image/jpeg,image/png,image/webp" multiple></label>
-    <p class="xs muted" style="margin:0">Solo las ve el equipo de ${esc(CONFIG.APP_NAME)}. Guarda la carta como llegó mientras revisamos.</p>
-    <button type="button" class="btn danger sm cl-send">Enviar reclamo</button></div>`;
+    <label class="f">¿Qué pasó?<textarea class="textarea cl-reason" rows="3" maxlength="1000" placeholder="Ej.: no es la carta de las fotos, llegó doblada, no es la graduación anunciada…"></textarea></label>
+    <label class="f">Fotos de la carta como la recibiste (de 1 a 6)<input type="file" class="cl-photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+    <p class="xs muted" style="margin:0">Solo las ve el equipo de ${esc(CONFIG.APP_NAME)}. Guarda la carta como llegó mientras revisamos; el pago al vendedor queda en espera.</p>
+    <button type="button" class="btn danger sm cl-send">Enviar</button></div>`;
   box.querySelector(".cl-reason").focus();
   box.querySelector(".cl-send").addEventListener("click", async (e) => {
-    const btn = e.currentTarget, reason = box.querySelector(".cl-reason").value.trim(), files = [...box.querySelector(".cl-photos").files];
+    const b = e.currentTarget, reason = box.querySelector(".cl-reason").value.trim(), files = [...box.querySelector(".cl-photos").files];
     if (reason.length < 10) return toast("Cuéntanos qué pasó en al menos 10 letras.", { type: "error" });
-    if (files.length > 4) return toast("Puedes subir hasta 4 fotos.", { type: "error" });
-    btn.disabled = true; btn.textContent = "Enviando…";
+    if (!files.length || files.length > 6) return toast("Sube entre 1 y 6 fotos de la carta.", { type: "error" });
+    b.disabled = true; b.textContent = "Enviando…";
     const paths = [];
     try {
       for (const [i, f] of files.entries()) {
@@ -3329,23 +3403,24 @@ function openClaim(uid, li, done) {
         if (up.error) throw up.error;
         paths.push(path);
       }
-      const { error } = await sb.rpc("buyer_open_claim", { p_order: li.dataset.order, p_reason: reason, p_photos: paths });
+      const { error } = await sb.rpc("buyer_open_dispute", { p_order: li.dataset.order, p_reason: reason, p_photos: paths });
       if (error) throw error;
-      toast("Recibimos tu reclamo. Lo revisamos y te escribimos.");
+      toast("Recibimos tu reporte. Lo revisamos y te escribimos.");
       done();
     } catch (err) {
       console.error(err);
       if (paths.length) sb.storage.from("claim-photos").remove(paths);
-      btn.disabled = false; btn.textContent = "Enviar reclamo";
+      b.disabled = false; b.textContent = "Enviar";
       toast(err?.statusCode === "413" || /size/i.test(err?.message ?? "") ? "Una foto es muy pesada (máximo 5 MB)." : orderError(err), { type: "error" });
     }
   });
 }
 
 // ============================================================= checkout (#/pagar/<listing id>)
-// Pays a Compra Protegida with the Botón de Pago Yappy. The order and its amounts come from the
-// database (start_checkout: listing price or the buyer's accepted offer, plus the fee); the
-// yappy-pago Edge Function talks to Yappy, and Yappy's payment notice marks the order paid.
+// 1) request_order(): the seller has a couple of hours to confirm they still have the card; nothing
+//    is charged. 2) Once confirmed (or with an accepted offer), the buyer pays. Amounts come from the
+// database; the payment Edge Function talks to the provider (Yappy, or its mock in development), and
+// the provider's notice marks the order paid. #/reintento/<order id> pays a second delivery attempt.
 let yappyScript = null;
 function loadYappy() {
   yappyScript ??= new Promise((resolve, reject) => {
@@ -3357,14 +3432,80 @@ function loadYappy() {
   });
   return withTimeout(yappyScript, 15000);
 }
-const checkoutError = (e) => /on hold/.test(e?.message ?? "") ? "Otra persona está pagando esta carta en este momento. Intenta de nuevo en unos minutos."
+const checkoutError = (e) => /on hold/.test(e?.message ?? "") ? "Otra persona está comprando esta carta en este momento. Intenta de nuevo más tarde."
   : /own listing/.test(e?.message ?? "") ? "Esta carta es tuya."
   : /not available/.test(e?.message ?? "") ? "Esta carta ya no está disponible."
+  : /can't sell/.test(e?.message ?? "") ? "Este vendedor no puede vender por ahora."
   : /too many/.test(e?.message ?? "") ? "Hiciste demasiados intentos hoy. Escríbenos si necesitas ayuda."
   : "No pudimos preparar tu compra. Revisa tu conexión e intenta de nuevo.";
+const readOrder = async (id) => (await sb.from("protected_orders").select("*").eq("id", id).maybeSingle()).data;
+
+// Payment widget for an order: Yappy's button, or the E/R/C/X simulator when the Edge Function runs
+// the mock provider (CONFIG.YAPPY.SIMULATOR). `isDone(order)` says when the provider's notice landed.
+async function mountPayment(box, orderId, isDone, onDone) {
+  const call = async (query, body) => {
+    const s = (await sb.auth.getSession()).data.session;
+    if (!s) throw Object.assign(new Error("session"), { user: "Tu sesión se cerró. Entra de nuevo para pagar." });
+    const res = await withTimeout(fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${CONFIG.YAPPY.FUNCTION}${query}`, {
+      method: "POST", headers: { "Content-Type": "application/json", apikey: CONFIG.SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` },
+      body: JSON.stringify(body),
+    }), 30000);
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) throw Object.assign(new Error("payment"), { user: out.error ?? "No pudimos iniciar el pago. Intenta de nuevo." });
+    return out;
+  };
+  const wait = async (say) => {
+    say("good", `<span class="spinner"></span> Estamos confirmando tu pago…`);
+    for (let i = 0; i < 40 && box.isConnected; i++) {
+      const o = await readOrder(orderId);
+      if (o && isDone(o)) return onDone(o);
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    if (box.isConnected) say("good", `Tu pago está en proceso. Lo verás confirmado en <a class="link" href="#/cuenta">Mi cuenta</a> en unos minutos.`);
+  };
+  if (CONFIG.YAPPY.SIMULATOR) {
+    box.innerHTML = `<p class="notice warn" style="margin:0 0 12px">Modo de prueba: no se cobra dinero. Elige qué respondería Yappy.</p>
+      <div class="order-actions" style="justify-content:center">${[["E", "Pago aprobado (E)", "primary"], ["R", "Rechazado (R)", "outline"], ["C", "Cancelado (C)", "outline"], ["X", "Expirado (X)", "outline"]]
+        .map(([s, t, st]) => `<button class="btn ${st} sm" data-sim="${s}">${t}</button>`).join("")}</div><div id="payMsg" style="margin-top:12px"></div>`;
+    const msg = box.querySelector("#payMsg"), say = (cls, html) => (msg.innerHTML = `<p class="notice ${cls}" style="margin:0">${html}</p>`);
+    box.querySelectorAll("[data-sim]").forEach((b) => b.addEventListener("click", async () => {
+      box.querySelectorAll("[data-sim]").forEach((x) => (x.disabled = true));
+      try {
+        const charge = await call("", { order_id: orderId });
+        const r = await call("?simular", { attempt_id: charge.attempt, status: b.dataset.sim });
+        if (b.dataset.sim === "E") return wait(say);
+        say(r.result === "failed" ? "bad" : "warn", r.result === "failed" ? "El pago no se completó y la compra se cerró." : "Pago cancelado. Puedes intentarlo de nuevo.");
+      } catch (e) {
+        console.error(e); say("bad", esc(e.user ?? "No pudimos conectar con el pago. Intenta de nuevo."));
+      } finally { box.querySelectorAll("[data-sim]").forEach((x) => (x.disabled = false)); }
+    }));
+    return;
+  }
+  try { await loadYappy(); } catch { if (box.isConnected) box.innerHTML = `<p class="notice bad" style="margin:0">No pudimos cargar Yappy. Revisa tu conexión y recarga la página.</p>`; return; }
+  if (!box.isConnected) return;
+  box.innerHTML = `<btn-yappy theme="blue" rounded="true"></btn-yappy><div id="payMsg" style="margin-top:12px"></div>`;
+  const yb = box.querySelector("btn-yappy"), msg = box.querySelector("#payMsg");
+  const say = (cls, html) => (msg.innerHTML = `<p class="notice ${cls}" style="margin:0">${html}</p>`);
+  yb.addEventListener("eventClick", async () => {
+    msg.innerHTML = "";
+    yb.isButtonLoading = true;
+    try {
+      const out = await call("", { order_id: orderId });
+      if (!out.transactionId) return say("bad", "No pudimos iniciar el pago con Yappy. Intenta de nuevo.");
+      yb.eventPayment({ transactionId: out.transactionId, documentName: out.documentName, token: out.token });
+    } catch (e) {
+      console.error(e); say("bad", esc(e.user ?? "No pudimos conectar con Yappy. Intenta de nuevo."));
+    } finally { yb.isButtonLoading = false; }
+  });
+  yb.addEventListener("eventError", (e) => {
+    console.warn("yappy", e.detail);
+    say("bad", "El pago no se completó. Puedes intentarlo de nuevo. Si Yappy te descontó el dinero, no pagues otra vez: escríbenos.");
+  });
+  yb.addEventListener("eventSuccess", () => wait(say));
+}
 
 async function viewCheckout(app, listingId) {
-  setTitle("Pagar");
+  setTitle("Comprar");
   const back = `<a class="btn outline" href="#/carta/${encodeURIComponent(listingId)}">Volver a la carta</a>`;
   if (!CONFIG.YAPPY.ENABLED || !sb || !isUuid(listingId)) {
     app.innerHTML = `<div class="checkout"><p class="notice soft">El pago en línea se activa pronto. Por ahora, toca “Comprar protegido” en la carta y te atendemos por WhatsApp.</p>${back}</div>`;
@@ -3372,90 +3513,102 @@ async function viewCheckout(app, listingId) {
   }
   app.innerHTML = `<p class="loading"><span class="spinner"></span>Preparando tu compra…</p>`;
   const holder = app.firstElementChild;
-  const [{ data: order, error }, { data: l }] = await Promise.all([
-    sb.rpc("start_checkout", { p_listing: listingId }),
+  const [{ data: first, error }, { data: l }] = await Promise.all([
+    sb.rpc("request_order", { p_listing: listingId, p_pickup: false }),
     sb.from("listings").select("title, seller_id").eq("id", listingId).maybeSingle(),
   ]);
   if (!holder.isConnected) return;
-  if (error || !order) {
+  if (error || !first) {
     console.error(error);
     app.innerHTML = `<div class="checkout"><p class="notice bad">${esc(checkoutError(error))}</p>${back}</div>`;
     return;
   }
-  const total = orderAmounts(order).buyer;
-  // Retiro en tienda (migration 0028): only verified shops that offer it.
-  const sellerProf = "pickup" in order && l?.seller_id ? await fetchSellerProfile(l.seller_id) : null;
+  // Retiro en tienda (migration 0028): only verified shops that offer it; no shipping then.
+  const sellerProf = l?.seller_id ? await fetchSellerProfile(l.seller_id) : null;
   if (!holder.isConnected) return;
   const shop = sellerProf ? profileToSeller(l.seller_id, sellerProf) : null;
-  const dlv = shop && offersPickup(shop) ? `<section class="panel col"><h2 style="font-size:16px;margin:0">¿Cómo recibes tu compra?</h2>
-      <div class="dlv radios"><label class="radio"><input type="radio" name="dlv" value="pickup"${order.pickup ? " checked" : ""}><span><b>Retirar en ${esc(shop.displayName)}</b><span class="xs muted">${esc(shop.shopAddress)}${shop.shopProvince ? `, ${esc(shop.shopProvince)}` : ""}${shop.shopHours ? ` · ${esc(shop.shopHours)}` : ""}. Al pagar te damos un código para mostrar en la tienda.</span></span></label>
-      <label class="radio"><input type="radio" name="dlv" value="coordinate"${order.pickup ? "" : " checked"}><span><b>Coordinar la entrega</b><span class="xs muted">El equipo de ${esc(CONFIG.APP_NAME)} te escribe para acordar dónde y cuándo.</span></span></label></div></section>` : "";
-  const feeRows = orderAmounts(order).buyerFee ? buyerFeeRows(order.fee_cents, order.itbms_cents) : buyerFeeRows(0, 0);
-  app.innerHTML = `<div class="checkout col" style="gap:16px"><h1 class="display" style="font-size:30px">Pagar con Compra Protegida</h1>
-    <section class="panel"><p style="margin:0;font-weight:600">${esc(l?.title ?? "Carta")}</p>
-      <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(order.price_cents)}</dd></div>${feeRows}
-      <div class="total"><dt>Total</dt><dd>${formatUsd(total)}</dd></div></dl>
-      <p class="xs muted" style="margin:12px 0 0">Te guardamos la carta 15 minutos mientras pagas. ${esc(CONFIG.APP_NAME)} guarda tu dinero: el vendedor cobra cuando confirmas que recibiste la carta bien, o 3 días después de la entrega si no reportas nada.</p></section>
-    ${dlv}
-    <section class="panel center" id="payBox"><p class="loading"><span class="spinner"></span>Cargando Yappy…</p></section>
-    <p class="xs muted" style="margin:0">Al pagar aceptas los <a class="link" href="#/terminos">Términos</a> de Compra Protegida.</p>
-    <div>${back}</div></div>`;
-  const box = $("#payBox");
-  app.querySelectorAll('input[name="dlv"]').forEach((r) => r.addEventListener("change", async () => {
-    const pickup = r.value === "pickup";
-    app.querySelectorAll('input[name="dlv"]').forEach((x) => (x.disabled = true));
-    const { error: e } = await sb.rpc("set_order_pickup", { p_order: order.id, p_pickup: pickup });
-    app.querySelectorAll('input[name="dlv"]').forEach((x) => (x.disabled = false));
-    if (e) {
-      console.error(e);
-      app.querySelector(`input[name="dlv"][value="${pickup ? "coordinate" : "pickup"}"]`).checked = true;
-      return toast(/no pickup/.test(e.message ?? "") ? "Esta tienda ya no ofrece retiro en el local." : "No pudimos guardar tu elección. Intenta de nuevo.", { type: "error" });
+  let order = first, poll = 0;
+
+  const render = () => {
+    const amt = orderAmounts(order), waiting = order.status === "esperando_confirmacion_vendedor";
+    const dlv = shop && offersPickup(shop) ? `<section class="panel col"><h2 style="font-size:16px;margin:0">¿Cómo recibes tu compra?</h2>
+      <div class="dlv radios"><label class="radio"><input type="radio" name="dlv" value="pickup"${order.pickup ? " checked" : ""}><span><b>Retirar en ${esc(shop.displayName)}</b><span class="xs muted">${esc(shop.shopAddress)}${shop.shopProvince ? `, ${esc(shop.shopProvince)}` : ""}${shop.shopHours ? ` · ${esc(shop.shopHours)}` : ""}. Sin costo de envío; das tu código de entrega en la tienda.</span></span></label>
+      <label class="radio"><input type="radio" name="dlv" value="coordinate"${order.pickup ? "" : " checked"}><span><b>Envío con ${esc(CONFIG.APP_NAME)}</b><span class="xs muted">Recogemos la carta, la fotografiamos y te la llevamos.</span></span></label></div></section>` : "";
+    app.innerHTML = `<div class="checkout col" style="gap:16px"><h1 class="display" style="font-size:30px">Comprar con Compra Protegida</h1>
+      <section class="panel"><p style="margin:0;font-weight:600">${esc(l?.title ?? "Carta")}</p>
+        <dl class="rows" style="margin-top:12px"><div><dt>Carta</dt><dd>${formatUsd(order.price_cents)}</dd></div>${buyerFeeRows(order.fee_cents, order.itbms_cents)}
+        <div><dt>${order.pickup ? "Retiro en tienda" : "Envío"}</dt><dd>${formatUsd(order.shipping_cents ?? 0)}</dd></div>
+        <div class="total"><dt>Total</dt><dd>${formatUsd(amt.buyer)}</dd></div></dl>
+        <p class="xs muted" style="margin:12px 0 0">${esc(CONFIG.APP_NAME)} guarda tu dinero hasta que tengas la carta. Al recibirla tienes un plazo para revisarla y reportar un problema; si no hay problemas, le pagamos al vendedor.</p></section>
+      ${dlv}
+      <section class="panel center" id="payBox">${waiting
+        ? `<p style="margin:0"><span class="spinner"></span> Le pedimos al vendedor que confirme que aún tiene la carta (hasta el ${fmtDeadline(order.seller_confirm_deadline)}).</p>
+           <p class="xs muted" style="margin:8px 0 0">Todavía no te cobramos nada. Te avisamos en la campanita cuando confirme; puedes quedarte en esta página.</p>
+           <div class="order-actions" style="justify-content:center"><button class="btn outline sm" id="coCancel">Cancelar compra</button></div>`
+        : `<p class="loading"><span class="spinner"></span>Cargando el pago…</p>`}</section>
+      <p class="xs muted" style="margin:0">Al pagar aceptas los <a class="link" href="#/terminos">Términos</a> de Compra Protegida.</p>
+      <div>${back}</div></div>`;
+    app.querySelectorAll('input[name="dlv"]').forEach((r) => r.addEventListener("change", async () => {
+      const pickup = r.value === "pickup";
+      app.querySelectorAll('input[name="dlv"]').forEach((x) => (x.disabled = true));
+      const { error: e } = await sb.rpc("set_order_pickup", { p_order: order.id, p_pickup: pickup });
+      if (e) {
+        console.error(e);
+        app.querySelectorAll('input[name="dlv"]').forEach((x) => (x.disabled = false));
+        app.querySelector(`input[name="dlv"][value="${pickup ? "coordinate" : "pickup"}"]`).checked = true;
+        return toast(/no pickup/.test(e.message ?? "") ? "Esta tienda ya no ofrece retiro en el local." : "No pudimos guardar tu elección. Intenta de nuevo.", { type: "error" });
+      }
+      order = (await readOrder(order.id)) ?? order;
+      render();
+    }));
+    $("#coCancel")?.addEventListener("click", async () => {
+      if (!(await confirmDialog({ title: "¿Cancelar esta compra?", body: "No se te cobró nada.", confirm: "Cancelar compra" }))) return;
+      const { error: e } = await sb.rpc("buyer_cancel_order", { p_order: order.id });
+      if (e) return toast(orderError(e), { type: "error" });
+      toast("Compra cancelada."); go(`/carta/${encodeURIComponent(listingId)}`);
+    });
+    if (order.status === "pendiente_pago") {
+      mountPayment($("#payBox"), order.id, (o) => o.status !== "pendiente_pago", (o) => {
+        if (["fallida", "cancelada"].includes(o.status)) return toast("El pago no se completó.", { type: "error" });
+        toast("¡Pago confirmado! Sigue tu compra en Mi cuenta."); go("/cuenta");
+      });
+    } else if (!waiting) {
+      $("#payBox").innerHTML = `<p class="notice soft" style="margin:0">Esta compra ya no está esperando un pago. Revísala en <a class="link" href="#/cuenta">Mi cuenta</a>.</p>`;
     }
-    order.pickup = pickup;
-  }));
-  try { await loadYappy(); } catch { if (box.isConnected) box.innerHTML = `<p class="notice bad" style="margin:0">No pudimos cargar Yappy. Revisa tu conexión y recarga la página.</p>`; return; }
-  if (!box.isConnected) return;
-  box.innerHTML = `<btn-yappy theme="blue" rounded="true"></btn-yappy><div id="payMsg" style="margin-top:12px"></div>`;
-  const btn = box.querySelector("btn-yappy"), msg = $("#payMsg");
-  const say = (cls, html) => (msg.innerHTML = `<p class="notice ${cls}" style="margin:0">${html}</p>`);
-  btn.addEventListener("eventClick", async () => {
-    msg.innerHTML = "";
-    btn.isButtonLoading = true;
-    try {
-      const s = (await sb.auth.getSession()).data.session;
-      if (!s) return say("bad", "Tu sesión se cerró. Entra de nuevo para pagar.");
-      // Renew the hold right before paying; if the order or its total changed, show the new one.
-      const again = await sb.rpc("start_checkout", { p_listing: listingId });
-      if (again.error) return say("bad", esc(checkoutError(again.error)));
-      const t2 = orderAmounts(again.data).buyer;
-      if (again.data.id !== order.id || t2 !== total) { toast("El total de tu compra cambió. Revísalo antes de pagar."); return viewCheckout(app, listingId); }
-      const res = await withTimeout(fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${CONFIG.YAPPY.FUNCTION}`, {
-        method: "POST", headers: { "Content-Type": "application/json", apikey: CONFIG.SUPABASE_KEY, Authorization: `Bearer ${s.access_token}` },
-        body: JSON.stringify({ order_id: order.id }),
-      }), 30000);
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok || !out.transactionId) return say("bad", esc(out.error ?? "No pudimos iniciar el pago con Yappy. Intenta de nuevo."));
-      btn.eventPayment({ transactionId: out.transactionId, documentName: out.documentName, token: out.token });
-    } catch (e) {
-      console.error(e);
-      say("bad", "No pudimos conectar con Yappy. Intenta de nuevo.");
-    } finally { btn.isButtonLoading = false; }
-  });
-  btn.addEventListener("eventError", (e) => {
-    console.warn("yappy", e.detail);
-    say("bad", "El pago no se completó. Puedes intentarlo de nuevo. Si Yappy te descontó el dinero, no pagues otra vez: escríbenos.");
-  });
-  btn.addEventListener("eventSuccess", async () => {
-    say("good", `<span class="spinner"></span> ¡Pago hecho! Estamos confirmándolo con Yappy…`);
-    // The order turns "paid" when Yappy's notice reaches the Edge Function (usually seconds).
-    for (let i = 0; i < 40 && box.isConnected; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const { data } = await sb.rpc("my_orders");
-      const o = (data ?? []).find((x) => x.id === order.id);
-      if (o && o.stage !== "awaiting_payment") { toast("¡Pago confirmado! Sigue tu compra en Mi cuenta."); return go("/cuenta"); }
+  };
+  render();
+  // While the seller decides, check every few seconds (the bell notifies too).
+  const tick = async () => {
+    if (!app.isConnected || order.status !== "esperando_confirmacion_vendedor" || ++poll > 240) return;
+    await new Promise((r) => setTimeout(r, 8000));
+    if (!app.isConnected) return;
+    const o = await readOrder(order.id);
+    if (o && o.status !== order.status) {
+      order = o;
+      if (o.status === "cancelada") { app.querySelector("#payBox").innerHTML = `<p class="notice bad" style="margin:0">${esc(o.close_reason ?? "La compra se canceló")}. No se te cobró nada.</p>`; return; }
+      toast("¡El vendedor confirmó! Ya puedes pagar.");
+      render();
+      return;
     }
-    if (box.isConnected) say("good", `Tu pago está en proceso. Lo verás confirmado en <a class="link" href="#/cuenta">Mi cuenta</a> en unos minutos.`);
-  });
+    tick();
+  };
+  tick();
+}
+
+// Second delivery attempt (#/reintento/<order id>): the buyer wasn't there the first time.
+async function viewRetry(app, orderId) {
+  setTitle("Segundo intento de entrega");
+  const o = sb && isUuid(orderId) ? await readOrder(orderId) : null;
+  if (!o || o.status !== "en_custodia" || !o.retry_fee_cents || o.retry_paid_at) {
+    app.innerHTML = `<div class="checkout"><p class="notice soft">No hay un segundo intento por pagar en esta compra.</p><a class="btn outline" href="#/cuenta">Ir a Mi cuenta</a></div>`;
+    return;
+  }
+  app.innerHTML = `<div class="checkout col" style="gap:16px"><h1 class="display" style="font-size:30px">Segundo intento de entrega</h1>
+    <section class="panel"><p class="small" style="margin:0">No te encontramos la primera vez. Paga el segundo intento y coordinamos contigo. Si no lo pagas, devolvemos la carta al vendedor y te reembolsamos todo menos el envío.</p>
+      <dl class="rows" style="margin-top:12px"><div class="total"><dt>Segundo intento</dt><dd>${formatUsd(o.retry_fee_cents)}</dd></div></dl></section>
+    <section class="panel center" id="payBox"></section><div><a class="btn outline" href="#/cuenta">Volver</a></div></div>`;
+  if (!CONFIG.YAPPY.ENABLED) { $("#payBox").innerHTML = `<p class="notice soft" style="margin:0">Escríbenos por WhatsApp para pagarlo.</p>`; return; }
+  mountPayment($("#payBox"), o.id, (x) => !!x.retry_paid_at, () => { toast("¡Pagado! Te escribimos para coordinar la entrega."); go("/cuenta"); });
 }
 
 // Seller page: public reviews (verified purchases only).
@@ -3635,7 +3788,7 @@ function setupShare(l) {
 
 function viewProtected(app) {
   setTitle("Compra Protegida");
-  const steps = [["Pagas a " + CONFIG.APP_NAME, "Por Yappy o transferencia. Guardamos el dinero: el vendedor todavía no lo recibe."], ["El vendedor te entrega la carta", "En persona o por envío, directo a ti. Se ponen de acuerdo por WhatsApp."], ["Revisas tu carta", "Tienes 3 días desde la entrega para avisarnos desde Mi cuenta, con fotos, si no llegó o si no es la de las fotos, la condición o la graduación anunciada."], ["El vendedor cobra", "Cuando confirmas en Mi cuenta que todo está bien, o solo a los 3 días si no hay reclamo. Si hay un problema, te devolvemos todo."]];
+  const steps = [["El vendedor confirma", "Pides la carta y el vendedor tiene 2 horas para confirmar que aún la tiene. Hasta ahí no se te cobra nada."], ["Pagas a " + CONFIG.APP_NAME, "El precio más el envío, por Yappy. Guardamos el dinero: el vendedor todavía no lo recibe."], [CONFIG.APP_NAME + " te la lleva", "Recogemos la carta (con fotos de frente y reverso) y te la entregamos. Le das al mensajero tu código de 4 dígitos. Las tiendas verificadas también ofrecen retiro en el local."], ["Revisas y el vendedor cobra", "Tienes 48 horas desde la entrega para reportar un problema con fotos. Si no hay problemas, el dinero pasa al vendedor; si los hay, te devolvemos lo que corresponda."]];
   const rows = [10, 50, 150, 500, 1500].map((u) => quoteProtected(toCents(u)));
   app.innerHTML = `<div class="wrap page">
     <div style="max-width:760px">
@@ -3648,7 +3801,7 @@ function viewProtected(app) {
     </ol>
     <section class="fees-sec" style="max-width:760px">
       <h2 class="h2">Cuánto cuesta</h2>
-      <p class="small muted" style="margin-top:6px">Para el comprador, nada: pagas solo el precio de la carta. Cuando se completa la venta, ${esc(CONFIG.APP_NAME)} se queda con el ${feePct()} del precio, más 7% de ITBMS sobre esa comisión, y se lo descuenta al vendedor de lo que recibe. Sin mínimo ni máximo. Publicar sigue siendo gratis.</p>
+      <p class="small muted" style="margin-top:6px">Para el comprador, sin comisión: pagas el precio de la carta más el envío (${formatUsd(SHIPPING_CENTS)}; gratis si la retiras en una tienda). Cuando se completa la venta, ${esc(CONFIG.APP_NAME)} se queda con el ${feePct()} del precio, más 7% de ITBMS sobre esa comisión, y se lo descuenta al vendedor de lo que recibe. Sin mínimo ni máximo. Publicar sigue siendo gratis.</p>
       <div class="panel flush"><table class="fees"><thead><tr><th>Precio de la carta</th><th>Comisión (${feePct()})</th><th>ITBMS</th><th>Recibe el vendedor</th></tr></thead>
         <tbody>${rows.map((q) => `<tr><td>${formatUsd(q.priceCents)}</td><td>${formatUsd(q.sellerFeeCents)}</td><td>${formatUsd(q.sellerItbmsCents)}</td><td style="font-weight:700">${formatUsd(q.sellerPayoutCents)}</td></tr>`).join("")}</tbody></table></div>
     </section>
@@ -5658,7 +5811,7 @@ async function viewAccount(app) {
 // ============================================================= staff panel (#/admin)
 // Everything here is also enforced by RLS: a non-staff user who opens #/admin just
 // gets empty lists and failed writes. The UI check is for convenience only.
-const PAID_STATES = ["paid", "verifying", "delivered", "released"];
+const PAID_STATES = ["pagada_retenida", "esperando_entrega_vendedor", "en_custodia", "en_camino", "entregada", "en_revision", "en_disputa", "completada"];
 const LISTING_STATUS = { draft: "Borrador", active: "Activo", reserved: "Reservado", sold: "Vendido", removed: "Quitado" };
 const GOAL_ORDERS = 20;
 
@@ -5668,14 +5821,18 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["ordenes", "revisiones", "planes", "anuncios", "tiendas", "identidad", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
-  const tabs = [["ordenes", "Órdenes"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["identidad", "Identidad"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
+  const tab = ["ordenes", "disputas", "pagos", "conciliacion", "ajustes", "revisiones", "planes", "anuncios", "tiendas", "identidad", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "ordenes";
+  const tabs = [["ordenes", "Órdenes"], ["disputas", "Disputas"], ["pagos", "Reembolsos y liquidaciones"], ["conciliacion", "Conciliación y alertas"], ["ajustes", "Ajustes"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["identidad", "Identidad"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
   app.innerHTML = `<div class="wrap admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
   const body = $("#adminBody");
   try {
-    if (tab === "ordenes") await adminOrders(body);
+    if (tab === "ordenes") await adminOrders(body, params.get("estado") || "abiertas");
+    else if (tab === "disputas") await adminOrders(body, "en_disputa");
+    else if (tab === "pagos") await adminMoney(body);
+    else if (tab === "conciliacion") await adminRecon(body);
+    else if (tab === "ajustes") await adminSettings(body);
     else if (tab === "revisiones") await adminChecks(body);
     else if (tab === "planes") await adminPlans(body, params.get("q") ?? "");
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
@@ -5702,176 +5859,311 @@ async function profilesById(ids) {
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("es-PA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
 // ------------------------------------------------------------- orders
-// Every step goes through staff_order_action() (migration 0014): the order, the listing and the
-// sale record change together, and the database refuses a step out of order (e.g. paying the
-// seller while a claim is open or before the 3-day window ends).
-const STAFF_STAGE = {
-  awaiting_payment: ["Esperando pago", "prot"], paid: ["Pagada · por entregar", "prot"], delivered: ["Entregada · 3 días para reclamar", "prot"],
-  claim: ["Reclamo abierto", "warn"], ready: ["Lista para pagar al vendedor", "good"], released: ["Liberada ✓", "good"],
-  refunded: ["Reembolsada", "warn"], cancelled: ["Cancelada", "neutral"],
+// Every step is a database function (migration 0029): the state machine refuses a step out of
+// order, records who did it and why, and moves the money in the ledger. Staff act as Holo's courier.
+const ORDER_FLOW = ["esperando_confirmacion_vendedor", "pendiente_pago", "pagada_retenida", "esperando_entrega_vendedor",
+  "en_custodia", "en_camino", "entregada", "en_revision", "en_disputa", "completada", "cancelada", "reembolsada", "fallida"];
+const OPEN_ORDER = new Set(ORDER_FLOW.slice(0, 9));
+const STAFF_STATUS = {
+  esperando_confirmacion_vendedor: ["Esperando al vendedor", "warn"], pendiente_pago: ["Esperando pago", "prot"],
+  pagada_retenida: ["Pagada (retenida)", "prot"], esperando_entrega_vendedor: ["Por recoger", "prot"],
+  en_custodia: ["En custodia", "prot"], en_camino: ["En camino", "prot"], entregada: ["Entregada", "prot"],
+  en_revision: ["En revisión del comprador", "prot"], en_disputa: ["En disputa", "warn"], completada: ["Completada", "good"],
+  cancelada: ["Cancelada", "neutral"], reembolsada: ["Reembolsada", "warn"], fallida: ["Pago fallido", "neutral"],
 };
-const STAFF_ACTIONS = { // stage → [action, label, style]
-  awaiting_payment: [["mark_paid", "Marcar pagada", "primary"], ["cancel", "Cancelar", "danger"]],
-  paid: [["mark_delivered", "Entregada (empiezan los 3 días)", "primary"], ["buyer_confirmed", "El comprador confirmó que está bien", ""], ["refund", "Reembolsar", "danger"]],
-  delivered: [["buyer_confirmed", "El comprador confirmó que está bien", ""], ["refund", "Reembolsar", "danger"]],
-  claim: [["refund", "Reembolsar al comprador", "danger"], ["reject_claim", "Rechazar reclamo", ""]],
-  ready: [["release", "Ya le pagué al vendedor", "primary"], ["refund", "Reembolsar", "danger"]],
+const orderMigrationMissing = (error, body) => {
+  if (!["PGRST202", "42883", "42703", "42P01"].includes(error?.code)) return false;
+  body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0029 en Supabase.</p>`;
+  return true;
 };
-async function adminOrders(body) {
-  const { data: orders, error } = await sb.rpc("staff_orders");
-  if (error) {
-    if (["PGRST202", "42883"].includes(error.code)) { body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0014 en Supabase.</p>`; return; }
-    throw error;
-  }
-  const pickups = new Set();
-  const pk = await sb.from("protected_orders").select("id").eq("pickup", true).order("created_at", { ascending: false }).limit(300);
-  if (!pk.error) for (const r of pk.data ?? []) pickups.add(r.id); // migration 0028
-  const payNow = orders.filter((o) => o.stage === "ready");
-  const claims = orders.filter((o) => o.stage === "claim");
-  const open = orders.filter((o) => ["awaiting_payment", "paid", "delivered"].includes(o.stage));
-  const closed = orders.filter((o) => ["released", "refunded", "cancelled"].includes(o.stage));
+async function uploadOrderPhoto(orderId, file, stage, side) {
+  const img = await compressImage(file), ext = { "image/png": "png", "image/webp": "webp" }[img.type] ?? "jpg";
+  const path = `${orderId}/${stage}-${side}-${Date.now()}.${ext}`;
+  const up = await sb.storage.from("order-photos").upload(path, img, { contentType: img.type || "image/jpeg", upsert: false });
+  if (up.error) throw up.error;
+  const { error } = await sb.rpc("staff_add_order_photo", { p_order: orderId, p_stage: stage, p_side: side, p_path: path });
+  if (error) throw error;
+}
 
+async function adminOrders(body, filter) {
+  const [{ data: orders, error }, disp] = await Promise.all([sb.rpc("staff_orders", { p_status: null }), sb.rpc("staff_disputes")]);
+  if (error) { if (orderMigrationMissing(error, body)) return; throw error; }
+  const disputes = new Map((disp.data ?? []).map((d) => [d.order_id, d]));
+  const count = (s) => orders.filter((o) => o.status === s).length;
+  const shown = filter === "abiertas" ? orders.filter((o) => OPEN_ORDER.has(o.status)) : filter === "todas" ? orders : orders.filter((o) => o.status === filter);
+  const chip = (k, t, n) => `<a class="btn ${k === filter ? "primary" : "outline"} sm" href="#/admin?tab=ordenes&estado=${k}">${t}${n != null ? ` (${n})` : ""}</a>`;
+  const B = (a, t, st = "") => `<button class="btn ${st}" data-act="${a}">${t}</button>`;
+  const actions = (o) => ({
+    esperando_confirmacion_vendedor: B("cancel", "Cancelar", "danger"),
+    pendiente_pago: B("mark_paid", "Marcar pagada (Yappy manual)", "primary") + B("cancel", "Cancelar", "danger"),
+    esperando_entrega_vendedor: o.pickup
+      ? `<input class="input code-in" inputmode="numeric" maxlength="4" placeholder="Código" style="width:110px">${B("handover", "Entregada en tienda", "primary")}`
+      : `<label class="f xs">Foto frente<input type="file" class="ph-frente" accept="image/*"></label><label class="f xs">Foto reverso<input type="file" class="ph-reverso" accept="image/*"></label>${B("pickup", "Recogida", "primary")}`,
+    en_custodia: (o.retry_fee_cents > 0 && !o.retry_paid_at ? "" : B("out_for_delivery", o.delivery_attempts ? "Sale a 2.º intento" : "Sale a entregar", "primary"))
+      + (o.delivery_attempts ? B("return_to_seller", "Devolver al vendedor (reembolso sin envío)", "danger") : "") + B("incident", "Incidente"),
+    en_camino: `<label class="f xs">Foto de entrega<input type="file" class="ph-entrega" accept="image/*"></label><input class="input code-in" inputmode="numeric" maxlength="4" placeholder="Código" style="width:110px">${B("deliver", "Entregada", "primary")}${B("delivery_failed", "Comprador ausente")}${B("incident", "Incidente")}`,
+    en_disputa: B("resolve_seller", "A favor del vendedor") + B("resolve_partial", "Reembolso parcial") + B("resolve_total", "Reembolso total", "danger"),
+  }[o.status] ?? "");
   const card = (o) => {
-    const [label, cls] = STAFF_STAGE[o.stage] ?? [o.stage, "neutral"];
-    const amt = orderAmounts(o), total = amt.buyer;
-    const alert = /ATENCIÓN/.test(o.notes ?? "");
+    const [label, cls] = STAFF_STATUS[o.status] ?? [o.status, "neutral"];
+    const d = disputes.get(o.id), alert = /ATENCIÓN|reembolsado/.test(o.notes ?? "");
     return `<li class="panel order" data-id="${o.id}">
-      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Anuncio")}</a><span class="b ${cls}">${label}</span>${pickups.has(o.id) ? `<span class="b neutral">${ic("store")}Retiro en tienda</span>` : ""}</div>
-      ${alert ? `<p class="notice bad" style="margin:8px 0 0">${esc((o.notes ?? "").split("\n").filter((x) => /ATENCIÓN/.test(x)).join(" "))}</p>` : ""}
-      ${o.stage === "claim" ? `<div class="notice warn" style="margin:8px 0 0"><b>Reclamo del comprador</b> (${fmtDate(o.claimed_at)}):<br>${esc(o.claim_reason ?? "")}<div class="claim-photos" data-photos="${esc(JSON.stringify(o.claim_photos ?? []))}"></div></div>` : ""}
+      <div class="phead"><a href="#/carta/${encodeURIComponent(o.listing_id)}" style="font-weight:600">${esc(o.title ?? "Anuncio")}</a><span class="b ${cls}">${label}</span>${o.pickup ? `<span class="b neutral">${ic("store")}Retiro en tienda</span>` : ""}${o.open_dispute ? `<span class="b warn">Disputa</span>` : ""}</div>
+      ${alert ? `<p class="notice bad" style="margin:8px 0 0">${esc((o.notes ?? "").split("\n").filter((x) => /ATENCIÓN|reembolsado/.test(x)).join(" "))}</p>` : ""}
+      ${d ? `<div class="notice warn" style="margin:8px 0 0"><b>Disputa del comprador</b> (${fmtDate(d.opened_at)}):<br>${esc(d.reason)}<div class="claim-photos" data-photos="${esc(JSON.stringify(d.photos ?? []))}"></div></div>` : ""}
       <dl class="rows">
-        <div><dt>Vendedor</dt><dd>${esc(o.seller_name ?? "—")}</dd></div>
-        ${["ready", "released"].includes(o.stage) ? `<div><dt>Yappy del vendedor</dt><dd>${o.payout_phone ? `${esc(o.payout_phone)} · ${esc(o.payout_name ?? "")}` : `<span style="color:var(--down)">No lo ha puesto en Mi cuenta</span>`}</dd></div>` : ""}
-        <div><dt>Comprador</dt><dd>${esc(o.buyer_contact || (o.buyer_id ? `Cuenta ${o.buyer_id.slice(0, 8).toUpperCase()}` : "—"))}</dd></div>
-        <div><dt>El comprador paga</dt><dd>${formatUsd(total)}</dd></div>
-        <div><dt>Pagar al vendedor</dt><dd>${formatUsd(amt.payout)}</dd></div>
-        <div><dt>Comisiones con ITBMS (comprador + vendedor)</dt><dd>${formatUsd(amt.buyerFee)} + ${formatUsd(amt.sellerFee)}</dd></div>
+        <div><dt>Vendedor</dt><dd>${esc(o.seller_name ?? "—")}${o.seller_is_shop ? " · tienda verificada" : ""}</dd></div>
+        <div><dt>Comprador</dt><dd>${esc(o.buyer_name || o.buyer_contact || "—")}${o.buyer_name && o.buyer_contact ? ` · ${esc(o.buyer_contact)}` : ""}</dd></div>
+        <div><dt>El comprador paga</dt><dd>${formatUsd(o.buyer_total_cents)} (carta ${formatUsd(o.price_cents)} + envío ${formatUsd(o.shipping_cents)})</dd></div>
+        <div><dt>Al vendedor (a su saldo)</dt><dd>${formatUsd(o.seller_payout_cents)}</dd></div>
+        ${o.deadline ? `<div><dt>Plazo</dt><dd>${fmtDate(o.deadline)}</dd></div>` : ""}
+        <div><dt>En este estado desde</dt><dd>${fmtDate(o.status_changed_at)}</dd></div>
+        ${o.delivery_attempts ? `<div><dt>Intentos de entrega</dt><dd>${o.delivery_attempts}${o.retry_fee_cents ? ` · reintento ${formatUsd(o.retry_fee_cents)} ${o.retry_paid_at ? "pagado" : "sin pagar"}` : ""}</dd></div>` : ""}
         ${o.payment_ref ? `<div><dt>Ref. de pago</dt><dd>${esc(o.payment_ref)}</dd></div>` : ""}
-        ${o.delivered_at ? `<div><dt>Entregada</dt><dd>${fmtDate(o.delivered_at)}${o.buyer_confirmed_at ? " · el comprador confirmó" : ""}</dd></div>` : ""}
-        ${o.stage === "delivered" ? `<div><dt>Se puede pagar al vendedor desde</dt><dd>${fmtDate(o.ready_at)}</dd></div>` : ""}
-        ${o.payout_ref ? `<div><dt>Ref. del pago al vendedor</dt><dd>${esc(o.payout_ref)}</dd></div>` : ""}
-        <div><dt>Creada / actualizada</dt><dd>${fmtDate(o.created_at)} · ${fmtDate(o.updated_at)}${o.source === "checkout" ? " · pagó en línea" : ""}</dd></div>
+        ${o.close_reason ? `<div><dt>Motivo de cierre</dt><dd>${esc(o.close_reason)}</dd></div>` : ""}
+        <div><dt>Creada</dt><dd>${fmtDate(o.created_at)}${o.source === "checkout" ? " · en línea" : " · por el staff"}</dd></div>
       </dl>
+      <details class="order-detail"><summary class="small">Historial, fotos, pagos y libro contable</summary><div class="od-body xs muted">Cargando…</div></details>
       <label class="f muted-label" style="margin-top:8px">Notas<textarea class="textarea order-notes" rows="2" maxlength="500">${esc(o.notes ?? "")}</textarea></label>
-      <div class="order-actions">
-        ${(STAFF_ACTIONS[o.stage] ?? []).map(([a, t, st]) => `<button class="btn ${st}" data-act="${a}">${t}</button>`).join("")}
-        <button class="btn" data-act="notes">Guardar notas</button>
-      </div><div class="order-msg"></div></li>`;
+      <div class="order-actions">${actions(o)}<button class="btn" data-act="notes">Guardar notas</button></div><div class="order-msg"></div></li>`;
   };
-  const list = (xs, empty) => xs.length ? `<ul class="admin-list">${xs.map(card).join("")}</ul>` : `<p class="muted small">${empty}</p>`;
-
+  const chips = [chip("abiertas", "Abiertas", orders.filter((o) => OPEN_ORDER.has(o.status)).length),
+    ...ORDER_FLOW.filter((s) => count(s)).map((s) => chip(s, STAFF_STATUS[s][0], count(s))), chip("todas", "Todas", orders.length)].join("");
   body.innerHTML = `
-    <section class="panel col"><h2>Nueva orden protegida</h2>
-      <p class="small muted" style="margin:0">Cuando un comprador te escribe para comprar protegido, búscale el anuncio y crea la orden. El comprador paga el precio de la carta; al vendedor le descontamos ${feePct()} + ITBMS al pagarle.</p>
+    ${filter === "en_disputa" ? "" : `<section class="panel col"><h2>Nueva orden (concierge)</h2>
+      <p class="small muted" style="margin:0">Cuando un comprador escribe por WhatsApp y el vendedor confirma que tiene la carta, búscale el anuncio y crea la orden: queda esperando el pago. El monto lo calcula la base (precio u oferta aceptada + envío).</p>
       <div class="row-input"><input class="input" id="noSearch" placeholder="Busca el anuncio (título, jugador, set…)"><button class="btn" id="noFind" style="border-radius:12px">Buscar</button></div>
-      <div id="noResults"></div>
-    </section>
-    <h2 class="display admin-h">Pagar hoy (${payNow.length})</h2>
-    <p class="small muted" style="margin:0">El comprador confirmó o pasaron los 3 días sin reclamo. Envíale al vendedor el monto por Yappy y marca “Ya le pagué”.</p>
-    ${list(payNow, "Nada por pagar.")}
-    ${claims.length ? `<h2 class="display admin-h">Reclamos (${claims.length})</h2>${list(claims, "")}` : ""}
-    <h2 class="display admin-h">En curso (${open.length})</h2>
-    ${list(open, "No hay órdenes en curso.")}
-    <details class="admin-closed"><summary>Cerradas (${closed.length})</summary>${list(closed, "Ninguna todavía.")}</details>`;
+      <div id="noResults"></div></section>
+    <div class="order-actions" style="margin:16px 0 0">${chips}</div>`}
+    <ul class="admin-list" style="margin-top:12px">${shown.map(card).join("") || `<p class="muted small">No hay órdenes aquí.</p>`}</ul>`;
 
-  // claim photos (private bucket: short-lived links for staff)
+  // dispute photos (private bucket: short-lived links for staff)
   body.querySelectorAll(".claim-photos").forEach(async (el) => {
     const paths = JSON.parse(el.dataset.photos || "[]");
     if (!paths.length) { el.innerHTML = `<span class="xs muted">Sin fotos.</span>`; return; }
     const { data } = await sb.storage.from("claim-photos").createSignedUrls(paths, 3600);
-    el.innerHTML = (data ?? []).filter((x) => x.signedUrl).map((x) => `<a href="${esc(x.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(x.signedUrl)}" alt="Foto del reclamo"></a>`).join("");
+    el.innerHTML = (data ?? []).filter((x) => x.signedUrl).map((x) => `<a href="${esc(x.signedUrl)}" target="_blank" rel="noopener"><img src="${esc(x.signedUrl)}" alt="Foto de la disputa"></a>`).join("");
   });
+  // details on demand
+  body.querySelectorAll("details.order-detail").forEach((det) => det.addEventListener("toggle", async () => {
+    if (!det.open || det.dataset.loaded) return;
+    det.dataset.loaded = "1";
+    const id = det.closest("li").dataset.id, out = det.querySelector(".od-body");
+    const { data: d, error: e } = await sb.rpc("staff_order_detail", { p_order: id });
+    if (e) return adminFail(e, out, "No se pudo cargar el detalle.");
+    const urls = d.photos.length ? (await sb.storage.from("order-photos").createSignedUrls(d.photos.map((p) => p.path), 3600)).data ?? [] : [];
+    out.innerHTML = `<p style="margin:8px 0 4px"><b>Historial</b></p><ol style="margin:0;padding-left:18px">${d.history.map((h) => `<li>${fmtDate(h.created_at)} · ${esc(STAFF_STATUS[h.to_status]?.[0] ?? h.to_status)} · ${esc(h.actor_kind)}${h.reason ? ` · ${esc(h.reason)}` : ""}</li>`).join("")}</ol>
+      ${d.photos.length ? `<p style="margin:8px 0 4px"><b>Fotos</b></p><div class="claim-photos">${d.photos.map((p, i) => urls[i]?.signedUrl ? `<a href="${esc(urls[i].signedUrl)}" target="_blank" rel="noopener" title="${esc(p.stage)} · ${esc(p.side)}"><img src="${esc(urls[i].signedUrl)}" alt="${esc(p.stage)} ${esc(p.side)}"></a>` : "").join("")}</div>` : ""}
+      ${d.attempts.length ? `<p style="margin:8px 0 4px"><b>Intentos de pago</b></p><ul style="margin:0;padding-left:18px">${d.attempts.map((a) => `<li>${esc(a.id)} · ${esc(a.purpose)} · ${formatUsd(a.amount_cents)} · ${esc(a.status)}${a.confirmation ? ` · ${esc(a.confirmation)}` : ""}</li>`).join("")}</ul>` : ""}
+      ${d.notifications.length ? `<p style="margin:8px 0 4px"><b>Avisos del proveedor (IPN)</b></p><ul style="margin:0;padding-left:18px">${d.notifications.map((n) => `<li>${fmtDate(n.received_at)} · ${esc(n.attempt_id)} ${esc(n.status ?? "")} · ${n.valid ? "firma válida" : "<b>firma inválida</b>"} · ${esc(n.result ?? "")}</li>`).join("")}</ul>` : ""}
+      ${d.ledger.length ? `<p style="margin:8px 0 4px"><b>Libro contable</b> (débito +, crédito −)</p><ul style="margin:0;padding-left:18px">${d.ledger.map((x) => `<li>${esc(x.account)} · ${esc(x.kind)} · ${formatUsd(x.amount_cents)}${x.memo ? ` · ${esc(x.memo)}` : ""}</li>`).join("")}</ul>` : ""}
+      ${d.refunds.length ? `<p style="margin:8px 0 4px"><b>Reembolsos</b></p><ul style="margin:0;padding-left:18px">${d.refunds.map((r) => `<li>${formatUsd(r.amount_cents)} · ${esc(r.reason)} · ${esc(r.status)}${r.paid_ref ? ` · ${esc(r.paid_ref)}` : ""}</li>`).join("")}</ul>` : ""}
+      ${d.incidents.length ? `<p style="margin:8px 0 4px"><b>Incidentes</b></p><ul style="margin:0;padding-left:18px">${d.incidents.map((x) => `<li>${esc(x.kind)} · responsable: ${esc(x.responsible)} · cubierto ${formatUsd(x.covered_cents)} · ${esc(x.description)}</li>`).join("")}</ul>` : ""}`;
+  }));
 
-  // new order
+  // new concierge order
   const find = async () => {
     const q = $("#noSearch").value.trim(), out = $("#noResults");
     if (q.length < 2) { out.innerHTML = `<p class="xs muted">Escribe al menos 2 letras.</p>`; return; }
     out.innerHTML = `<p class="xs muted"><span class="spinner"></span> Buscando…</p>`;
     let query = sb.from("listings").select("id, title, price_cents, seller_id, status").eq("status", "active").limit(8);
     for (const t of searchTokens(q)) query = query.or(searchFilter(t, ["title", "subject", "set_name"]));
-    const { data, error } = await query;
-    if (error) return adminFail(error, out, "No se pudo buscar.");
+    const { data, error: e } = await query;
+    if (e) return adminFail(e, out, "No se pudo buscar.");
     if (!data.length) { out.innerHTML = `<p class="xs muted">No hay anuncios activos con ese texto.</p>`; return; }
     const sellersFound = await profilesById(data.map((l) => l.seller_id));
     out.innerHTML = `<ul class="admin-list">${data.map((l) => {
       const q2 = quoteProtected(l.price_cents);
       return `<li class="panel" data-lid="${l.id}"><div class="phead"><span style="font-weight:600">${esc(l.title)}</span><span class="small muted">${esc(sellersFound.get(l.seller_id)?.display_name ?? "")}</span></div>
-        <p class="small" style="margin:6px 0">El comprador paga <b>${formatUsd(q2.buyerTotalCents)}</b> · al vendedor le pagamos <b>${formatUsd(q2.sellerPayoutCents)}</b> (carta ${formatUsd(q2.priceCents)} − comisión ${formatUsd(q2.sellerFeeCents)} − ITBMS ${formatUsd(q2.sellerItbmsCents)})</p>
+        <p class="small" style="margin:6px 0">Carta ${formatUsd(q2.priceCents)} + envío · al vendedor ${formatUsd(q2.sellerPayoutCents)} (comisión ${formatUsd(q2.sellerFeeCents)} + ITBMS ${formatUsd(q2.sellerItbmsCents)}). El total exacto lo calcula la base.</p>
         <div class="row-input"><input class="input no-buyer" maxlength="120" placeholder="Comprador: nombre y WhatsApp"></div>
         <div class="row-input" style="margin-top:8px"><input class="input no-code" maxlength="8" placeholder="Código Holo del comprador (opcional)" autocapitalize="characters"><button class="btn primary no-create" style="border-radius:12px">Crear orden</button></div><div class="no-msg"></div></li>`;
     }).join("")}</ul>`;
-    out.querySelectorAll("[data-lid]").forEach((li) => li.querySelector(".no-create").addEventListener("click", async (e) => {
-      const l = data.find((x) => x.id === li.dataset.lid), msg = li.querySelector(".no-msg");
-      e.target.disabled = true;
-      // The buyer's code (in their message and in Mi cuenta) links the order to their account, so they
-      // can review the seller afterwards, and applies the price of an offer the seller accepted.
+    out.querySelectorAll("[data-lid]").forEach((li) => li.querySelector(".no-create").addEventListener("click", async (ev) => {
+      const msg = li.querySelector(".no-msg");
+      ev.target.disabled = true;
+      // The buyer's code links the order to their account (reviews, accepted offer price).
       const code = li.querySelector(".no-code").value.trim().toLowerCase();
-      let buyerId = null, price = l.price_cents;
+      let buyerId = null;
       if (code) {
         const buyer = /^[0-9a-f]{8}$/.test(code) ? await findByCode(code) : null;
-        if (!buyer) { e.target.disabled = false; msg.innerHTML = `<p class="notice bad" style="margin:0">No encontramos ese código. Está en el mensaje del comprador y en su Mi cuenta.</p>`; return; }
+        if (!buyer) { ev.target.disabled = false; msg.innerHTML = `<p class="notice bad" style="margin:0">No encontramos ese código. Está en el mensaje del comprador y en su Mi cuenta.</p>`; return; }
         buyerId = buyer.id;
-        const { data: off } = await sb.from("offers").select("amount_cents").eq("listing_id", l.id).eq("buyer_id", buyerId).eq("status", "accepted").order("updated_at", { ascending: false }).limit(1);
-        if (off?.[0]) price = off[0].amount_cents;
       }
-      const q2 = quoteProtected(price);
-      const row = {
-        listing_id: l.id, seller_id: l.seller_id, buyer_id: buyerId, buyer_contact: li.querySelector(".no-buyer").value.trim() || null,
-        price_cents: q2.priceCents, fee_cents: q2.feeCents, itbms_cents: q2.itbmsCents, status: "awaiting_payment",
-        seller_fee_cents: q2.sellerFeeCents, seller_itbms_cents: q2.sellerItbmsCents,
-      };
-      let { error } = await sb.from("protected_orders").insert(row);
-      // Before migration 0016 the seller commission columns don't exist yet.
-      if (error && (error.code === "PGRST204" || error.code === "42703")) {
-        delete row.seller_fee_cents; delete row.seller_itbms_cents;
-        ({ error } = await sb.from("protected_orders").insert(row));
-      }
-      if (error) { e.target.disabled = false; return adminFail(error, msg, "No se pudo crear la orden."); }
-      await sb.from("listings").update({ protected_eligible: true }).eq("id", l.id);
-      if (price !== l.price_cents) toast(`Orden creada con la oferta aceptada: ${formatUsd(price)}.`);
+      const { data: o, error: e2 } = await sb.rpc("staff_create_order", { p_listing: li.dataset.lid, p_buyer: buyerId, p_contact: li.querySelector(".no-buyer").value.trim() || null, p_pickup: false });
+      if (e2) { ev.target.disabled = false; return adminFail(e2, msg, /contact required/.test(e2.message ?? "") ? "Pon el código o el contacto del comprador." : "No se pudo crear la orden."); }
+      toast(`Orden creada: el comprador paga ${formatUsd(orderAmounts(o).buyer)}.`);
       route();
     }));
   };
-  $("#noFind").addEventListener("click", find);
-  $("#noSearch").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); find(); } });
+  $("#noFind")?.addEventListener("click", find);
+  $("#noSearch")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); find(); } });
 
   // order actions
-  const ASK = {
-    mark_paid: ["Referencia del pago (Yappy o transferencia):", "payment_ref"],
-    release: ["Referencia del Yappy que le enviaste al vendedor:", "payout_ref"],
-    refund: ["Referencia del reembolso (opcional):", null],
-    reject_claim: ["¿Por qué se rechaza el reclamo? (queda en las notas)", null],
-  };
-  const CONFIRM = {
-    cancel: "¿Cancelar esta orden? No hubo pago.",
-    refund: "¿Marcar como reembolsada? Confirma que ya le devolviste el dinero al comprador. La carta vuelve a estar a la venta.",
-    buyer_confirmed: "¿El comprador te confirmó que recibió la carta bien? Queda lista para pagarle al vendedor.",
-    mark_delivered: "¿El comprador ya tiene la carta? Empiezan sus 3 días para reclamar.",
-  };
   body.querySelectorAll("li.order").forEach((li) => {
     const o = orders.find((x) => x.id === li.dataset.id), msg = li.querySelector(".order-msg");
-    li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
-      const act = b.dataset.act;
-      if (act === "notes") {
-        const { error } = await sb.from("protected_orders").update({ notes: li.querySelector(".order-notes").value.trim() || null }).eq("id", o.id);
-        return error ? adminFail(error, msg) : (msg.innerHTML = `<p class="notice good" style="margin:0">Notas guardadas.</p>`);
-      }
-      let ref = null;
-      if (ASK[act]) {
-        const [q, field] = ASK[act];
-        ref = prompt(act === "release" ? `Pagar ${formatUsd(orderAmounts(o).payout)} a ${o.seller_name ?? "el vendedor"}${o.payout_phone ? ` (Yappy ${o.payout_phone})` : ""}.\n${q}` : q, (field && o[field]) || "");
-        if (ref === null) return;
-      }
-      if (CONFIRM[act] && !confirm(CONFIRM[act])) return;
+    const rpc = async (fn, args) => {
       li.querySelectorAll("button").forEach((x) => (x.disabled = true));
-      const { error } = await sb.rpc("staff_order_action", { p_order: o.id, p_action: act, p_ref: ref?.trim() || null });
-      if (error) {
-        li.querySelectorAll("button").forEach((x) => (x.disabled = false));
-        return adminFail(error, msg, /not allowed/.test(error.message ?? "") ? "La orden cambió de estado. Recarga el panel." : "No se pudo guardar. Intenta de nuevo.");
+      const { data, error: e } = await sb.rpc(fn, args);
+      li.querySelectorAll("button").forEach((x) => (x.disabled = false));
+      if (e) {
+        const m = e.message ?? "";
+        adminFail(e, msg, /front and back/.test(m) ? "Faltan las fotos de frente y reverso." : /photo required/.test(m) ? "Falta la foto de la entrega."
+          : /retry not paid/.test(m) ? "El comprador no ha pagado el segundo intento." : /cap/.test(m) ? "El monto supera el máximo cubierto por envío."
+          : /locked/.test(m) ? "El código está bloqueado por intentos fallidos." : /transition|not allowed|not in|not out|not ready|not open/.test(m) ? "La orden cambió de estado. Recarga el panel."
+          : "No se pudo guardar. Intenta de nuevo.");
+        return null;
       }
-      route();
+      return data ?? true;
+    };
+    li.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
+      const a = b.dataset.act;
+      if (a === "notes") {
+        const { error: e } = await sb.from("protected_orders").update({ notes: li.querySelector(".order-notes").value.trim() || null }).eq("id", o.id);
+        return e ? adminFail(e, msg) : (msg.innerHTML = `<p class="notice good" style="margin:0">Notas guardadas.</p>`);
+      }
+      if (a === "pickup") {
+        const f = li.querySelector(".ph-frente").files[0], r = li.querySelector(".ph-reverso").files[0];
+        if (!f || !r) return adminFail(null, msg, "Sube la foto de frente y la de reverso.");
+        try { await uploadOrderPhoto(o.id, f, "recogida", "frente"); await uploadOrderPhoto(o.id, r, "recogida", "reverso"); } catch (e) { return adminFail(e, msg, "No se pudieron subir las fotos."); }
+        if (await rpc("staff_pickup", { p_order: o.id, p_note: null })) route();
+        return;
+      }
+      if (a === "deliver" || a === "handover") {
+        const code = li.querySelector(".code-in").value.trim();
+        if (!/^\d{4}$/.test(code)) return adminFail(null, msg, "Escribe el código de 4 dígitos del comprador.");
+        if (a === "deliver") {
+          const f = li.querySelector(".ph-entrega").files[0];
+          if (f) { try { await uploadOrderPhoto(o.id, f, "entrega", "otra"); } catch (e) { return adminFail(e, msg, "No se pudo subir la foto."); } }
+        }
+        const r = await rpc("deliver_with_code", { p_order: o.id, p_code: code });
+        if (r?.ok) route(); else if (r) adminFail(null, msg, `Código incorrecto (${r.failures} de ${r.max}).`);
+        return;
+      }
+      if (a === "incident") {
+        const kind = prompt("Tipo de incidente: perdida, dano, accidente o robo", "perdida");
+        if (!kind) return;
+        const resp = prompt("Responsable: holo, mensajero, vendedor, comprador o tercero", "holo");
+        if (!resp) return;
+        const desc = prompt("¿Qué pasó?");
+        if (!desc) return;
+        const cov = resp === "holo" ? prompt("Monto cubierto al vendedor en dólares (vacío = lo que iba a recibir, con el tope por envío)", "") : "";
+        if (cov === null) return;
+        if (resp === "holo" && !confirm("Si la carta estaba en custodia de Holo, se reembolsa todo al comprador y se le paga al vendedor desde el fondo de reserva. ¿Seguir?")) return;
+        if (await rpc("staff_report_incident", { p_order: o.id, p_kind: kind.trim(), p_responsible: resp.trim(), p_description: desc.trim(), p_covered_cents: cov ? toCents(Number(cov)) : null })) route();
+        return;
+      }
+      if (a.startsWith("resolve_")) {
+        const outcome = { resolve_seller: "vendedor", resolve_partial: "comprador_parcial", resolve_total: "comprador_total" }[a];
+        let refund = null;
+        if (outcome === "comprador_parcial") {
+          const v = prompt(`¿Cuánto se le devuelve al comprador? (dólares, menos de ${formatUsd(o.price_cents)})`);
+          if (!v) return;
+          refund = toCents(Number(v));
+        }
+        const note = prompt("Nota de la resolución (queda en el historial):", "") ?? "";
+        if (!confirm({ vendedor: "¿Resolver a favor del vendedor? La venta se completa y pasa a su saldo.", comprador_total: `¿Reembolsar todo (${formatUsd(o.buyer_total_cents)}) al comprador?`, comprador_parcial: `¿Reembolsar ${formatUsd(refund)} al comprador y completar la venta por el resto?` }[outcome])) return;
+        if (await rpc("staff_resolve_dispute", { p_order: o.id, p_outcome: outcome, p_refund_cents: refund, p_note: note.trim() || null })) route();
+        return;
+      }
+      const ASK = { mark_paid: "Referencia del pago (Yappy o transferencia):", delivery_failed: "¿Qué pasó? (queda en el historial)", return_to_seller: "Nota (opcional):", cancel: "Motivo de la cancelación:" };
+      let ref = null;
+      if (ASK[a]) { ref = prompt(ASK[a], ""); if (ref === null) return; }
+      if (a === "return_to_seller" && !confirm(`¿Devolver la carta al vendedor? Se le reembolsan ${formatUsd(o.buyer_total_cents - o.shipping_cents)} al comprador (sin el envío) y la carta vuelve a estar a la venta.`)) return;
+      if (await rpc("staff_order_action", { p_order: o.id, p_action: a, p_ref: ref?.trim() || null })) route();
     }));
   });
+}
+
+// ------------------------------------------------------------- refunds and payouts (manual for now)
+async function adminMoney(body) {
+  const [ref, pend, paid] = await Promise.all([
+    sb.rpc("staff_refunds", { p_status: "pendiente" }), sb.rpc("staff_payouts", { p_status: "pendiente" }), sb.rpc("staff_payouts", { p_status: "pagado" }),
+  ]);
+  if (ref.error) { if (orderMigrationMissing(ref.error, body)) return; throw ref.error; }
+  const refunds = ref.data ?? [], payouts = pend.data ?? [], done = (paid.data ?? []).slice(-20).reverse();
+  body.innerHTML = `
+    <h2 class="display admin-h">Reembolsos por pagar (${refunds.length})</h2>
+    <p class="small muted" style="margin:0">Devuélvele el monto al comprador por Yappy y marca “Ya lo pagué” con la referencia.</p>
+    ${refunds.length ? `<ul class="admin-list">${refunds.map((r) => `<li class="panel" data-ref="${r.id}"><div class="phead"><span style="font-weight:600">${esc(r.title ?? "Orden")} <span class="xs muted">· orden ${esc(r.order_id.slice(0, 8))}</span></span><b>${formatUsd(r.amount_cents)}</b></div>
+      <p class="small" style="margin:6px 0">${esc(r.recipient_name ?? "Comprador")}${r.recipient_contact ? ` · ${esc(r.recipient_contact)}` : ""} · ${esc(r.reason)} · ${fmtDate(r.created_at)}</p>
+      <div class="order-actions"><button class="btn primary" data-pay-refund>Ya lo pagué</button></div><div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">Nada por reembolsar.</p>`}
+    <h2 class="display admin-h">Liquidación semanal (${payouts.length})</h2>
+    <p class="small muted" style="margin:0">Se prepara sola cada lunes con el saldo de cada vendedor (solo órdenes completadas, menos penalizaciones). Envía el monto por Yappy y marca “Pagado” con la referencia.</p>
+    <div class="order-actions"><button class="btn" id="prepPayouts">Preparar ahora</button><button class="btn" id="csvPayouts"${payouts.length ? "" : " disabled"}>Descargar CSV</button></div>
+    ${payouts.length ? `<ul class="admin-list">${payouts.map((p) => `<li class="panel" data-payout="${p.id}"><div class="phead"><span style="font-weight:600">${esc(p.seller_name)}${p.is_shop ? " · tienda" : ""}</span><b>${formatUsd(p.amount_cents)}</b></div>
+      <p class="small" style="margin:6px 0">${p.yappy_phone ? `Yappy ${esc(p.yappy_phone)} · ${esc(p.holder_name ?? "")}` : `<span style="color:var(--down)">No ha puesto su Yappy en Mi cuenta</span>`} · semana del ${esc(p.week_of)}</p>
+      <div class="order-actions"><button class="btn primary" data-pay-payout>Pagado</button><button class="btn danger" data-void-payout>Anular</button></div><div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">No hay liquidaciones pendientes.</p>`}
+    ${done.length ? `<details class="admin-closed"><summary>Últimas pagadas (${done.length})</summary><ul class="admin-list">${done.map((p) => `<li class="panel"><div class="phead"><span>${esc(p.seller_name)}</span><span>${formatUsd(p.amount_cents)}</span></div><p class="xs muted" style="margin:4px 0 0">${fmtDate(p.paid_at)} · ${esc(p.paid_ref ?? "")}</p></li>`).join("")}</ul></details>` : ""}`;
+  const run = async (el, fn, args, ok) => {
+    const msg = el.querySelector(".order-msg") ?? body;
+    el.querySelectorAll("button").forEach((x) => (x.disabled = true));
+    const { data, error } = await sb.rpc(fn, args);
+    el.querySelectorAll("button").forEach((x) => (x.disabled = false));
+    if (error) return adminFail(error, msg, /balance changed/.test(error.message ?? "") ? "El saldo cambió: anúlala y prepara de nuevo." : "No se pudo guardar. Intenta de nuevo.");
+    if (ok) toast(typeof ok === "function" ? ok(data) : ok);
+    route();
+  };
+  body.querySelectorAll("[data-pay-refund]").forEach((b) => b.addEventListener("click", () => {
+    const li = b.closest("li"), r = prompt("Referencia del Yappy con el que devolviste el dinero:");
+    if (r && r.trim().length >= 3) run(li, "staff_mark_refund_paid", { p_refund: li.dataset.ref, p_ref: r.trim() }, "Reembolso marcado como pagado.");
+  }));
+  body.querySelectorAll("[data-pay-payout]").forEach((b) => b.addEventListener("click", () => {
+    const li = b.closest("li"), r = prompt("Referencia del Yappy que le enviaste al vendedor:");
+    if (r && r.trim().length >= 3) run(li, "staff_mark_payout_paid", { p_payout: li.dataset.payout, p_ref: r.trim() }, "Liquidación pagada.");
+  }));
+  body.querySelectorAll("[data-void-payout]").forEach((b) => b.addEventListener("click", () => {
+    const li = b.closest("li");
+    if (confirm("¿Anular esta liquidación? El saldo queda para la próxima.")) run(li, "staff_void_payout", { p_payout: li.dataset.payout }, "Anulada.");
+  }));
+  $("#prepPayouts").addEventListener("click", (e) => run(e.target.parentElement, "prepare_weekly_payouts", {}, (n) => `${n} liquidaciones nuevas.`));
+  $("#csvPayouts").addEventListener("click", async () => {
+    const { data, error } = await sb.rpc("staff_payouts_csv");
+    if (error) return adminFail(error, body, "No se pudo generar el CSV.");
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob(["﻿" + data], { type: "text/csv;charset=utf-8" })), download: `liquidacion-${new Date().toISOString().slice(0, 10)}.csv` });
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+}
+
+// ------------------------------------------------------------- reconciliation and alerts
+async function adminRecon(body) {
+  const [rec, al] = await Promise.all([sb.rpc("staff_reconciliation", { p_days: 30 }), sb.rpc("staff_alerts")]);
+  if (rec.error) { if (orderMigrationMissing(rec.error, body)) return; throw rec.error; }
+  const rows = rec.data ?? [], alerts = al.data ?? [];
+  const ALERT = { atascada: "Orden atascada", repetida: "Mismo comprador y vendedor", codigo_bloqueado: "Código de entrega bloqueado" };
+  body.innerHTML = `
+    <h2 class="display admin-h">Alertas (${alerts.length})</h2>
+    ${alerts.length ? `<ul class="admin-list">${alerts.map((a) => `<li class="panel"><div class="phead"><span class="b warn">${esc(ALERT[a.kind] ?? a.kind)}</span><span class="xs muted">${fmtDate(a.since)}</span></div><p class="small" style="margin:6px 0 0">${esc(a.detail)}</p></li>`).join("")}</ul>` : `<p class="muted small">Sin alertas.</p>`}
+    <div class="order-actions"><button class="btn" id="runDeadlines">Correr los plazos ahora</button><span class="xs muted">Corre solo cada 5 minutos (pg_cron).</span></div>
+    <h2 class="display admin-h">Conciliación (últimos 30 días)</h2>
+    <p class="small muted" style="margin:0">Movimientos de la cuenta de ${esc(CONFIG.APP_NAME)} por día (hora de Panamá), para comparar con el estado de cuenta del banco.</p>
+    ${rows.length ? `<div style="overflow-x:auto"><table class="recon"><thead><tr><th>Día</th><th>Pagos</th><th>Cobrado</th><th>Reembolsos</th><th>Liquidaciones</th><th>Neto</th></tr></thead><tbody>
+      ${rows.map((r) => `<tr><td>${esc(r.day)}</td><td>${r.payments}</td><td>${formatUsd(Number(r.charged_cents))}</td><td>${formatUsd(Number(r.refunds_paid_cents))}</td><td>${formatUsd(Number(r.payouts_paid_cents))}</td><td>${formatUsd(Number(r.net_cents))}</td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="muted small">Sin movimientos.</p>`}`;
+  $("#runDeadlines").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    const { data, error } = await sb.rpc("run_order_deadlines");
+    e.target.disabled = false;
+    if (error) return adminFail(error, body, "No se pudo correr.");
+    toast(`Listo: ${data.seller_confirm_expired} sin confirmar, ${data.payment_expired} sin pagar, ${data.delivery_expired} sin entregar, ${data.review_completed} completadas, ${data.reminders} recordatorios.`);
+    route();
+  });
+}
+
+// ------------------------------------------------------------- settings (holo_settings)
+async function adminSettings(body) {
+  const { data, error } = await sb.from("holo_settings").select("key, value, description, updated_at").order("key");
+  if (error) { if (orderMigrationMissing(error, body)) return; throw error; }
+  body.innerHTML = `<p class="small muted">Valores que usa la base para montos, plazos y penalizaciones. Montos en centavos, porcentajes en puntos básicos (500 = 5%). Aplican a las órdenes nuevas.</p>
+    <ul class="admin-list">${data.map((s) => `<li class="panel" data-key="${esc(s.key)}"><div class="phead"><span style="font-weight:600">${esc(s.description)}</span><span class="xs muted">${esc(s.key)}</span></div>
+      <div class="row-input"><input class="input st-val" type="number" min="0" step="1" value="${Number(s.value)}"><button class="btn" style="border-radius:12px" data-save>Guardar</button></div><div class="order-msg"></div></li>`).join("")}</ul>`;
+  body.querySelectorAll("[data-save]").forEach((b) => b.addEventListener("click", async () => {
+    const li = b.closest("li"), v = Number(li.querySelector(".st-val").value), msg = li.querySelector(".order-msg");
+    if (!Number.isInteger(v) || v < 0) return adminFail(null, msg, "Tiene que ser un número entero, 0 o más.");
+    const { error: e } = await sb.rpc("staff_set_setting", { p_key: li.dataset.key, p_value: v });
+    if (e) return adminFail(e, msg, /bps/.test(e.message ?? "") ? "Un porcentaje no puede pasar de 10000 (100%)." : "No se pudo guardar.");
+    msg.innerHTML = `<p class="notice good" style="margin:0">Guardado.</p>`;
+  }));
 }
 
 // ------------------------------------------------------------- listings
@@ -6159,7 +6451,7 @@ async function adminPlans(body, q) {
 // ------------------------------------------------------------- summary
 async function adminSummary(body) {
   const [{ data: orders, error }, { count: activeCount }, { count: shopCount }, { count: pendingShops }, { count: openReports }] = await Promise.all([
-    sb.from("protected_orders").select("status, price_cents, fee_cents, created_at"),
+    sb.from("protected_orders").select("status, price_cents, fee_cents, seller_fee_cents, created_at"),
     sb.from("listings").select("id", { count: "exact", head: true }).eq("status", "active"),
     sb.from("public_profiles").select("id", { count: "exact", head: true }).eq("is_shop", true).eq("verified", true),
     sb.from("shop_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
@@ -6167,7 +6459,7 @@ async function adminSummary(body) {
   ]);
   if (error) throw error;
   const paid = orders.filter((o) => PAID_STATES.includes(o.status));
-  const released = orders.filter((o) => o.status === "released");
+  const released = orders.filter((o) => o.status === "completada");
   const sum = (arr, k) => arr.reduce((a, o) => a + o[k], 0);
   const pct = Math.min(100, Math.round((paid.length / GOAL_ORDERS) * 100));
   const first = orders.length ? orders.map((o) => o.created_at).sort()[0] : null;
@@ -6179,13 +6471,13 @@ async function adminSummary(body) {
       <p class="small" style="margin:0"><b>${paid.length} de ${GOAL_ORDERS}</b>${first ? ` · día ${days} desde la primera orden${days > 28 ? " (ya pasaron las 4 semanas)" : ""}` : " · aún no hay órdenes"}</p></section>
     <div class="stats">
       ${stat(paid.length, "órdenes pagadas")}
-      ${stat(formatUsd(sum(released, "fee_cents")), "comisiones cobradas (liberadas)")}
+      ${stat(formatUsd(sum(released, "fee_cents") + sum(released, "seller_fee_cents")), "comisiones cobradas (completadas)")}
       ${stat(formatUsd(sum(paid, "price_cents")), "valor de cartas protegidas (GMV)")}
-      ${stat(orders.filter((o) => o.status === "awaiting_payment").length, "esperando pago")}
+      ${stat(orders.filter((o) => o.status === "pendiente_pago").length, "esperando pago")}
       ${stat(activeCount ?? 0, "anuncios activos")}
       ${stat(shopCount ?? 0, "tiendas verificadas")}
       ${stat(pendingShops ?? 0, "solicitudes de tienda")}
-      ${stat(orders.filter((o) => ["refunded", "cancelled"].includes(o.status)).length, "reembolsadas o canceladas")}
+      ${stat(orders.filter((o) => ["reembolsada", "cancelada", "fallida"].includes(o.status)).length, "reembolsadas, canceladas o fallidas")}
       ${stat(openReports ?? 0, "reportes por revisar")}
     </div>`;
 }
@@ -6194,7 +6486,7 @@ async function adminSummary(body) {
 // Draft written for Panamá (Ley 81 de 2019 y D.E. 285 de 2021 sobre datos personales; Ley 45 de 2007
 // de protección al consumidor; Ley 51 de 2008 de comercio electrónico). Must be reviewed by a
 // Panamanian lawyer and CONFIG.LEGAL completed before opening to the public.
-const TERMS_VERSION = "2026-10-01";
+const TERMS_VERSION = "2026-10-15";
 function legalVal(k) {
   const v = CONFIG.LEGAL?.[k];
   return v ? esc(v) : `<mark class="todo">[por completar]</mark>`;
@@ -6220,12 +6512,12 @@ function viewTerms(app) {
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
     ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>El producto sellado (cajas de sobres, Elite Trainer Box, sobres, latas y similares) tiene que estar sellado de fábrica. Está prohibido vender producto abierto, resellado o con sobres cambiados, pesados o seleccionados; si el comprador lo reclama dentro del plazo, aplica el reembolso de Compra Protegida.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Cuando vendes una carta, ${esc(CONFIG.APP_NAME)} se queda con una comisión de ${feePct()} del precio de venta, más ${FEES.itbmsBps / 100}% de ITBMS sobre esa comisión, que se descuenta de lo que te pagamos.</li><li>Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
-    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta. El comprador no paga comisión.</li><li>Guardamos el dinero. El vendedor entrega o envía la carta directamente al comprador. Si el vendedor es una tienda verificada que ofrece retiro en tienda, el comprador puede elegir retirarla en el local mostrando el código de su compra; conviene revisarla ahí mismo.</li><li>Cuando el comprador tiene la carta, el vendedor la marca como entregada en ${esc(CONFIG.APP_NAME)}. Desde ese momento, el comprador tiene 3 días para reclamar desde Mi cuenta (“Tengo un problema”) si la carta no llegó, no es original o no coincide con el anuncio (fotos, condición y graduación).</li><li>Le pagamos al vendedor el precio de la carta menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) por Yappy, al número que registra en Mi cuenta, cuando el comprador confirma que la recibió bien (“Ya recibí mi carta”) o cuando terminan los 3 días sin reclamo. Después de eso, la compra ya no se puede reclamar.</li></ol><p>Si el comprador paga en línea y no completa el pago en el tiempo indicado, la carta vuelve a estar disponible. Marcar una carta como entregada sin haberla entregado es una falta grave: suspendemos la cuenta del vendedor y devolvemos el dinero al comprador.</p><p><b>Preventas y varias unidades:</b> solo las tiendas verificadas pueden publicar producto sellado en preventa o con varias unidades. En una preventa el comprador paga al reservar y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que la tienda entrega; si no entrega dentro de los 15 días siguientes a la fecha de salida anunciada, devolvemos todo lo pagado.</p><p><b>Reembolso:</b> si la carta no llega, no es original o no coincide con el anuncio, y el comprador reclama dentro del plazo, devolvemos todo lo pagado; el comprador devuelve la carta al vendedor. Para reclamar, el comprador debe subir en su reclamo fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardar la carta como llegó mientras revisamos. Si la venta no se concreta por causa del vendedor, también devolvemos todo.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa, el vendedor no paga comisión y al comprador le devolvemos todo lo pagado.</p>`],
+    ["Compra Protegida", `<p>Todas las compras de cartas que se encuentran en ${esc(CONFIG.APP_NAME)} se pagan con Compra Protegida. Así funciona:</p><ol><li>El comprador pide la carta. El vendedor tiene 2 horas para confirmar que aún la tiene; si no confirma, la compra se cancela sin cobro.</li><li>Cuando el vendedor confirma, el comprador paga a ${esc(CONFIG.APP_NAME)} el precio de la carta más el envío, en el tiempo que indica la página. El comprador no paga comisión. Si no completa el pago a tiempo, la compra se cierra y la carta vuelve a estar disponible.</li><li>${esc(CONFIG.APP_NAME)} guarda el dinero y el anuncio se marca como vendido. El vendedor tiene 48 horas para entregarnos la carta o tenerla lista para que la recojamos. Al recogerla le tomamos fotos de frente y reverso. Si el vendedor es una tienda verificada que ofrece retiro en tienda, el comprador puede elegir retirarla en el local, sin costo de envío.</li><li>Le llevamos la carta al comprador. La entrega se confirma cuando el comprador le da al mensajero (o a la tienda) su código de entrega de 4 dígitos, que solo ve el comprador en Mi cuenta. Si el comprador no está, puede pagar un segundo intento; si ese también falla, devolvemos la carta al vendedor y le reembolsamos al comprador todo menos el envío.</li><li>Desde la entrega, el comprador tiene 48 horas para reportar un problema desde Mi cuenta (“Tengo un problema”), con fotos, si la carta no es original o no coincide con el anuncio (fotos, condición y graduación). Si no reporta nada, o confirma que está bien, la venta se completa.</li><li>El dinero de las ventas completadas pasa al saldo del vendedor: el precio menos la comisión de ${esc(CONFIG.APP_NAME)} (${fee}) y las penalizaciones que tenga. Pagamos los saldos una vez por semana por Yappy, al número que el vendedor registra en Mi cuenta.</li></ol><p><b>Si el vendedor no entrega:</b> si no entrega la carta en 48 horas, devolvemos todo lo pagado al comprador, incluido el envío. El vendedor recibe una advertencia y sus anuncios se pausan unos días; si se repite, suspendemos su cuenta por un tiempo y, a la tercera vez, la cerramos. Las tiendas verificadas además pagan una penalización que se descuenta de su saldo.</p><p><b>Vendedores nuevos:</b> mientras no completen sus primeras ventas, los vendedores que no son tiendas verificadas tienen un precio máximo por anuncio.</p><p><b>Preventas y varias unidades:</b> solo las tiendas verificadas pueden publicar producto sellado en preventa o con varias unidades. En una preventa el comprador paga al reservar y ${esc(CONFIG.APP_NAME)} guarda el dinero hasta que la tienda entrega; si no entrega dentro de los 15 días siguientes a la fecha de salida anunciada, devolvemos todo lo pagado.</p><p><b>Disputas y reembolsos:</b> mientras una disputa está abierta, el dinero de esa venta no se le paga al vendedor. Revisamos las fotos del comprador y las que tomamos al recoger la carta, y decidimos: a favor del vendedor (la venta se completa), un reembolso parcial al comprador (la venta se completa por el resto) o un reembolso total. Para reclamar, el comprador debe subir fotos de la carta como la recibió (o mandarnos un video si se lo pedimos) y guardarla como llegó mientras revisamos. Si la carta se pierde o se daña mientras está en manos de ${esc(CONFIG.APP_NAME)}, le devolvemos todo al comprador y le pagamos al vendedor lo que iba a recibir, hasta un máximo por envío.</p><p>La comisión de ${esc(CONFIG.APP_NAME)} la paga solo el vendedor: ${fee}, calculada sobre el precio publicado o el que el vendedor aceptó en una oferta, y se descuenta de lo que recibe. Solo se cobra si la venta se completa; si la compra se reembolsa completa, el vendedor no paga comisión.</p>`],
     [`Pagos por fuera de ${esc(CONFIG.APP_NAME)}`, `<p>Si conociste al comprador o al vendedor en ${esc(CONFIG.APP_NAME)}, la venta se paga con Compra Protegida. <b>Está prohibido cerrar el trato por fuera</b> (por WhatsApp, en persona o en otra app) para no pagar la comisión: podemos retirar los anuncios y suspender las cuentas que lo hagan.</p><p>Si aun así pagas por fuera, ${esc(CONFIG.APP_NAME)} no puede protegerte ni devolverte el dinero. Nunca le pagues directo al vendedor.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p><p>La única excepción es Compra Protegida (sección 6): si el comprador reclama dentro del plazo, le devolvemos lo que pagó. Nuestra responsabilidad se limita a ese reembolso.</p>`],
     ["Revisión en tienda", `<p>Es un servicio opcional para vendedores. El vendedor paga ${formatUsd(toCents(CONFIG.AUTH_CHECK_USD))} a ${esc(CONFIG.APP_NAME)} y lleva la carta a una tienda aliada, que la revisa en persona. Si la tienda no encuentra señales de réplica, el anuncio muestra “Revisada por” con el nombre de la tienda. ${esc(CONFIG.APP_NAME)} nunca recibe la carta.</p><ul><li>El resultado es <b>la opinión de la tienda</b> con lo que puede ver en persona. No es una garantía de autenticidad ni una graduación oficial.</li><li>Ni ${esc(CONFIG.APP_NAME)} ni la tienda responden si una carta revisada resulta falsa, salvo el reembolso de Compra Protegida (sección 6).</li><li>El pago no se devuelve según el resultado. Sí lo devolvemos si la revisión no se puede hacer por causa nuestra o de la tienda.</li><li>Si la carta no pasa la revisión, podemos retirar el anuncio.</li><li>La insignia deja de verse cuando el anuncio se vende o se retira.</li></ul>`],
     ["Plan Coleccionista", `<p>Es una suscripción opcional de ${formatUsd(toCents(CONFIG.PLAN_USD))} al mes. Sin el plan, cada cuenta puede escanear 3 cartas al día en “¿Cuánto vale tu carta?”; con el plan, sin límite para uso personal (ponemos un tope diario alto para evitar abusos).</p><ul><li>Cada pago activa el plan por 30 días. No se renueva solo: si no vuelves a pagar, tu cuenta regresa al plan gratis.</li><li>Los valores que muestra el escáner son referencias de mercado, no tasaciones (sección 5).</li><li>Podemos cambiar el precio o lo que incluye el plan; los cambios aplican desde tu siguiente pago.</li></ul>`],
-    ["Reembolsos", `<ul><li><b>Compra Protegida:</b> devolvemos todo lo pagado si la carta no llega, no es original o no coincide con el anuncio y el comprador reclama dentro de los 3 días de recibirla (sección 6). El reembolso se hace por el mismo medio de pago, en un máximo de 5 días hábiles desde que lo aprobamos.</li><li><b>Revisión en tienda:</b> se devuelve si la revisión no se puede hacer por causa nuestra o de la tienda, no según el resultado (sección 9).</li><li><b>Plan Coleccionista:</b> no se reembolsa una vez activado, salvo que el servicio no funcione por causa nuestra (sección 10).</li><li><b>Pagos hechos por fuera de ${esc(CONFIG.APP_NAME)}:</b> no los podemos reembolsar (sección 7).</li><li>Para pedir un reembolso escríbenos a ${legalVal("EMAIL")} o por WhatsApp con la referencia de tu compra.</li></ul>`],
+    ["Reembolsos", `<ul><li><b>Compra Protegida:</b> devolvemos todo lo pagado (incluido el envío) si el vendedor no entrega, si la carta se pierde en manos de ${esc(CONFIG.APP_NAME)}, o si no es original o no coincide con el anuncio y el comprador lo reporta dentro de las 48 horas de recibirla (sección 6). Si la entrega falla porque el comprador no estuvo, devolvemos todo menos el envío. El reembolso se hace por el mismo medio de pago, en un máximo de 5 días hábiles desde que lo aprobamos.</li><li><b>Revisión en tienda:</b> se devuelve si la revisión no se puede hacer por causa nuestra o de la tienda, no según el resultado (sección 9).</li><li><b>Plan Coleccionista:</b> no se reembolsa una vez activado, salvo que el servicio no funcione por causa nuestra (sección 10).</li><li><b>Pagos hechos por fuera de ${esc(CONFIG.APP_NAME)}:</b> no los podemos reembolsar (sección 7).</li><li>Para pedir un reembolso escríbenos a ${legalVal("EMAIL")} o por WhatsApp con la referencia de tu compra.</li></ul>`],
     ["Conducta prohibida", `<ul><li>Estafas o suplantación de identidad.</li><li>Pedir o hacer pagos por fuera de Compra Protegida.</li><li>Poner teléfonos, correos, enlaces o redes sociales en anuncios, preguntas o respuestas para cerrar el trato por fuera.</li><li>Acosar, amenazar o insultar a otras personas.</li><li>Usar la plataforma para actividades ilegales o para extraer datos de forma automatizada.</li><li>Intentar vulnerar la seguridad de la plataforma.</li><li>Hacer ofertas sin intención de comprar, o publicar reseñas falsas u ofensivas (o pedir u ofrecer algo a cambio de una reseña).</li></ul>`],
     ["Reportes", `<p>Cualquier usuario puede reportar un anuncio. Revisamos los reportes y podemos retirar anuncios, ocultar reseñas que incumplan estas reglas o suspender cuentas. Las reseñas solo las puede dejar quien compró con Compra Protegida. Si crees que retiramos algo por error, escríbenos a ${legalVal("EMAIL")}.</p>`],
     ["Marcas", `<p>Pokémon, NBA, NFL y los nombres de jugadores, equipos y fabricantes (Panini, Topps y otros) son marcas de sus dueños. ${esc(CONFIG.APP_NAME)} no está afiliado ni patrocinado por ellos. Las imágenes de catálogo se usan solo para identificar las cartas. Si tienes derechos sobre una imagen y quieres que la retiremos, escríbenos a ${legalVal("EMAIL")}.</p>`],
