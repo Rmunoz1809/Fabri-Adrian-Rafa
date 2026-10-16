@@ -67,6 +67,30 @@ export function quoteProtected(priceCents: number, cfg: FeeConfig = DEFAULT_FEES
   };
 }
 
+/** Default shipping the buyer pays; the live value is holo_settings.shipping_cents (migration 0029). */
+export const DEFAULT_SHIPPING_CENTS = 400;
+
+export interface OrderQuote extends ProtectedQuote {
+  shippingCents: number;
+  /** What the buyer pays: price (+ any buyer commission) + shipping. */
+  orderTotalCents: number;
+}
+
+/**
+ * Escrow order amounts: the buyer pays price + shipping (no shipping with pickup at the shop); the
+ * seller receives price − commission − ITBMS. Mirrors order_quote() in migration 0029.
+ */
+export function quoteOrder(
+  priceCents: number,
+  opts: { pickup?: boolean; shippingCents?: number } = {},
+  cfg: FeeConfig = DEFAULT_FEES,
+): OrderQuote {
+  const q = quoteProtected(priceCents, cfg);
+  const shippingCents = opts.pickup ? 0 : (opts.shippingCents ?? DEFAULT_SHIPPING_CENTS);
+  if (!Number.isInteger(shippingCents) || shippingCents < 0) throw new RangeError("shippingCents must be a non-negative integer");
+  return { ...q, shippingCents, orderTotalCents: q.buyerTotalCents + shippingCents };
+}
+
 export function toCents(usd: number): number {
   return Math.round(usd * 100);
 }

@@ -10,7 +10,7 @@
 | IA | Claude API (`claude-sonnet-5`, vision + structured outputs), en la Edge Function `identificar-carta` | Una llamada devuelve JSON validado con zod; la clave vive como secreto de Supabase |
 | Precios | TCGplayer (tcgcsv, TCGdex), Cardmarket, PriceCharting / SportsCardsPro + tabla propia `sales` | Gratis; los datos locales se vuelven el activo propio |
 | Mapa | Solo barrio (lista fija) | Privacidad del vendedor; no hace falta un mapa |
-| Pagos | Manual: Yappy Comercial a la cuenta de la empresa | Stripe no opera en Panamá; la pasarela queda para v2 |
+| Pagos | Botón de Pago Yappy V2 detrás de la interfaz `PaymentProvider` (mock para desarrollo), Edge Function `yappy-pago`; pago retenido y libro contable en la base (migración 0029) | Stripe no opera en Panamá; cambiar de proveedor no toca el resto |
 | Móvil | Web móvil primero; Expo en v2 (puede compartir `src/lib`) | No construir dos apps antes de validar |
 
 ## Estructura
@@ -26,7 +26,10 @@ src/
     pricing/           estimatePrice (+ tests) y cliente de pokemontcg.io
     ai/recognize.ts    Claude vision → JSON
     data/              repositorio (datos demo hoy, Supabase después)
+    escrow/            pruebas del flujo de órdenes contra todas las migraciones (PGlite)
 supabase/migrations/   esquema + RLS + bucket de fotos
+supabase/functions/    Edge Functions; _shared/payments = proveedor de pago (Yappy y mock)
+scripts/demo-flujo.ts  recorrido local de una compra completa (npm run demo:flujo)
 ```
 
 ## Modelo de datos
