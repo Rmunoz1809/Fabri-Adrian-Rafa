@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TestDb } from "./testing/db";
 
+const STAFF = "00000000-0000-4000-a000-000000000001";
 const SELLER = "00000000-0000-4000-a000-000000000003";
 const BUYER = "00000000-0000-4000-a000-000000000004";
 
@@ -67,5 +68,25 @@ describe("watchlist", () => {
     await db.q(`insert into public.watchlist (user_id, name, catalog_id) select $1, 'Carta ' || g, 'test-' || g from generate_series(1, 99) g`, [SELLER]);
     expect((await asRole<{ n: number }>(SELLER, "select count(*)::int as n from public.watchlist"))[0]).toEqual({ n: 100 });
     await expect(add(SELLER, { name: "Una más", catalog_id: "test-100" })).rejects.toThrow(/limit 100/);
+  });
+});
+
+// "Lo más buscado" for staff (migration 0034): counts per card, never who wants it.
+describe("watchlist_summary", () => {
+  it("staff see the most wanted cards and how many are on sale; nobody else can call it", async () => {
+    // Charizard ex 199/165 (sv3pt5-199) is wanted by two people; the seed has no listing with that catalog id.
+    await asRole(BUYER, "insert into public.watchlist (name, catalog_id, set_name, number) values ('Charizard ex', 'sv3pt5-199', '151', '199/165')");
+    await db.q("insert into public.watchlist (user_id, name, catalog_id) values ($1, 'Charizard ex', 'sv3pt5-199')", [STAFF]);
+    const rows = await db.as<{ catalog_id: string; people: string; on_sale: string }>({ kind: "user", id: STAFF }, "select catalog_id, people, on_sale from public.watchlist_summary(10)");
+    const charizard = rows.find((r) => r.catalog_id === "sv3pt5-199");
+    expect(Number(charizard?.people)).toBe(2);
+    expect(Number(charizard?.on_sale)).toBe(0);
+    // Most wanted first.
+    expect(rows.map((r) => Number(r.people))).toEqual([...rows.map((r) => Number(r.people))].sort((a, b) => b - a));
+    // Once someone lists it, it counts as on sale.
+    await db.q("update public.listings set catalog_id = 'sv3pt5-199' where id = '00000000-0000-4000-b000-000000000001'");
+    const [again] = await db.as<{ on_sale: string }>({ kind: "user", id: STAFF }, "select on_sale from public.watchlist_summary(10) where catalog_id = 'sv3pt5-199'");
+    expect(Number(again.on_sale)).toBe(1);
+    await expect(db.as({ kind: "user", id: BUYER }, "select * from public.watchlist_summary()")).rejects.toThrow(/staff only/);
   });
 });

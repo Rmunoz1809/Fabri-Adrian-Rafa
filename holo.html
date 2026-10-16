@@ -5048,7 +5048,7 @@ async function renderReferrals(box) {
   if (error) { if (error.code !== "PGRST202") console.error(error); return; }
   const url = inviteUrl();
   box.innerHTML = `<section class="panel col"><h2>Invita y gana</h2>
-    <p class="small muted" style="margin:0">Invita a una tienda o a un amigo. Cuando publique sus primeras 3 cartas, <b>los dos reciben 1 mes del Plan Coleccionista</b> (escaneos sin límite y hasta 50 búsquedas en “Busco…”).</p>
+    <p class="small muted" style="margin:0">Invita a una tienda o a un amigo. Cuando publique sus primeras 3 cartas, <b>los dos reciben 1 mes del Plan Coleccionista</b> (escaneos sin límite en “¿Cuánto vale tu carta?”).</p>
     <div class="row-input"><input class="input" id="refUrl" readonly value="${esc(url)}" aria-label="Tu link de invitación"><button type="button" class="btn" id="refCopy" style="border-radius:12px">Copiar</button></div>
     <a class="btn outline" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Te invito a ${CONFIG.APP_NAME}, para comprar y vender cartas en Panamá: ${url}`)}">${ic("chat")}Enviar por WhatsApp</a>
     <p class="xs muted" style="margin:0">Invitaste a ${data?.invited ?? 0} · ${data?.rewarded ?? 0} ya publicaron sus 3 cartas.</p></section>`;
@@ -6872,13 +6872,24 @@ async function adminAnalytics(body, days) {
         const title = t.title ?? DEMO.find((d) => d.id === t.ref)?.title ?? "Anuncio eliminado";
         return `<tr><td><a href="#/carta/${encodeURIComponent(t.ref)}">${esc(title)}</a></td><td>${t.views}</td><td>${t.visitors}</td><td>${t.clicks}</td></tr>`;
       }).join("")}</tbody></table>` : `<p class="muted small" style="margin:0">Todavía nadie ha abierto una carta.</p>`}</section>
-    <section class="panel col" id="wantedTop"><h2>Lo más buscado (“Busco…”)</h2><p class="muted small" style="margin:0"><span class="spinner"></span></p></section>`;
-  // What people want and nobody sells yet: what to ask the shops to bring (migration 0022).
-  const { data: wanted, error: wErr } = await sb.rpc("wanted_summary");
+    <section class="panel col" id="wantedTop"><h2>Lo más buscado</h2><p class="muted small" style="margin:0"><span class="spinner"></span></p></section>`;
+  // What people want and nobody sells yet: what to ask the shops to bring. From the watchlists
+  // (watchlist_summary, migration 0034); until it runs, the old "Busco…" searches (0022).
   const box = $("#wantedTop");
-  if (!box) return;
+  const { data: wl, error: wlErr } = await sb.rpc("watchlist_summary", { p_limit: 30 });
+  if (!box?.isConnected) return;
+  if (!wlErr) {
+    const link = (w) => (w.catalog_id ? `#/watchlist/carta/${encodeURIComponent(w.catalog_id)}` : hrefWith({ sort: "recientes" }, { q: w.name }));
+    box.innerHTML = `<h2>Lo más buscado (watchlists)</h2>${wl.length ? `<table class="fees"><thead><tr><th>Carta</th><th>Personas</th><th>Precio de referencia</th><th>En venta</th></tr></thead><tbody>${wl.map((w) =>
+      `<tr><td><a href="${esc(link(w))}">${esc(w.name)}</a>${[w.set_name, w.number].filter(Boolean).length ? `<span class="xs muted"> · ${esc([w.set_name, w.number].filter(Boolean).join(" · "))}</span>` : ""}${w.graded ? ` <span class="b prot">Graduada</span>` : ""}</td><td>${w.people}</td><td>${w.ref_price_cents ? formatUsd(w.ref_price_cents) : "—"}</td><td>${Number(w.on_sale) ? w.on_sale : `<b>Nadie la vende</b>`}</td></tr>`).join("")}</tbody></table>
+      <p class="xs muted" style="margin:0">“Nadie la vende”: cartas que la gente quiere y no están en la web. Pídeselas a las tiendas.</p>` : `<p class="muted small" style="margin:0">Nadie ha agregado cartas a su watchlist todavía.</p>`}`;
+    return;
+  }
+  if (!["PGRST202", "42883"].includes(wlErr.code)) console.error(wlErr);
+  const { data: wanted, error: wErr } = await sb.rpc("wanted_summary");
+  if (!box.isConnected) return;
   if (wErr) { box.remove(); if (wErr.code !== "PGRST202") console.error(wErr); return; }
-  box.innerHTML = `<h2>Lo más buscado (“Busco…”)</h2>${wanted.length ? `<table class="fees"><thead><tr><th>Búsqueda</th><th>Personas</th><th>Avisos enviados</th></tr></thead><tbody>${wanted.map((w) =>
+  box.innerHTML = `<h2>Lo más buscado (“Busco…”, antes de la watchlist)</h2>${wanted.length ? `<table class="fees"><thead><tr><th>Búsqueda</th><th>Personas</th><th>Avisos enviados</th></tr></thead><tbody>${wanted.map((w) =>
     `<tr><td><a href="${esc(hrefWith({ sort: "recientes" }, { q: w.query }))}">${esc(w.query)}</a></td><td>${w.people}</td><td>${w.hits}</td></tr>`).join("")}</tbody></table>
     <p class="xs muted" style="margin:0">Las búsquedas con 0 avisos son cartas que nadie ha publicado todavía: pídeselas a las tiendas.</p>` : `<p class="muted small" style="margin:0">Nadie ha guardado una búsqueda todavía.</p>`}`;
 }
