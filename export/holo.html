@@ -1005,6 +1005,58 @@ a.pcard:hover .act .i { transform: translateX(2px); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; animation-delay: 0s !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .gate-col { animation: none; }
 }
+/* ---------------------------------------------------------------- watchlist (#/watchlist) */
+/* A big search box, the catalog as a grid of cards, and the list in two groups. Same pieces as the
+   rest of the page (pcard, seg, chip, panel), only the search box is larger. */
+.wl-hero { max-width: 760px; padding-top: 28px; }
+.wl-hero h1 { margin: 0; font-size: 30px; }
+.wl-hero .lead { margin-top: 8px; }
+.wl-search { position: relative; margin-top: 20px; }
+.wl-search > .i { position: absolute; left: 18px; top: 50%; width: 22px; height: 22px; transform: translateY(-50%); color: var(--fg-3); pointer-events: none; }
+.wl-search .input { height: 60px; padding: 0 54px; border-radius: 18px; font-size: 18px; font-weight: 500; }
+.wl-search .wl-clear { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
+.wl-search .wl-clear[hidden] { display: none; }
+.wl-opts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.wl-opts .seg { flex: 0 1 300px; }
+.wl-grade { display: flex; gap: 8px; }
+.wl-grade[hidden] { display: none; }
+.wl-grade .select { width: auto; height: 44px; font-size: 14px; }
+.wl-guest { margin-top: 12px; }
+.wl-try { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 18px; }
+.wl-try .chip { background: transparent; cursor: pointer; }
+.wl-try .chip:hover { border-color: var(--border-strong); color: var(--fg); }
+.wl-status { display: flex; align-items: center; gap: 10px; margin: 24px 0 12px; color: var(--fg-2); font-size: 14px; }
+.wl-results section, .wl-sec { margin-top: 32px; }
+.wl-mine { margin: 16px 0 48px; }
+.wl-rhead { flex-wrap: wrap; align-items: center; }
+.wl-rhead .select { width: auto; max-width: 100%; height: 36px; font-size: 14px; }
+.wl-note { margin: -4px 0 14px; color: var(--fg-2); font-size: 13px; }
+.wl-h .i { width: 20px; height: 20px; margin-right: 8px; vertical-align: -3px; color: var(--fg-2); }
+.wl-count { display: inline-grid; place-items: center; min-width: 26px; height: 24px; margin-left: 10px; padding: 0 8px; border-radius: 8px; background: var(--muted); color: var(--fg); font-size: 13px; font-weight: 700; letter-spacing: 0; vertical-align: 3px; }
+.wl-card .media { display: block; }
+.wl-card .foot { padding-top: 8px; }
+.wl-onsale { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; color: var(--fg); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--deco); }
+.wl-onsale .i { width: 13px; height: 13px; color: var(--up); }
+.wl-add, .wl-actions .btn { width: 100%; height: auto; min-height: 34px; padding: 6px 10px; line-height: 1.2; white-space: normal; }
+.wl-add { margin-top: 10px; }
+.wl-add.on, .wl-toggle.on { background: var(--good-bg); border-color: rgb(52 211 153 / .4); color: var(--fg); box-shadow: none; }
+.wl-add.on .i, .wl-toggle.on .i { color: var(--up); }
+.wl-flag { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px; padding: 7px 10px; border-radius: 10px; font-size: 12px; font-weight: 600; line-height: 1.35; }
+.wl-flag .i { flex-shrink: 0; width: 14px; height: 14px; margin-top: 1px; }
+.wl-flag.good { background: var(--good-bg); color: var(--fg); }
+.wl-flag.good .i { color: var(--up); }
+.wl-flag.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.wl-actions { display: grid; gap: 6px; margin-top: 8px; }
+.wl-want { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: var(--fg-2); font-size: 12px; line-height: 1.35; }
+.wl-want .i { flex-shrink: 0; width: 13px; height: 13px; margin-top: 1px; }
+.wl-none { margin: 0; padding: 16px; border: 1px dashed var(--input); border-radius: var(--radius-lg); color: var(--fg-2); font-size: 14px; }
+.wl-more { display: flex; justify-content: center; margin-top: 18px; }
+.wl-free { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-top: 24px; }
+.wl-free > div { flex: 1 1 280px; min-width: 0; }
+.wl-free .btn { flex: 0 0 auto; }
+.wl-free .btn.wl-add { width: auto; margin-top: 0; padding: 6px 16px; }
+.grid.wl-in { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 1280px) { .grid.wl-in { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 </style>
 </head>
 <body>
@@ -1252,6 +1304,7 @@ const ICONS = {
   eye: '<path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/>',
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>',
 };
 const ic = (name, cls = "") => `<svg class="i${cls ? ` ${cls}` : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -2032,7 +2085,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/busco" || path === "/consultas" || path === "/portafolio" || path.startsWith("/portafolio/"));
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/consultas" || path === "/portafolio" || path.startsWith("/portafolio/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -2055,7 +2108,10 @@ async function route() {
     if (path === "/vender/graduadas") return viewSellGraded(app);
     if (path === "/vender/sellado") return viewSellSealed(app);
     if (path === "/vender/lote") return viewSellLot(app);
-    if (path === "/busco") { app.innerHTML = `<div class="wrap"></div>`; return await viewWanted(app.firstElementChild, params); }
+    // "Busco…" (0022) became the watchlist (2026-10-16): old links keep their search.
+    if (path === "/busco") return location.replace(params.get("q") ? watchHref(params.get("q"), params.get("tipo") === "graded") : "#/watchlist");
+    if (path === "/watchlist") { app.innerHTML = `<div class="wrap"></div>`; return await viewWatchlist(app.firstElementChild, params); }
+    if (path.startsWith("/watchlist/carta/")) return await viewWatchCard(app, safeDecode(path.slice(17)), params);
     if (path === "/consultas") { app.innerHTML = `<div class="wrap"></div>`; return await viewInquiries(app.firstElementChild); }
     if (path === "/portafolio") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild); }
     if (path.startsWith("/portafolio/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolioItem(app.firstElementChild, safeDecode(path.slice(12))); }
@@ -2074,14 +2130,14 @@ async function route() {
   }
 }
 
-const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["eventos", "#/eventos", "Eventos", "calendar"], ["consultas", "#/consultas", "Consultas", "chat"]];
+const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["eventos", "#/eventos", "Eventos", "calendar"], ["consultas", "#/consultas", "Consultas", "chat"], ["watchlist", "#/watchlist", "Mi watchlist", "bookmark"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/eventos": "eventos", "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/busco": "busco" }[path] ?? (path.startsWith("/portafolio/") ? "portafolio" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi portafolio", "trend"], ["cuenta", "#/cuenta", "Mi cuenta", "user"], ["busco", "#/busco", "Busco…", "search"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
+  const current = { "/eventos": "eventos", "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/watchlist": "watchlist" }[path] ?? (path.startsWith("/portafolio/") ? "portafolio" : path.startsWith("/watchlist/") ? "watchlist" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi portafolio", "trend"], ["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
-  $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span></a>`).join("");
+  $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span>${k === "watchlist" ? watchNavBadge() : ""}</a>`).join("");
   // What used to be the strip under the logo on the home page (moved here 2026-10-16).
   $("#sideCta").innerHTML = `<a class="btn primary" href="#/vender"${path === "/vender" ? ' aria-current="page"' : ""}>${ic("plus")}Publica tu carta gratis</a><a class="btn outline" href="#/escanear"${path === "/escanear" ? ' aria-current="page"' : ""}>${ic("camera")}¿Cuánto vale tu carta?</a>`;
   $("#sideFoot").innerHTML = session
@@ -2161,8 +2217,9 @@ function marketDelta(l) {
   if (pct < 0.5) return `<p class="delta ${tone}"><span>En el valor estimado</span></p>`;
   return `<p class="delta ${tone}" title="Comparado con el valor estimado de ${esc(fmtEstimate(est.mid))}">${diff < 0 ? TRI.down : TRI.up}<span>${diff < 0 ? "−" : "+"}${fmtEstimate(Math.abs(diff))} (${fmtPct(pct)}%)</span><span class="vs">vs. estimado</span></p>`;
 }
-function tile(l, i = 0) {
-  return `<li style="--i:${Math.min(i, 16)}"><a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
+function tile(l, i = 0, opts = {}) {
+  const { before = "", after = "" } = Array.isArray(opts) ? {} : opts; // list.map(tile) passes the array third
+  return `<li style="--i:${Math.min(i, 16)}">${before}<a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
     <div class="media card-ratio"><div class="inner">${cardArt(l)}</div>
       <div class="corner-l">${conditionBadge(l)}${l.verificationPhoto ? `<span class="chip-img good" title="Tiene foto de verificación">${ic("camera")}<span class="sr-only">Tiene foto de verificación</span></span>` : ""}${l.authCheck ? `<span class="chip-img good" title="Revisada por ${esc(l.authCheck.shop)}">${ic("check")}<span class="sr-only">Revisada por ${esc(l.authCheck.shop)}</span></span>` : ""}</div>
       ${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
@@ -2171,7 +2228,7 @@ function tile(l, i = 0) {
     <p class="meta">${ic("pin")}<span>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</span></p>
     ${tileSeller(l.seller)}
     <div class="foot"><div style="min-width:0"><p class="price">${formatUsd(toCents(l.priceUsd))}</p>${marketDelta(l)}</div><span class="act" aria-hidden="true">${ic("arrowRight")}</span></div>
-  </a></li>`;
+  </a>${after}</li>`;
 }
 const skeletonGrid = (n) => `<ul class="grid" aria-hidden="true">${Array.from({ length: n }, () => `<li><div class="pcard sk-card"><div class="sk card-ratio"></div><div class="sk" style="height:16px;width:85%;margin-top:12px"></div><div class="sk" style="height:12px;width:55%;margin-top:8px"></div><div class="sk" style="height:20px;width:40%;margin-top:18px"></div></div></li>`).join("")}</ul><p class="sr-only" role="status">Cargando cartas…</p>`;
 function estimatePanel(est, price) {
@@ -2219,10 +2276,10 @@ function storedPrices() {
 }
 
 const TCGDEX_API = "https://api.tcgdex.net/v2/en";
-/** pokemontcg.io ids (sv3pt5-199, swsh12pt5-1) → TCGdex ids (sv03.5-199, swsh12.5-1). */
+/** pokemontcg.io ids (sv3pt5-199, swsh12pt5-1, me2pt5-294) → TCGdex ids (sv03.5-199, swsh12.5-1, me02.5-294). */
 function tcgdexId(id) {
   const i = id.lastIndexOf("-"), set = id.slice(0, i), m = set.match(/^([a-z]+)(\d+)(pt5)?$/);
-  return `${m ? `${m[1]}${m[1] === "sv" ? m[2].padStart(2, "0") : m[2]}${m[3] ? ".5" : ""}` : set}-${id.slice(i + 1)}`;
+  return `${m ? `${m[1]}${m[1] === "sv" || m[1] === "me" ? m[2].padStart(2, "0") : m[2]}${m[3] ? ".5" : ""}` : set}-${id.slice(i + 1)}`;
 }
 /** TCGdex ids (sv03.5-006) → pokemontcg.io ids (sv3pt5-6), the format stored in listings.catalog_id. */
 function ptcgId(dexId) {
@@ -2586,7 +2643,7 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
     // Visitors without a session only get already-researched (cached) web prices.
     if (sb && !session) {
       box.innerHTML = `${header}<p class="sub" style="margin-top:8px">Entra a tu cuenta para ver el precio de mercado de esta carta.</p>
-        <a class="btn" style="margin-top:10px" href="#/entrar?next=${encodeURIComponent(`/carta/${l.id}`)}">Entrar para ver el precio</a>${priceSources(l, h)}`;
+        <a class="btn" style="margin-top:10px" href="#/entrar?next=${encodeURIComponent(l.backPath ?? `/carta/${l.id}`)}">Entrar para ver el precio</a>${priceSources(l, h)}`;
       return;
     }
     // Only when every source failed (network, service down): offer to try again.
@@ -2745,12 +2802,13 @@ function renderPriceChart(box, l, h, rangeDays, setRange, animate) {
   });
 }
 
-async function loadPriceChart(l) {
+async function loadPriceChart(l, onHistory = null) {
   const box = $("#priceChart");
   if (!box) return;
   const h = await fetchPriceHistory(l).catch((e) => { console.error(e); return { market: [], cardmarket: [], sales: [], web: [], factor: 1 }; });
   if (!box.isConnected) return;
-  h.retry = () => { box.innerHTML = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:20px 0"><span class="spinner"></span>Buscando el precio en ventas recientes…</p>`; loadPriceChart(l); };
+  onHistory?.(h);
+  h.retry = () => { box.innerHTML = `<h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:20px 0"><span class="spinner"></span>Buscando el precio en ventas recientes…</p>`; loadPriceChart(l, onHistory); };
   // Con historial semanal largo se abre en "1 año"; si no, en 90 días (o todo, si son ventas encontradas en internet).
   let range = h.weekly ? 365 : h.web?.length ? Infinity : 90, width = box.clientWidth;
   const draw = (animate) => renderPriceChart(box, l, h, range, (r) => { range = r; draw(true); }, animate);
@@ -2811,7 +2869,7 @@ async function viewHome(app, params) {
           </form>
         </aside>
         <section aria-labelledby="resultsTitle">
-          <div class="rhead"><h2 id="resultsTitle">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : f.category ? esc(categoryName(f.category)) : "Recién publicadas"}</h2><div class="rtools">${f.q ? `<a class="btn ghost sm" href="${esc(wantedHref(f.q, f.category, f.graded))}">${ic("bell")}Avisarme de nuevas</a><a class="btn ghost sm" href="${hrefWith(f, { q: undefined })}">${ic("x")}Quitar búsqueda</a>` : ""}<p class="small muted num" id="count" aria-live="polite"></p></div></div>
+          <div class="rhead"><h2 id="resultsTitle">${f.q ? `Resultados para “${esc(f.q)}”` : f.seller === "tiendas" ? "Cartas de tiendas verificadas" : f.seller === "particulares" ? "Cartas de particulares" : f.category ? esc(categoryName(f.category)) : "Recién publicadas"}</h2><div class="rtools">${f.q ? `<a class="btn ghost sm" href="${esc(watchHref(f.q, f.graded === "graded"))}">${ic("bookmark")}Agregar a mi watchlist</a><a class="btn ghost sm" href="${hrefWith(f, { q: undefined })}">${ic("x")}Quitar búsqueda</a>` : ""}<p class="small muted num" id="count" aria-live="polite"></p></div></div>
           <div id="list">${skeletonGrid(8)}</div>
         </section>
       </div>
@@ -2845,7 +2903,7 @@ async function viewHome(app, params) {
     ? `<ul class="grid live">${list.map(tile).join("")}</ul>`
     : f.seller === "tiendas" && !f.q && !f.category
     ? `<div class="empty-state"><span class="ico">${ic("store")}</span><p style="font-weight:600">Todavía no hay tiendas verificadas con cartas publicadas.</p><p class="small muted" style="margin-top:4px">Estamos sumando las primeras tiendas de Panamá.</p></div>`
-    : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos cartas con esos filtros.</p><p class="small muted" style="margin-top:4px">Prueba con otra búsqueda o <a class="link" href="#/">ve todo</a>.</p>${f.q ? `<a class="btn primary sm" style="margin-top:14px" href="${esc(wantedHref(f.q, f.category, f.graded))}">${ic("bell")}Avísame cuando alguien la publique</a>` : ""}</div>`;
+    : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos cartas con esos filtros.</p><p class="small muted" style="margin-top:4px">Prueba con otra búsqueda o <a class="link" href="#/">ve todo</a>.</p>${f.q ? `<a class="btn primary sm" style="margin-top:14px" href="${esc(watchHref(f.q, f.graded === "graded"))}">${ic("bookmark")}Agregar a mi watchlist</a>` : ""}</div>`;
 }
 
 function sellerPanel(s) {
@@ -3004,6 +3062,7 @@ async function viewDetail(app, id) {
           <p class="sub">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales consultas aquí y te atendemos por WhatsApp." : `¿Te interesa esta carta? Escríbenos y el equipo de ${esc(CONFIG.APP_NAME)} te ayuda con la compra por WhatsApp.`}</p>
           <button type="button" class="btn primary block" id="inquiryBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>${ic("chat")}Consultar por WhatsApp</button>
           <p class="xs muted" style="margin:10px 0 0">Tu consulta queda registrada con un código para darle seguimiento. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.</p></section>` : ""}
+        ${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline block wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}
         <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
           <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
           <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a><button type="button" class="btn outline" id="shareStory">${ic("camera")}Historia</button></div></section>
@@ -3031,6 +3090,7 @@ async function viewDetail(app, id) {
     t.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(t); } });
   });
   setupShare(l);
+  if ($("#watchBtn")) bindWatchToggle($("#watchBtn"), watchFromListing(l));
   if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
   if ($("#qaBox")) renderQuestions(l, $("#qaBox"));
   $("#inquiryBtn")?.addEventListener("click", () => {
@@ -5118,80 +5178,658 @@ async function viewInquiries(app) {
   await renderMyInquiries($("#inqList"), { title: false });
 }
 
-// ============================================================= "Busco…" (#/busco, migration 0022)
-// Saved searches: when a listing goes live and matches, the database sends a notification (0021).
-// 3 searches on a free account, 50 with the Plan Coleccionista (enforced in the database).
-const WANTED_KINDS = [["any", "Cualquiera"], ["raw", "Sin graduar"], ["graded", "Graduada"], ["sealed", "Producto sellado"]];
-const wantedHref = (q, cat, kind) => `#/busco?${new URLSearchParams(Object.entries({ q, cat, tipo: kind }).filter(([, v]) => v)).toString()}`;
-const wantedSearchHref = (w) => hrefWith({ sort: "recientes" }, { q: w.query, cat: w.category ?? undefined, tipo: w.kind === "any" ? undefined : w.kind });
+// ============================================================= watchlist (#/watchlist, migration 0032)
+// "Mi watchlist" took the place of "Busco…" (0022) on 2026-10-16. A big search box shows, as it is
+// typed, every printing of a card in the catalog (TCGdex: all sets, numbers, rarities and promos) with
+// a reference price, and one tap adds it. Sports cards have no free catalog: they are added as typed
+// ("Wembanyama Prizm 2023") and matched against the listings by their words.
+// Each card of the list is checked against the active listings, demo ones included (same catalog_id,
+// else name + number): "Disponibles en MarketZlab" shows the listing and its price; "Todavía no están
+// en la web" shows a listing-like card with the market reference price and "Consultar por WhatsApp".
+// Signed in, the list lives in public.watchlist (row-level security: each person only theirs, up to
+// 100 cards). Without a session, or until 0032 runs, it lives in this browser (localStorage) and moves
+// to the account on sign-in.
+const WATCH_KEY = "holo_watchlist", WATCH_LIMIT = 100, WATCH_PAGE = 24;
+const WATCH_COLS = "id, category, catalog_id, name, set_name, number, variant, image_url, graded, grading_company, grade, ref_price_cents, ref_price_at, created_at";
+const WATCH_GRADES = [10, 9.5, 9, 8.5, 8, 7, 6, 5, 4, 3, 2, 1];
+const WATCH_TRY = ["Charizard", "Pikachu", "Umbreon", "Mewtwo", "Gengar", "Iono"];
+let watchDbOn = true; // false once we know migration 0032 is not applied
+let watchState = null; // { uid, items, remote }: the current person's list, newest first
+let watchLoad = null; // { uid, p }: the load in flight
+let watchGen = 0; // bumps on every change, so a stale count is not shown
+let watchBadge = { uid: undefined, n: 0, busy: false }; // cards on sale, next to the menu link
+const watchRefTried = new Set(); // cards whose price was already researched on this visit
+const watchMissing = (e) => ["42P01", "PGRST205", "PGRST202", "42703"].includes(e?.code);
+const isLocalWatch = (w) => String(w?.id ?? "").startsWith("local-");
+const watchHref = (q, graded = false) => `#/watchlist?${new URLSearchParams(Object.entries({ q, g: graded ? "1" : "" }).filter(([, v]) => v))}`;
+/** Same card for the list: its catalog id (or name + number when typed by hand), raw or graded. Mirrors the unique index of 0032. */
+const watchKey = (w) => `${w.catalogId ? String(w.catalogId).toLowerCase() : `${normalize(w.name).replace(/\s+/g, " ").trim()}#${normalize(w.number ?? "").trim()}`}${w.graded ? "|g" : ""}`;
+const watchSlug = (w) => w.catalogId || `m-${w.id}`;
+const gradeLabel = (w) => `${w.gradingCompany || "Graduada"}${w.grade ? ` ${w.grade}` : ""}`;
+const watchHash = (w) => `#/watchlist/carta/${encodeURIComponent(watchSlug(w))}${w.graded ? `?g=${encodeURIComponent(`${w.gradingCompany || "PSA"}-${w.grade || 10}`)}` : ""}`;
+const watchUrl = (w) => `${location.origin}${location.pathname}${watchHash(w)}`;
+const watchTitle = (w) => [w.name, w.number && !normalize(w.name).includes(normalize(w.number)) ? w.number : "", w.setName ? `· ${w.setName}` : "", w.graded ? `· ${gradeLabel(w)}` : ""].filter(Boolean).join(" ");
+const watchNum = (n) => String(n ?? "").split("/")[0].replace(/^#/, "").trim().toLowerCase().replace(/^([a-z]*)0+(?=\d)/, "$1");
+const fmtRef = (cents) => fmtEstimate(cents / 100);
+const missingText = (cents) => `Esta carta todavía no está en la web${cents > 0 ? ` · Precio de referencia ${fmtRef(cents)}` : ""}`;
+/** Runs fn over the list, at most n at a time. */
+async function eachLimit(list, n, fn) {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => { while (i < list.length) await fn(list[i++]); }));
+}
 
-async function viewWanted(app, params) {
-  setTitle("Busco…");
-  if (!sb || !session) return go("/entrar?next=/busco");
-  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tus búsquedas…</p>`;
-  const holder = app.firstElementChild, uid = session.user.id;
-  const [{ data, error }, plan] = await Promise.all([
-    sb.from("wanted").select("id, query, category, kind, max_price_cents, created_at").order("created_at", { ascending: false }),
-    sb.from("subscriptions").select("active_until").eq("user_id", uid).maybeSingle(),
-  ]);
-  if (!holder.isConnected) return;
-  if (error) {
-    const soon = ["42P01", "PGRST205"].includes(error.code);
-    if (!soon) console.error(error);
-    app.innerHTML = `<div class="wanted"><h1 class="display" style="font-size:30px">Busco…</h1><p class="notice soft">${soon ? "“Busco…” se abre pronto: vas a poder guardar las cartas que buscas y te avisamos cuando alguien las publique." : "No pudimos cargar tus búsquedas. Recarga la página."}</p></div>`;
-    return;
+// ----- storage: the account (0032) or this browser
+function readWatchLocal() {
+  try {
+    const a = JSON.parse(localStorage.getItem(WATCH_KEY) ?? "[]");
+    return Array.isArray(a) ? a.filter((w) => isLocalWatch(w) && typeof w.name === "string" && w.name.trim().length >= 2) : [];
+  } catch { return []; }
+}
+function writeWatchLocal(items) {
+  const mine = items.filter(isLocalWatch).slice(0, WATCH_LIMIT);
+  try { if (mine.length) localStorage.setItem(WATCH_KEY, JSON.stringify(mine)); else localStorage.removeItem(WATCH_KEY); } catch { /* storage unavailable: the list lasts until the page closes */ }
+}
+const rowToWatch = (r) => ({
+  id: r.id, category: r.category, catalogId: r.catalog_id, name: r.name, setName: r.set_name ?? "", number: r.number ?? "", variant: r.variant ?? "",
+  image: r.image_url ?? "", graded: !!r.graded, gradingCompany: r.grading_company, grade: r.grade != null ? Number(r.grade) : null,
+  refCents: r.ref_price_cents, refAt: r.ref_price_at, createdAt: r.created_at,
+});
+const watchToRow = (w) => ({
+  category: CATEGORIES.some((c) => c.slug === w.category) ? w.category : null, catalog_id: w.catalogId ? String(w.catalogId).slice(0, 64) : null,
+  name: w.name.slice(0, 120), set_name: w.setName ? w.setName.slice(0, 120) : null, number: w.number ? w.number.slice(0, 40) : null,
+  variant: w.variant ? w.variant.slice(0, 80) : null, image_url: /^https:\/\//.test(w.image) && w.image.length <= 500 ? w.image : null,
+  graded: w.graded, grading_company: w.graded && GRADERS.includes(w.gradingCompany) ? w.gradingCompany : null, grade: w.graded && w.grade >= 1 && w.grade <= 10 ? w.grade : null,
+  ref_price_cents: w.refCents >= 1 && w.refCents <= 100000000 ? Math.round(w.refCents) : null, ref_price_at: w.refCents >= 1 ? w.refAt : null,
+});
+/** The fields of a card the list keeps (search results and listings carry more). */
+const watchPick = (w) => ({
+  category: w.category ?? null, catalogId: w.catalogId ?? null, dexId: w.dexId ?? null, name: String(w.name ?? "").replace(/\s+/g, " ").trim().slice(0, 120),
+  setName: String(w.setName ?? ""), number: String(w.number ?? ""), variant: String(w.variant ?? ""), image: String(w.image ?? ""),
+  graded: !!w.graded, gradingCompany: w.graded ? w.gradingCompany || "PSA" : null, grade: w.graded ? Number(w.grade) || 10 : null,
+  refCents: w.refCents > 0 ? w.refCents : null, refAt: w.refCents > 0 ? w.refAt ?? new Date().toISOString() : null,
+});
+
+/** The current person's watchlist, newest first (cached per session). Signed in, it moves to the account what was saved in this browser. */
+function loadWatchlist() {
+  const uid = session?.user.id ?? null;
+  if (watchState?.uid === uid) return Promise.resolve(watchState.items);
+  if (watchLoad?.uid === uid) return watchLoad.p;
+  const p = (async () => {
+    let items = readWatchLocal(), remote = false;
+    if (sb && uid && watchDbOn) {
+      const { data, error } = await sb.from("watchlist").select(WATCH_COLS).order("created_at", { ascending: false }).limit(WATCH_LIMIT);
+      if (error) { if (watchMissing(error)) watchDbOn = false; else console.error(error); }
+      else {
+        remote = true;
+        const mine = data.map(rowToWatch), have = new Set(mine.map(watchKey)), left = [];
+        for (const w of items.reverse()) { // oldest first, so the newest ends on top
+          if (have.has(watchKey(w))) continue;
+          if (mine.length >= WATCH_LIMIT) { left.unshift(w); continue; }
+          const { data: row, error: e } = await sb.from("watchlist").insert(watchToRow(watchPick(w))).select(WATCH_COLS).single();
+          if (row) { mine.unshift(rowToWatch(row)); have.add(watchKey(w)); }
+          else if (e?.code !== "23505") { left.unshift(w); console.warn("watchlist upload", e?.code); }
+        }
+        items = [...mine, ...left];
+        writeWatchLocal(left);
+      }
+    }
+    watchState = { uid, items, remote };
+    return items;
+  })();
+  watchLoad = { uid, p };
+  p.finally(() => { if (watchLoad?.p === p) watchLoad = null; });
+  return p;
+}
+function watchChanged() { watchGen++; watchBadge.uid = undefined; }
+const fullMsg = `Tu watchlist ya tiene ${WATCH_LIMIT} cartas. Quita alguna para agregar otra.`;
+async function addToWatchlist(cand) {
+  const w = watchPick(cand);
+  if (w.name.length < 2) return { ok: false, msg: "Escribe el nombre de la carta." };
+  const items = await loadWatchlist();
+  if (items.some((x) => watchKey(x) === watchKey(w))) return { ok: true };
+  if (items.length >= WATCH_LIMIT) return { ok: false, msg: fullMsg };
+  if (watchState.remote) {
+    const { data, error } = await sb.from("watchlist").insert(watchToRow(w)).select(WATCH_COLS).single();
+    if (data) { items.unshift({ ...rowToWatch(data), dexId: w.dexId }); watchChanged(); return { ok: true }; }
+    if (error?.code === "23505") { watchState = null; watchChanged(); return { ok: true }; } // added from another tab
+    if (/limit/.test(error?.message ?? "")) return { ok: false, msg: fullMsg };
+    if (!watchMissing(error)) { console.error(error); return { ok: false, msg: "No pudimos guardarla. Revisa tu conexión e intenta de nuevo." }; }
+    watchDbOn = false; watchState.remote = false;
   }
-  const hasPlan = plan.data?.active_until && new Date(plan.data.active_until) > new Date();
-  const limit = hasPlan ? 50 : 3, full = data.length >= limit;
-  const pre = { q: params.get("q") ?? "", cat: params.get("cat") ?? "", tipo: params.get("tipo") ?? "any" };
-  const describe = (w) => [w.category ? categoryName(w.category) : null, w.kind !== "any" ? WANTED_KINDS.find(([k]) => k === w.kind)?.[1] : null,
-    w.max_price_cents ? `hasta ${formatUsd(w.max_price_cents)}` : null].filter(Boolean).join(" · ");
-  app.innerHTML = `<div class="wanted col" style="gap:16px">
-    <div><h1 class="display" style="font-size:30px;margin:0">Busco…</h1>
-      <p class="muted" style="margin:6px 0 0">Guarda la carta que buscas y te avisamos en la campanita${CONFIG.EMAIL_ALERTS ? " y por correo" : ""} apenas alguien la publique.</p></div>
-    <form id="wForm" class="panel col" novalidate>
-      <label class="f">¿Qué buscas?<input class="input" name="q" maxlength="80" required placeholder="Ej.: Charizard 151, Wembanyama Prizm, ETB Prismatic" value="${esc(pre.q)}"></label>
-      <div class="grid2">
-        <label class="f">Categoría<select class="select" name="cat"><option value="">Todas</option>${CATEGORIES.map((c) => `<option value="${c.slug}"${pre.cat === c.slug ? " selected" : ""}>${c.name}</option>`).join("")}</select></label>
-        <label class="f">Tipo<select class="select" name="kind">${WANTED_KINDS.map(([k, t]) => `<option value="${k}"${pre.tipo === k ? " selected" : ""}>${t}</option>`).join("")}</select></label>
-        <label class="f">Precio máximo (opcional)<input class="input" name="max" type="number" min="1" step="1" inputmode="numeric" placeholder="USD"></label>
+  items.unshift({ ...w, id: `local-${crypto.randomUUID()}`, createdAt: new Date().toISOString() });
+  writeWatchLocal(items);
+  watchChanged();
+  return { ok: true };
+}
+async function removeFromWatchlist(cand) {
+  const items = await loadWatchlist();
+  const it = items.find((x) => (cand.id && x.id === cand.id) || watchKey(x) === watchKey(cand));
+  if (!it) return { ok: true };
+  if (!isLocalWatch(it)) {
+    const { error } = await sb.from("watchlist").delete().eq("id", it.id);
+    if (error) { console.error(error); return { ok: false, msg: "No pudimos quitarla. Revisa tu conexión e intenta de nuevo." }; }
+  }
+  const i = items.indexOf(it);
+  if (i >= 0) items.splice(i, 1);
+  writeWatchLocal(items);
+  watchChanged();
+  return { ok: true };
+}
+const inWatchlist = async (cand) => (await loadWatchlist()).some((x) => watchKey(x) === watchKey(cand));
+/** Keeps the latest reference price with the card (when it changes, or once a day). */
+function saveWatchRef(w, cents) {
+  if (!(cents > 0) || !w.id) return;
+  if (w.refCents === cents && w.refAt && Date.now() - Date.parse(w.refAt) < DAY_MS) return;
+  w.refCents = cents; w.refAt = new Date().toISOString();
+  if (isLocalWatch(w)) return writeWatchLocal(watchState?.items ?? []);
+  sb?.from("watchlist").update({ ref_price_cents: cents, ref_price_at: w.refAt }).eq("id", w.id).then(({ error }) => { if (error) console.warn("watchlist price", error.code); });
+}
+
+// ----- the card as a listing, and its reference price
+/** A listing-shaped object for a card of the list, so the listing components (art, price chart) can draw it. */
+function watchListing(w, { thumb = false } = {}) {
+  const image = thumb ? String(w.image ?? "").replace(/\/high\.webp$/, "/low.webp") : w.image;
+  return {
+    id: watchSlug(w), backPath: watchHash(w).slice(1), title: watchTitle(w), description: "", isDemo: false, status: "watch", priceUsd: null, priceLabel: "Precio de referencia",
+    card: { category: w.category ?? "", subject: w.name, setName: w.setName ?? "", year: null, number: w.number ?? "", variant: w.variant ?? "", catalogId: w.catalogId ?? null, dexId: w.dexId ?? null },
+    condition: w.graded ? null : "NM", grading: w.graded ? { company: w.gradingCompany || "PSA", grade: w.grade || 10 } : null,
+    photos: image ? [image] : [], location: { province: "", district: "", neighborhood: "" }, seller: null, estimate: null,
+  };
+}
+/** The card's catalog image, or a placeholder (cards typed by hand have none). */
+function watchArt(w, { thumb = false } = {}) {
+  const l = watchListing(w, { thumb });
+  return l.photos[0] ? cardArt(l) : cardArt(l).replace('<p class="note">Foto de ejemplo</p>', '<p class="note">Sin imagen</p>').replace("(sin foto)", "(sin imagen)");
+}
+/** A card of the list from a listing (the listing page's button and the search results). */
+function watchFromListing(l) {
+  const c = l.card, id = c.catalogId ?? "", cut = id.lastIndexOf("-");
+  const photo = l.photos.find((u) => /^https:\/\//.test(u)) ?? "";
+  const art = c.category === "pokemon" && cut > 0 ? `https://images.pokemontcg.io/${id.slice(0, cut)}/${id.slice(cut + 1)}.png` : "";
+  return {
+    category: c.category, catalogId: c.catalogId || null, name: c.subject || l.title, setName: c.setName ?? "", number: c.number ?? "", variant: c.variant ?? "",
+    image: l.isDemo ? photo : art || photo, graded: !!l.grading, gradingCompany: l.grading?.company ?? null, grade: l.grading?.grade ?? null,
+    refCents: l.estimate?.mid > 0 ? toCents(l.estimate.mid) : null, fixedKind: true,
+  };
+}
+/** Today's reference for a raw Pokémon card from TCGdex: TCGplayer's market price, else Cardmarket's in USD. */
+async function dexRefCents(card) {
+  const d = await fetchDexCard(card);
+  const tp = d?.pricing?.tcgplayer, keys = tp ? Object.keys(tp).filter((k) => tp[k] && typeof tp[k] === "object") : [];
+  if (keys.length) { const p = tp[pickVariantKey(keys, card.variant)], v = p?.marketPrice ?? p?.midPrice; if (v > 0) return { cents: toCents(v), d }; }
+  const cm = d?.pricing?.cardmarket, eur = cm?.avg7 > 0 ? cm.avg7 : cm?.trend > 0 ? cm.trend : null;
+  const fx = eur ? await eurUsd() : null;
+  return { cents: fx?.rate ? toCents(eur * fx.rate) : null, d };
+}
+/** The reference price at hand: the one saved today, else this file's weekly TCGplayer price (raw Pokémon), else the last one saved. */
+function watchQuickRef(w) {
+  if (w.refCents > 0 && w.refAt && Date.now() - Date.parse(w.refAt) < DAY_MS) return w.refCents;
+  if (!w.graded && w.catalogId) {
+    const series = storedPrices().cartas[w.catalogId]?.series?.tcgplayer ?? {}, keys = Object.keys(series);
+    const last = keys.length ? (series[pickVariantKey(keys, w.variant)] ?? []).filter((p) => p.market > 0).at(-1) : null;
+    if (last) return toCents(last.market);
+  }
+  return w.refCents > 0 ? w.refCents : null;
+}
+const histRef = (h) => {
+  const p = h?.market?.at(-1) ?? h?.cardmarket?.at(-1) ?? h?.web?.at(-1);
+  return p?.v > 0 ? toCents(p.v) : h?.quote?.market_price > 0 ? toCents(h.quote.market_price) : null;
+};
+/** Researches the reference now: TCGdex for raw Pokémon cards, else the price history's sources (PriceCharting / SportsCardsPro, then the web quote). */
+async function watchLiveRef(w) {
+  if (w.category === "pokemon" && w.catalogId && !w.graded) { const r = await dexRefCents(w).catch(() => null); if (r?.cents) return r.cents; }
+  return histRef(await fetchPriceHistory(watchListing(w)).catch(() => null));
+}
+
+// ----- is it on MarketZlab?
+function watchMatches(w, l) {
+  if ((l.status && l.status !== "active") || isSealed(l) || isLot(l) || !!w.graded !== !!l.grading) return false;
+  if (w.catalogId && l.card.catalogId) return String(w.catalogId).toLowerCase() === String(l.card.catalogId).toLowerCase();
+  if (w.category && l.card.category && w.category !== l.card.category) return false;
+  const hay = normalize([l.title, l.card.subject, l.card.setName, l.card.number, l.card.variant, l.card.year].join(" "));
+  return searchTokens(w.name).every((t) => hay.includes(t)) && (!w.number || watchNum(w.number) === watchNum(l.card.number));
+}
+/** Active listings that may match the list: the same catalog ids, or the main word of each name (for listings typed by hand). */
+async function fetchWatchListings(items) {
+  if (!sb || !items.length) return [];
+  const ids = [...new Set(items.map((w) => w.catalogId).filter(Boolean))].slice(0, 100);
+  const words = [...new Set(items.map((w) => searchTokens(w.name).sort((a, b) => b.length - a.length)[0]).filter(Boolean))].slice(0, 40);
+  const run = async (filter) => {
+    for (let tries = 0; tries < 5; tries++) {
+      const { data, error } = await filter(sb.from("listings").select(listingCols()).eq("status", "active")).limit(200);
+      if (missingCol(error)) continue;
+      if (error) { console.error(error); return []; }
+      return data ?? [];
+    }
+    return [];
+  };
+  const [byId, byName] = await Promise.all([
+    ids.length ? run((q) => q.in("catalog_id", ids)) : [],
+    words.length ? run((q) => q.or(words.map((t) => searchFilter(t, ["subject", "title"])).join(","))) : [],
+  ]);
+  const listings = await withProfiles([...new Map([...byId, ...byName].map((r) => [r.id, r])).values()]);
+  rememberListings(listings);
+  return listings;
+}
+/** watchKey → the active listings (demo ones too) for that card, cheapest first. */
+async function watchAvailability(items) {
+  const pool = new Map();
+  const fresh = await fetchWatchListings(items).catch((e) => { console.warn("watchlist listings", e); return []; });
+  for (const l of [...(CONFIG.SHOW_DEMO_LISTINGS ? DEMO : []), ...listingCache.values(), ...fresh]) pool.set(l.id, l);
+  const all = [...pool.values()];
+  return new Map(items.map((w) => [watchKey(w), all.filter((l) => watchMatches(w, l)).sort((a, b) => a.priceUsd - b.priceUsd)]));
+}
+
+// ----- the menu counter and the add buttons
+const watchBadgeHtml = (n) => (n > 0 ? `<span class="nbadge" title="${n === 1 ? "1 carta de tu watchlist está disponible" : `${n} cartas de tu watchlist están disponibles`}">${n}</span>` : "");
+function setWatchBadge(n) {
+  watchBadge = { uid: session?.user.id ?? null, n, busy: false };
+  const a = $('#sideLinks a[href="#/watchlist"]');
+  if (!a) return;
+  a.querySelector(".nbadge")?.remove();
+  a.insertAdjacentHTML("beforeend", watchBadgeHtml(n));
+}
+/** For renderNav: how many cards of the watchlist are on sale (worked out once per session and after each change). */
+function watchNavBadge() {
+  const uid = session?.user.id ?? null;
+  if (watchBadge.uid !== uid && !watchBadge.busy && !parseHash().path.startsWith("/watchlist")) {
+    watchBadge.busy = true;
+    const gen = watchGen;
+    setTimeout(async () => {
+      try {
+        const items = await loadWatchlist(), avail = items.length ? await watchAvailability(items) : new Map();
+        if (gen === watchGen && uid === (session?.user.id ?? null)) setWatchBadge(items.filter((w) => avail.get(watchKey(w))?.length).length);
+        else watchBadge.busy = false;
+      } catch (e) { console.warn("watchlist count", e); watchBadge.busy = false; }
+    }, 1500);
+  }
+  return watchBadge.uid === uid ? watchBadgeHtml(watchBadge.n) : "";
+}
+function paintWatchBtn(btn, on) {
+  btn.setAttribute("aria-pressed", String(on));
+  btn.classList.toggle("on", on);
+  btn.innerHTML = on ? `<span>En tu watchlist</span>${ic("check")}` : `${ic("plus")}<span>Agregar a mi watchlist</span>`;
+  btn.title = on ? "Toca de nuevo para quitarla" : "";
+}
+/** Adds or removes the card; the button follows. Resolves true when something changed. */
+async function toggleWatch(btn, cand) {
+  const on = btn.getAttribute("aria-pressed") === "true";
+  btn.disabled = true;
+  const r = on ? await removeFromWatchlist(cand) : await addToWatchlist(cand);
+  btn.disabled = false;
+  if (!r.ok) { toast(r.msg, { type: "error" }); return false; }
+  paintWatchBtn(btn, !on);
+  toast(on ? "La quitamos de tu watchlist" : "Agregada a tu watchlist", { description: on ? "" : watchTitle(watchPick(cand)) });
+  return true;
+}
+/** "Agregar a mi watchlist" on a card's page. */
+async function bindWatchToggle(btn, cand) {
+  btn.addEventListener("click", () => toggleWatch(btn, cand));
+  paintWatchBtn(btn, await inWatchlist(cand));
+}
+function askAboutWatch(w, cents = watchQuickRef(w)) {
+  startInquiry({ source: "watchlist", subject: watchTitle(w).slice(0, 160), priceCents: cents > 0 ? cents : null, catalogRef: w.catalogId ?? null, url: watchUrl(w) });
+}
+
+// ----- catalog search
+/**
+ * Every printing of a card in the catalog (TCGdex, Pokémon): "Charizard" brings all its sets, numbers,
+ * rarities and promos; "pikachu 151" or "Umbreon VMAX 215/203" narrow it down. Names with the search as
+ * whole words come first, then the newest sets. null when the catalog does not answer.
+ */
+async function watchCatalogSearch(text) {
+  const numM = text.match(/#?\s*([a-z]{0,5}\d+[a-z]?)\s*\/\s*([a-z]{0,5}\d+)\b/i) ?? text.match(/#\s*([a-z]{0,5}\d+[a-z]?)\b/i);
+  const words = (numM ? text.replace(numM[0], " ") : text).replace(/[^\p{L}\p{N}'’.&-]+/gu, " ").trim().split(/\s+/).filter(Boolean).slice(0, 6);
+  const sets = await dexSets();
+  let list = null, used = 0;
+  for (let k = words.length; k >= 1; k--) {
+    const name = words.slice(0, k).join(" ");
+    if (name.length < 3) break;
+    const found = await dexGet(`/cards?name=${encodeURIComponent(name)}`);
+    if (!found) return null;
+    if (found.length) { list = found; used = k; break; }
+  }
+  if (!list && numM) list = await dexCandidates({ number: numM[1], total: numM[2] });
+  list = (list ?? []).filter((c) => !isPocketSet(setOfDexId(c.id)));
+  const setOf = (c) => sets.get(setOfDexId(c.id));
+  if (numM && used) {
+    const byNum = list.filter((c) => sameNumber(c.localId, numM[1]));
+    const byTotal = numM[2] ? byNum.filter((c) => String(setOf(c)?.cardCount?.official ?? "") === String(Number(numM[2]))) : byNum;
+    list = byTotal.length ? byTotal : byNum;
+  }
+  // Words that are not part of the name ("151", "evolving skies") pick the set or the number.
+  const extra = words.slice(used).map(normalize);
+  let note = "";
+  if (extra.length && list.length) {
+    const narrowed = list.filter((c) => {
+      const setName = normalize(setOf(c)?.name ?? ""), setWords = setName.split(/[^\p{L}\p{N}]+/u);
+      return extra.every((t) => (/^\d+$/.test(t) ? sameNumber(c.localId, t) || setWords.includes(t) : setName.includes(t) || setOfDexId(c.id).toLowerCase() === t));
+    });
+    if (narrowed.length) list = narrowed;
+    else note = `Ninguna versión de «${words.slice(0, used).join(" ")}» coincide con «${words.slice(used).join(" ")}»: te mostramos todas.`;
+  }
+  const order = new Map([...sets.keys()].map((id, i) => [id, i]));
+  const plain = (s) => ` ${normalize(s).replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const q = plain(words.slice(0, used).join(" "));
+  const whole = (c) => (used && plain(c.name).includes(q) ? 1 : 0);
+  list.sort((a, b) => whole(b) - whole(a) || !!b.image - !!a.image
+    || (order.get(setOfDexId(b.id)) ?? -1) - (order.get(setOfDexId(a.id)) ?? -1) || (parseInt(a.localId, 10) || 0) - (parseInt(b.localId, 10) || 0));
+  return {
+    note,
+    cards: list.slice(0, 500).map((c) => {
+      const set = setOf(c), total = set?.cardCount?.official;
+      return {
+        category: "pokemon", dexId: c.id, catalogId: ptcgId(c.id), name: c.name, setName: set?.name ?? setOfDexId(c.id), number: total ? `${c.localId}/${total}` : c.localId,
+        variant: "", image: c.image ? `${c.image}/high.webp` : "", thumb: c.image ? `${c.image}/low.webp` : "",
+      };
+    }),
+  };
+}
+
+// ----- #/watchlist
+async function viewWatchlist(app, params) {
+  setTitle("Mi watchlist");
+  const APP = esc(CONFIG.APP_NAME);
+  const st = { seq: 0, timer: 0, q: "", cards: [], strip: [], sale: new Map(), shown: WATCH_PAGE, set: "", note: "", down: false, reg: new Map(), prices: new Map(), mineRun: 0, painted: false, graded: params.get("g") === "1", company: "PSA", grade: 10 };
+  const q0 = (params.get("q") ?? "").trim().slice(0, 80);
+  app.innerHTML = `
+    <section class="wl-hero">
+      <h1 class="display">Mi watchlist</h1>
+      <p class="lead">Busca la carta que quieres y tócala: queda en tu lista. Te mostramos si ya está a la venta en ${APP} y, si no, cuánto vale.</p>
+      <form class="wl-search" id="wlForm" role="search">${ic("search")}
+        <input class="input" id="wlQ" type="search" value="${esc(q0)}" maxlength="80" placeholder="Busca cualquier carta: Charizard, Pikachu 151, Wembanyama…" aria-label="Buscar una carta" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+        <button type="button" class="icon-btn wl-clear" id="wlClear" aria-label="Borrar la búsqueda"${q0 ? "" : " hidden"}>${ic("x")}</button>
+      </form>
+      <div class="wl-opts">
+        <div class="seg" role="radiogroup" aria-label="Sin graduar o graduada">
+          <label class="${st.graded ? "" : "on"}"><input type="radio" name="wlKind" value="raw"${st.graded ? "" : " checked"}>Sin graduar</label>
+          <label class="${st.graded ? "on" : ""}"><input type="radio" name="wlKind" value="graded"${st.graded ? " checked" : ""}>Graduada</label>
+        </div>
+        <div class="wl-grade" id="wlGrade"${st.graded ? "" : " hidden"}>
+          <select class="select" id="wlCo" aria-label="Empresa que la gradúa">${GRADERS.map((g) => `<option${g === st.company ? " selected" : ""}>${g}</option>`).join("")}</select>
+          <select class="select" id="wlGr" aria-label="Nota">${WATCH_GRADES.map((g) => `<option value="${g}"${g === st.grade ? " selected" : ""}>${g}</option>`).join("")}</select>
+        </div>
       </div>
-      <p class="xs muted" style="margin:0">Te avisamos cuando se publique una carta que tenga todas esas palabras. Usa pocas palabras clave: el nombre y el set suelen bastar.</p>
-      <div id="wMsg" aria-live="polite"></div>
-      <button class="btn primary" id="wSave"${full ? " disabled" : ""}>${ic("bell")}Avisarme</button>
-      <p class="xs muted" style="margin:0">${data.length} de ${limit} búsquedas guardadas.${hasPlan ? "" : ` Con el <a class="link" href="#/escanear">Plan Coleccionista</a> puedes guardar hasta 50.`}</p>
-    </form>
-    ${data.length ? `<section class="panel col"><h2>Mis búsquedas</h2><ul class="admin-list">${data.map((w) => `<li class="panel" data-id="${w.id}">
-      <div class="phead"><span style="font-weight:600">“${esc(w.query)}”</span><button type="button" class="btn ghost sm w-del">${ic("trash")}Quitar</button></div>
-      ${describe(w) ? `<p class="xs muted" style="margin:4px 0 0">${esc(describe(w))}</p>` : ""}
-      <a class="link small" href="${esc(wantedSearchHref(w))}">Ver lo que hay ahora</a></li>`).join("")}</ul></section>` : ""}
-  </div>`;
-  const form = $("#wForm");
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const msg = $("#wMsg"), btn = $("#wSave"), q = form.q.value.trim().replace(/\s+/g, " ");
-    const max = form.max.value ? Math.round(Number(form.max.value) * 100) : null;
-    if (q.replace(/[^\p{L}\p{N}]/gu, "").length < 2) { msg.innerHTML = `<p class="notice bad" style="margin:0">Escribe qué carta buscas.</p>`; return; }
-    if (max != null && !(max >= 100 && max <= 10000000)) { msg.innerHTML = `<p class="notice bad" style="margin:0">El precio máximo tiene que estar entre $1 y $100,000.</p>`; return; }
-    btn.disabled = true;
-    const { error: err } = await sb.from("wanted").insert({ user_id: uid, query: q.slice(0, 80), category: form.cat.value || null, kind: form.kind.value, max_price_cents: max });
-    if (err) {
-      btn.disabled = false;
-      if (!/limit/.test(err.message ?? "")) console.error(err);
-      msg.innerHTML = `<p class="notice bad" style="margin:0">${/limit/.test(err.message ?? "") ? `Ya tienes ${limit} búsquedas guardadas. Quita alguna${hasPlan ? "" : " o activa el Plan Coleccionista"}.` : "No pudimos guardar tu búsqueda. Intenta de nuevo."}</p>`;
+      ${sb && !session ? `<p class="xs muted wl-guest">Tu watchlist se guarda en este navegador. <a class="link" href="#/entrar?next=${encodeURIComponent("/watchlist")}">Inicia sesión</a> para tenerla en tu cuenta y en todos tus dispositivos.</p>` : ""}
+    </section>
+    <div class="wl-results" id="wlRes" aria-live="polite"></div>
+    <div class="wl-mine" id="wlMine"></div>`;
+  const input = $("#wlQ"), resBox = $("#wlRes"), mineBox = $("#wlMine");
+  // The raw / graded choice applies to catalog cards and typed ones; a listing's card is what it is.
+  const withKind = (c) => {
+    if (c.fixedKind) return c;
+    const p = c.dexId ? st.prices.get(c.dexId) : null;
+    return { ...c, variant: p?.rarity ?? c.variant ?? "", graded: st.graded, gradingCompany: st.graded ? st.company : null, grade: st.graded ? st.grade : null, refCents: st.graded ? null : p?.cents ?? null };
+  };
+
+  // --- search results
+  const visible = () => (st.set ? st.cards.filter((c) => c.setName === st.set) : st.cards);
+  const priceBlock = (c) => {
+    const p = st.prices.get(c.dexId), sale = st.sale.get(c.catalogId.toLowerCase()); // p: { cents, rarity } once researched
+    return `<div style="min-width:0">${p ? `<p class="price">${p.cents ? fmtRef(p.cents) : "—"}</p>` : `<span class="sk" style="display:block;height:22px;width:72px"></span>`}
+      <p class="delta neutral"><span>${p && !p.cents ? "Sin precio de referencia" : st.graded ? "Referencia sin graduar" : "Precio de referencia"}</span></p>
+      ${sale ? `<a class="wl-onsale" href="#/carta/${encodeURIComponent(sale.id)}">${ic("store")}En venta desde ${formatUsd(toCents(sale.priceUsd))}</a>` : ""}</div>`;
+  };
+  const cardTile = (c, i) => {
+    st.reg.set(c.dexId, c);
+    return `<li style="--i:${Math.min(i, 16)}"><div class="pcard wl-card">
+      <a class="media card-ratio" href="${esc(watchHash(c))}" title="Ver su precio"><div class="inner">${c.thumb ? `<img class="card loading-img" src="${esc(c.thumb)}" alt="${esc(`${c.name} · ${c.setName}`)}" loading="lazy" decoding="async">` : watchArt(c)}</div>
+        ${st.sale.has(c.catalogId.toLowerCase()) ? `<div class="corner-l"><span class="cond">En venta</span></div>` : ""}</a>
+      <p class="title">${esc(c.name)}</p>
+      <p class="set">${esc(c.setName)} · ${esc(c.number)}</p>
+      <div class="foot" data-ref="${esc(c.dexId)}">${priceBlock(c)}</div>
+      <button type="button" class="btn outline sm wl-add" data-w="${esc(c.dexId)}" aria-pressed="false">${ic("plus")}<span>Agregar a mi watchlist</span></button>
+    </div></li>`;
+  };
+  const listingTile = (l, i) => {
+    st.reg.set(`l:${l.id}`, watchFromListing(l));
+    return tile(l, i, { after: `<button type="button" class="btn outline sm wl-add" data-w="${esc(`l:${l.id}`)}" aria-pressed="false">${ic("plus")}<span>Agregar a mi watchlist</span></button>` });
+  };
+  const loadPrices = (cards) => {
+    const seq = st.seq;
+    eachLimit(cards.filter((c) => !st.prices.has(c.dexId)), 6, async (c) => {
+      if (seq !== st.seq || st.prices.has(c.dexId)) return;
+      st.prices.set(c.dexId, null); // researching
+      const r = await dexRefCents(c).catch(() => null);
+      st.prices.set(c.dexId, { cents: r?.cents ?? watchQuickRef({ catalogId: c.catalogId }) ?? null, rarity: r?.d?.rarity ?? "" });
+      const el = resBox.querySelector(`[data-ref="${CSS.escape(c.dexId)}"]`);
+      if (el) el.innerHTML = priceBlock(c);
+    });
+  };
+  const syncButtons = async () => {
+    const keys = new Set((await loadWatchlist()).map(watchKey));
+    resBox.querySelectorAll("button[data-w]").forEach((b) => { const c = st.reg.get(b.dataset.w); if (c) paintWatchBtn(b, keys.has(watchKey(withKind(c)))); });
+  };
+  const moreBtn = (left) => (left > 0 ? `<div class="wl-more"><button type="button" class="btn outline" id="wlMore">Ver más versiones (${left})</button></div>` : "");
+  const paintCatalog = () => {
+    const box = $("#wlCat");
+    if (!box) return;
+    const cards = visible(), sets = [...new Set(st.cards.map((c) => c.setName))];
+    box.innerHTML = st.cards.length ? `<section>
+      <div class="rhead wl-rhead"><h2 class="wl-h">Todas las versiones<span class="wl-count">${cards.length}</span></h2>
+        ${sets.length > 1 ? `<select class="select" id="wlSet" aria-label="Filtrar por set"><option value="">Todos los sets (${sets.length})</option>${sets.map((s) => `<option${s === st.set ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>` : ""}</div>
+      ${st.note ? `<p class="wl-note">${esc(st.note)}</p>` : ""}
+      <ul class="grid live" id="wlGrid">${cards.slice(0, st.shown).map(cardTile).join("")}</ul>${moreBtn(cards.length - st.shown)}</section>` : "";
+    loadPrices(cards.slice(0, st.shown));
+    syncButtons();
+  };
+  const freeCard = () => {
+    const cats = st.strip.map((l) => l.card.category);
+    const guess = st.cards.length ? "pokemon" : cats.sort((a, b) => cats.filter((x) => x === b).length - cats.filter((x) => x === a).length)[0] ?? null;
+    st.reg.set("free", { category: guess, name: st.q, catalogId: null });
+    const lead = !st.cards.length;
+    return `<div class="panel wl-free"><div>
+      <p style="font-weight:700;margin:0">${lead ? (st.down ? "El catálogo no responde en este momento" : `«${esc(st.q)}» no está en el catálogo de Pokémon`) : "¿No es ninguna de estas?"}</p>
+      <p class="small muted" style="margin:4px 0 0">${lead ? `Agrégala tal cual. Para NBA y NFL escribe jugador, set y año (ej.: Wembanyama Prizm 2023): la buscamos en los anuncios de ${APP}.` : `Agrégala tal cual: «${esc(st.q)}».`}</p></div>
+      <button type="button" class="btn ${lead ? "primary" : "outline"} sm wl-add" data-w="free" aria-pressed="false">${ic("plus")}<span>Agregar a mi watchlist</span></button></div>`;
+  };
+  const paintIdle = (hint = "") => {
+    resBox.innerHTML = `<div class="wl-try">${hint ? `<span class="small muted">${hint}</span>` : `<span class="small muted">Prueba con:</span>${WATCH_TRY.map((s) => `<button type="button" class="chip" data-try="${esc(s)}">${esc(s)}</button>`).join("")}`}</div>`;
+  };
+  const search = async () => {
+    clearTimeout(st.timer);
+    if (!input.isConnected) return; // the page was left while typing
+    const q = input.value.trim().replace(/\s+/g, " ").slice(0, 80), seq = ++st.seq;
+    $("#wlClear").hidden = !q;
+    const hash = q ? `#/watchlist?q=${encodeURIComponent(q)}` : "#/watchlist";
+    if (location.hash !== hash) history.replaceState(null, "", hash);
+    const letters = q.replace(/[^\p{L}\p{N}]/gu, "").length;
+    if (letters < 3) { st.cards = []; st.strip = []; return paintIdle(letters ? "Escribe al menos 3 letras." : ""); }
+    resBox.innerHTML = `<p class="wl-status"><span class="spinner"></span>Buscando «${esc(q)}» en el catálogo y en ${APP}…</p>${skeletonGrid(8)}`;
+    const [found, real] = await Promise.all([
+      watchCatalogSearch(q).catch((e) => { console.warn("watchlist catalog", e); return null; }),
+      fetchRealListings({ q }).catch(() => []),
+    ]);
+    if (seq !== st.seq || !resBox.isConnected) return;
+    rememberListings(real);
+    const listings = [...new Map([...(CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => matchesFilters(l, { q })) : []), ...real].map((l) => [l.id, l])).values()]
+      .filter((l) => !isSealed(l) && !isLot(l));
+    Object.assign(st, { q, down: found === null, cards: found?.cards ?? [], note: found?.note ?? "", shown: WATCH_PAGE, set: "", reg: new Map(), sale: new Map() });
+    const ids = new Set(st.cards.map((c) => c.catalogId.toLowerCase()));
+    for (const l of [...listings].sort((a, b) => b.priceUsd - a.priceUsd)) { const id = l.card.catalogId?.toLowerCase(); if (id && ids.has(id)) st.sale.set(id, l); } // cheapest wins
+    st.strip = sortListings(listings.filter((l) => !ids.has(l.card.catalogId?.toLowerCase() ?? "")), "recientes").slice(0, 12);
+    resBox.innerHTML = `
+      ${st.strip.length ? `<section><div class="rhead"><h2 class="wl-h">En venta en ${APP}<span class="wl-count">${st.strip.length}</span></h2></div>
+        <ul class="grid live">${st.strip.map(listingTile).join("")}</ul></section>` : ""}
+      <div id="wlCat"></div>
+      ${freeCard()}`;
+    paintCatalog();
+  };
+
+  // --- the list, in two groups
+  const availTile = (w, ls, i) => tile(ls[0], i, {
+    before: `<p class="wl-flag good">${ic("checkCircle")}<span>Disponible en ${APP}${ls[0].isDemo ? " (anuncio de ejemplo)" : ""}${ls.length > 1 ? ` · ${ls.length} anuncios` : ""}</span></p>`,
+    after: `<div class="wl-actions"><p class="wl-want">${ic("bookmark")}<span>${esc(watchTitle(w))}</span></p><button type="button" class="btn ghost sm wl-del" data-id="${esc(w.id)}">${ic("trash")}<span>Quitar</span></button></div>`,
+  });
+  const missingTile = (w, i) => {
+    const ref = watchQuickRef(w);
+    return `<li style="--i:${Math.min(i, 16)}" data-wid="${esc(w.id)}">
+      <p class="wl-flag warn">${ic("info")}<span data-flag>${esc(missingText(ref))}</span></p>
+      <a class="pcard" href="${esc(watchHash(w))}">
+        <div class="media card-ratio"><div class="inner">${watchArt(w, { thumb: true })}</div>
+          <div class="corner-l">${w.graded ? `<span class="graded">${esc(gradeLabel(w))}</span>` : `<span class="cond">Sin graduar</span>`}</div>
+          <div class="corner-r"><span class="demo">No está en la web</span></div></div>
+        <p class="title">${esc(w.name)}</p>
+        <p class="set">${esc([w.setName, w.number].filter(Boolean).join(" · ") || categoryName(w.category) || "Agregada a mano")}</p>
+        <p class="meta">${ic("clock")}<span>Todavía no está a la venta</span></p>
+        <div class="foot"><div style="min-width:0"><p class="price" data-price>${ref ? fmtRef(ref) : "—"}</p><p class="delta neutral"><span>Precio de referencia</span></p></div><span class="act" aria-hidden="true">${ic("arrowRight")}</span></div>
+      </a>
+      <div class="wl-actions"><button type="button" class="btn primary sm wl-ask" data-id="${esc(w.id)}">${ic("chat")}<span>Consultar por WhatsApp</span></button><button type="button" class="btn ghost sm wl-del" data-id="${esc(w.id)}">${ic("trash")}<span>Quitar</span></button></div></li>`;
+  };
+  const paintMine = async () => {
+    const run = ++st.mineRun, items = await loadWatchlist();
+    if (run !== st.mineRun || !mineBox.isConnected) return;
+    if (!items.length) {
+      setWatchBadge(0);
+      mineBox.innerHTML = `<section class="wl-sec"><div class="rhead"><h2 class="wl-h">${ic("bookmark")}Tus cartas</h2></div>
+        <div class="empty-state"><span class="ico">${ic("bookmark")}</span><p style="font-weight:600">Tu watchlist está vacía.</p><p class="small muted" style="margin-top:4px">Busca una carta arriba y toca «Agregar a mi watchlist».</p></div></section>`;
       return;
     }
-    toast("Listo. Te avisamos cuando la publiquen.");
-    go("/busco");
-    route();
-  });
-  app.querySelectorAll(".w-del").forEach((b) => b.addEventListener("click", async () => {
-    const li = b.closest("li");
-    b.disabled = true;
-    const { error: err } = await sb.from("wanted").delete().eq("id", li.dataset.id);
-    if (err) { b.disabled = false; console.error(err); return toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
-    route();
+    if (!st.painted) mineBox.innerHTML = `<p class="wl-status"><span class="spinner"></span>Revisando si tus cartas ya están en ${APP}…</p>`;
+    const avail = await watchAvailability(items).catch((e) => { console.error(e); return new Map(); });
+    if (run !== st.mineRun || !mineBox.isConnected) return;
+    const yes = items.filter((w) => avail.get(watchKey(w))?.length), no = items.filter((w) => !avail.get(watchKey(w))?.length);
+    setWatchBadge(yes.length);
+    const live = st.painted ? "" : " live";
+    st.painted = true;
+    mineBox.innerHTML = `
+      <section class="wl-sec" aria-labelledby="wlYes"><div class="rhead"><h2 class="wl-h" id="wlYes">${ic("checkCircle")}Disponibles en ${APP}<span class="wl-count">${yes.length}</span></h2></div>
+        ${yes.length ? `<ul class="grid${live}">${yes.map((w, i) => availTile(w, avail.get(watchKey(w)), i)).join("")}</ul>` : `<p class="wl-none">Ninguna de tus cartas está a la venta todavía. Cuando alguien publique una, aparece aquí.</p>`}</section>
+      <section class="wl-sec" aria-labelledby="wlNo"><div class="rhead"><h2 class="wl-h" id="wlNo">${ic("clock")}Todavía no están en la web<span class="wl-count">${no.length}</span></h2></div>
+        ${no.length ? `<ul class="grid${live}">${no.map(missingTile).join("")}</ul>` : `<p class="wl-none">Todas tus cartas están a la venta en ${APP}.</p>`}</section>`;
+    // Reference prices: researched again at most once a day per card (and once per visit).
+    const stale = no.filter((w) => !watchRefTried.has(watchKey(w)) && !(w.refCents > 0 && w.refAt && Date.now() - Date.parse(w.refAt) < DAY_MS));
+    eachLimit(stale, 2, async (w) => {
+      watchRefTried.add(watchKey(w));
+      const cents = await watchLiveRef(w).catch(() => null);
+      if (!cents) return;
+      saveWatchRef(w, cents);
+      const li = mineBox.querySelector(`li[data-wid="${CSS.escape(w.id)}"]`);
+      if (!li) return;
+      li.querySelector("[data-price]").textContent = fmtRef(cents);
+      li.querySelector("[data-flag]").textContent = missingText(cents);
+    });
+  };
+
+  // --- events
+  input.addEventListener("input", () => { clearTimeout(st.timer); $("#wlClear").hidden = !input.value; st.timer = setTimeout(search, 350); });
+  $("#wlForm").addEventListener("submit", (e) => { e.preventDefault(); input.blur(); search(); });
+  $("#wlClear").addEventListener("click", () => { input.value = ""; search(); input.focus(); });
+  app.querySelectorAll("input[name=wlKind]").forEach((r) => r.addEventListener("change", () => {
+    st.graded = app.querySelector("input[name=wlKind]:checked")?.value === "graded";
+    app.querySelectorAll(".wl-opts .seg label").forEach((lb) => lb.classList.toggle("on", lb.querySelector("input").checked));
+    $("#wlGrade").hidden = !st.graded;
+    resBox.querySelectorAll("[data-ref]").forEach((el) => { const c = st.reg.get(el.dataset.ref); if (c) el.innerHTML = priceBlock(c); });
+    syncButtons();
   }));
+  $("#wlCo").addEventListener("change", (e) => { st.company = e.target.value; });
+  $("#wlGr").addEventListener("change", (e) => { st.grade = Number(e.target.value); });
+  resBox.addEventListener("click", async (e) => {
+    const chip = e.target.closest("[data-try]");
+    if (chip) { input.value = chip.dataset.try; return search(); }
+    if (e.target.closest("#wlMore")) {
+      const cards = visible(), from = st.shown;
+      st.shown += WATCH_PAGE;
+      $("#wlGrid").insertAdjacentHTML("beforeend", cards.slice(from, st.shown).map((c, i) => cardTile(c, i)).join(""));
+      $("#wlMore").closest(".wl-more").outerHTML = moreBtn(cards.length - st.shown);
+      loadPrices(cards.slice(from, st.shown));
+      return syncButtons();
+    }
+    const b = e.target.closest("button[data-w]"), c = b && st.reg.get(b.dataset.w);
+    if (c && await toggleWatch(b, withKind(c))) paintMine();
+  });
+  resBox.addEventListener("change", (e) => { if (e.target.id === "wlSet") { st.set = e.target.value; st.shown = WATCH_PAGE; paintCatalog(); } });
+  mineBox.addEventListener("click", async (e) => {
+    const b = e.target.closest(".wl-del, .wl-ask");
+    if (!b) return;
+    const w = (await loadWatchlist()).find((x) => x.id === b.dataset.id);
+    if (!w) return;
+    if (b.classList.contains("wl-ask")) return askAboutWatch(w);
+    b.disabled = true;
+    const r = await removeFromWatchlist(w);
+    if (!r.ok) { b.disabled = false; return toast(r.msg, { type: "error" }); }
+    toast("La quitamos de tu watchlist");
+    paintMine();
+    syncButtons();
+  });
+
+  if (q0) search(); else paintIdle();
+  if (!q0 && matchMedia("(hover: hover) and (pointer: fine)").matches) input.focus({ preventScroll: true });
+  await paintMine();
+}
+
+// ----- #/watchlist/carta/<catalog id>: a card of the list, with or without listings
+async function viewWatchCard(app, slug, params) {
+  app.innerHTML = `<div class="wrap"><p class="loading"><span class="spinner"></span>Cargando carta…</p></div>`;
+  const holder = app.firstElementChild, APP = esc(CONFIG.APP_NAME);
+  const g = params.get("g"), [gco, ggr] = (g ?? "").split("-"), graded = !!g;
+  const items = await loadWatchlist();
+  let w = items.find((x) => watchSlug(x) === slug && !!x.graded === graded);
+  if (!w && !slug.startsWith("m-")) { // a shared link, or a search result not added yet: build it from the catalog
+    const d = await fetchDexCard({ catalogId: slug }).catch(() => null);
+    const c = d ? await catalogFromDex(d.id) : null;
+    if (c) {
+      w = {
+        category: "pokemon", catalogId: c.id, dexId: c.dexId, name: c.name, setName: c.set.name, number: c.set.printedTotal ? `${c.number}/${c.set.printedTotal}` : c.number,
+        variant: c.rarity ?? "", image: c.images.large || c.images.small || "", graded, refCents: null,
+        gradingCompany: graded ? (GRADERS.includes(gco) ? gco : "PSA") : null, grade: graded ? (WATCH_GRADES.includes(Number(ggr)) ? Number(ggr) : 10) : null,
+      };
+    }
+  }
+  if (!holder.isConnected) return;
+  if (!w) {
+    setTitle("Carta no encontrada");
+    app.innerHTML = `<div class="wrap"><div class="empty-state" style="margin-top:48px"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos esta carta.</p><p class="small muted" style="margin:4px 0 16px">Puede que la hayas quitado de tu watchlist.</p><a class="btn primary" href="#/watchlist">Ir a mi watchlist</a></div></div>`;
+    return;
+  }
+  setTitle(watchTitle(w));
+  const ls = (await watchAvailability([w]).catch(() => new Map())).get(watchKey(w)) ?? [];
+  if (!holder.isConnected) return;
+  let ref = watchQuickRef(w);
+  const meta = [w.number, w.variant, w.category ? categoryName(w.category) : ""].filter(Boolean).map(esc).join('<span class="sep" aria-hidden="true">•</span>');
+  app.innerHTML = `
+    <section class="dhead"><div class="wrap">
+      <nav class="crumbs" aria-label="Ruta"><a href="#/watchlist">Mi watchlist</a>${ic("chevronRight")}<span aria-current="page">${esc(w.name)}</span></nav>
+      <div class="dhead-row">
+        <div style="min-width:0">
+          <h1>${esc(w.name)}</h1>
+          ${w.setName ? `<a class="dset" href="#/?q=${encodeURIComponent(w.setName)}">${esc(w.setName)}</a>` : ""}
+          ${meta ? `<p class="dmeta">${meta}</p>` : ""}
+          <div class="dbadges">${w.graded ? `<span class="graded">${esc(gradeLabel(w))}</span>` : `<span class="cond">Sin graduar</span>`}${ls.length ? `<span class="b good">${ic("checkCircle")}Disponible en ${APP}</span>` : `<span class="b warn">${ic("clock")}Todavía no está en la web</span>`}</div>
+        </div>
+        <div class="dprice"><p class="big" id="wlRef">${ref ? fmtRef(ref) : "—"}</p><p class="delta neutral"><span>Precio de referencia${w.graded ? ` (${esc(gradeLabel(w))})` : ""}</span></p></div>
+      </div>
+      ${ls.length ? `<p class="notice good" style="font-weight:600">Esta carta está a la venta en ${APP}: ${ls.length === 1 ? "mira el anuncio" : `hay ${ls.length} anuncios`} más abajo.</p>`
+        : `<p class="notice warn" id="wlNotice" style="font-weight:600">${esc(missingText(ref))}</p>`}
+    </div></section>
+    <div class="wrap dgrid">
+      <div class="dmedia">
+        <div class="big-art card-ratio"><div class="inner">${watchArt(w)}</div></div>
+        <p class="media-note">${[w.image ? "Imagen de catálogo." : "", ls.length ? "" : "Esta carta todavía no está a la venta."].filter(Boolean).join(" ")}</p>
+      </div>
+      <div class="dmain">
+        ${ls.length ? `<section class="panel"><h2 class="ptitle">${ic("store")}En venta en ${APP}</h2><ul class="grid wl-in" style="margin-top:14px">${ls.slice(0, 6).map((l, i) => tile(l, i)).join("")}</ul></section>` : ""}
+        <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
+      </div>
+      <aside class="dside">
+        ${ls.length ? "" : `<section class="panel"><h2 class="ptitle">${ic("chat")}Consultas</h2>
+          <p class="sub">Esta carta todavía no está a la venta en ${APP}. Escríbenos y el equipo te ayuda a conseguirla por WhatsApp.</p>
+          <button type="button" class="btn primary block" id="wlAsk" style="margin-top:14px">${ic("chat")}Consultar por WhatsApp</button>
+          <p class="xs muted" style="margin:10px 0 0">No se puede comprar aquí: el precio es una referencia del mercado, no una oferta.</p></section>`}
+        <button type="button" class="btn outline block wl-toggle" id="wlToggle" aria-pressed="false">${ic("plus")}Agregar a mi watchlist</button>
+      </aside>
+    </div>`;
+  loadPriceChart(watchListing(w), (h) => {
+    const cents = histRef(h);
+    if (!cents) return;
+    ref = cents;
+    if ($("#wlRef")) $("#wlRef").textContent = fmtRef(cents);
+    if ($("#wlNotice")) $("#wlNotice").textContent = missingText(cents);
+    if (w.id) saveWatchRef(w, cents);
+    else { w.refCents = cents; w.refAt = new Date().toISOString(); }
+  });
+  $("#wlAsk")?.addEventListener("click", () => askAboutWatch(w, ref));
+  bindWatchToggle($("#wlToggle"), w);
 }
 
 // ============================================================= scanner (#/escanear)
