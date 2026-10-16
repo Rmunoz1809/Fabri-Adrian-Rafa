@@ -25,6 +25,12 @@ insert into public.payout_accounts (user_id, yappy_phone, holder_name) values
   ('00000000-0000-4000-a000-000000000003', '67654321', 'Ana Vendedora')
 on conflict (user_id) do nothing;
 
+-- Seller accounts (migration 0031): the shop and Ana sell, Beto only buys.
+insert into public.seller_accounts (user_id, phone, pickup_address) values
+  ('00000000-0000-4000-a000-000000000002', '+50761234567', 'Vía España, edificio Plaza, local 4'),
+  ('00000000-0000-4000-a000-000000000003', '+50767654321', 'San Francisco, calle 74, PH Las Palmas, apto 3B')
+on conflict (user_id) do nothing;
+
 insert into public.listings (id, seller_id, category, title, subject, set_name, number, condition, grading_company, grade,
                              price_cents, province, district, neighborhood, status, protected_eligible) values
   ('00000000-0000-4000-b000-000000000001', '00000000-0000-4000-a000-000000000002', 'pokemon',

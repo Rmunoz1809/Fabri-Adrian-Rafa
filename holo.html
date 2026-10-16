@@ -839,7 +839,19 @@ body.gate header.top, body.gate footer.bottom { display: none; }
 .gate-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; }
 .gate-pills span { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid rgb(244 246 251 / .1); border-radius: 10px; background: rgb(11 18 34 / .72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); font-size: 13px; font-weight: 600; }
 .gate-glass { margin-top: 20px; padding: 24px; border: 1px solid rgb(244 246 251 / .1); border-radius: 24px; background: rgb(11 18 34 / .8); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); box-shadow: 0 30px 80px -20px rgb(0 0 0 / .9), var(--hairline); }
-.gate-glass .input { background: rgb(0 0 0 / .45); }
+.gate-glass .input, .gate-glass .textarea { background: rgb(0 0 0 / .45); }
+.gate-alt { margin-top: 16px; text-align: center; color: var(--fg-2); }
+.gate-alt .link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+/* seller accounts (migration 0031): sign-up fields, "Vender" with a buyer account, Mi cuenta */
+.pickup-note { display: flex; gap: 10px; align-items: flex-start; margin: 0; font-size: 13px; line-height: 1.45; }
+.pickup-note > .i { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; color: var(--fg); }
+.pickup-note b { color: var(--fg); }
+.seller-form .input[readonly] { color: var(--fg-2); background: transparent; border-style: dashed; }
+.ic-line .i { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
+.seller-panel { max-width: 560px; margin-top: 24px; }
+.seller-data { display: grid; gap: 12px; margin: 0; }
+.seller-data dt { font-size: 12px; color: var(--fg-2); }
+.seller-data dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
 .legal { font-size: 12px; color: var(--fg-2); }
 /* animated card wall: Pokémon + NBA + NFL */
 body:not(.gate) .gate-bg { display: none; }
@@ -2036,7 +2048,9 @@ async function route() {
     if (path === "/escanear") return viewScan(app);
     if (path === "/terminos") return viewTerms(app);
     if (path === "/privacidad") return viewPrivacy(app);
-    if (path === "/entrar") return viewAuth(app, params.get("next") || "/");
+    if (path === "/entrar") return viewAuth(app, params.get("next") || "/", params.get("cuenta"));
+    // Only seller accounts sell (migration 0031): a buyer account first becomes one.
+    if (/^\/vender(\/|$)/.test(path) && sb && session && !(await sellerReady())) return viewBecomeSeller(app);
     if (path === "/vender") return viewSell(app);
     if (path === "/vender/graduadas") return viewSellGraded(app);
     if (path === "/vender/sellado") return viewSellSealed(app);
@@ -2087,7 +2101,7 @@ function renderNav() {
     { heading: session.user.email ?? name },
     { label: "Mi cuenta", icon: "user", href: "#/cuenta" },
     { label: "Mis consultas", icon: "chat", href: "#/consultas" },
-    { label: "Vender una carta", icon: "plus", href: "#/vender" },
+    isSeller() ? { label: "Vender una carta", icon: "plus", href: "#/vender" } : { label: "Pasar a cuenta de vendedor", icon: "store", href: "#/cuenta?vendedor=1" },
     ...(isStaff ? [{ label: "Panel de staff", icon: "layout", href: "#/admin" }] : []),
     "sep",
     { label: "Salir", icon: "logout", onSelect: signOut },
@@ -3478,13 +3492,18 @@ function gateBackground() {
   document.body.insertAdjacentHTML("afterbegin", `<div class="gate-bg" id="gateBg" aria-hidden="true"><div class="gate-cols">${cols.join("")}</div></div>`);
 }
 
-function viewAuth(app, next) {
+function viewAuth(app, next, kind = null) {
   setTitle("Entrar");
   if (!next.startsWith("/") || /^\/entrar(\?|$)/.test(next)) next = "/"; // never bounce back to the sign-in page
   if (session) return go(next);
   if (!sb) { app.innerHTML = `<div class="wrap"><p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p></div>`; return; }
   gateBackground();
-  let mode = "entrar", captcha = null;
+  // kind "vendedor" (#/entrar?cuenta=vendedor, from "Vender" without a session) opens "Crear cuenta" as a seller.
+  let mode = kind === "vendedor" ? "registro" : "entrar", seller = kind === "vendedor", captcha = null;
+  const label = () => mode === "registro" ? (seller ? "Crear cuenta de vendedor" : "Crear cuenta") : "Entrar";
+  const copy = () => mode !== "registro" ? ["Bienvenido", "Entra para ver y publicar cartas."]
+    : seller ? ["Crea tu cuenta de vendedor", "Publica tus cartas y nosotros pasamos a retirarlas."] : ["Crea tu cuenta", "Es gratis y toma un minuto."];
+  const kindHint = () => seller ? "Publica tus cartas. Te pedimos un teléfono y la dirección donde las retiramos." : "Compra y consulta cartas. Puedes pasarte a vendedor cuando quieras.";
   const render = () => {
     const up = mode === "registro";
     captcha?.then((c) => c?.remove()); // switching tabs re-renders the form: drop the old widget
@@ -3496,52 +3515,185 @@ function viewAuth(app, next) {
         <div class="gate-pills"><span>Pokémon</span><span>NBA</span><span>NFL</span></div>
       </section>
       <div class="gate-form">
-        <h2>${up ? "Crea tu cuenta" : "Bienvenido"}</h2><p class="muted" style="margin-top:4px">${up ? "Es gratis y toma un minuto." : "Entra para ver y publicar cartas."}</p>
+        <h2 id="authTitle">${copy()[0]}</h2><p class="muted" style="margin-top:4px" id="authSub">${copy()[1]}</p>
         <div class="gate-glass">
           <div class="tabs" role="group" aria-label="Tipo de acceso"><button type="button" data-m="entrar" class="${!up ? "on" : ""}" aria-pressed="${!up}">Entrar</button><button type="button" data-m="registro" class="${up ? "on" : ""}" aria-pressed="${up}">Crear cuenta</button></div>
           <form id="authForm" style="display:flex;flex-direction:column;gap:14px;margin-top:20px">
-            ${up ? `<label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
+            ${up ? `<div class="col" style="gap:6px"><div class="seg" role="radiogroup" aria-label="Tipo de cuenta">
+                <label class="${seller ? "" : "on"}"><input type="radio" name="accountType" value="buyer"${seller ? "" : " checked"}>Comprador</label>
+                <label class="${seller ? "on" : ""}"><input type="radio" name="accountType" value="seller"${seller ? " checked" : ""}>Vendedor</label></div>
+              <p class="xs muted" id="kindHint" style="margin:0">${kindHint()}</p></div>
+            <label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
             <label class="f">Correo<input class="input" name="email" type="email" required autocomplete="email" inputmode="email"></label>
             <label class="f">Contraseña<input class="input" name="password" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}"></label>
+            ${up ? `<div id="sellerBox" class="col" style="gap:14px"${seller ? "" : " hidden"}>${sellerFields({ disabled: !seller })}</div>` : ""}
             ${up ? `<label class="legal accept"><input type="checkbox" name="accept" required><span>Acepto los <a href="#/terminos" target="_blank" rel="noopener">Términos y condiciones</a> y la <a href="#/privacidad" target="_blank" rel="noopener">Política de privacidad</a>, incluido el tratamiento de mis datos según la Ley 81 de 2019. Nunca mostramos tu correo ni tu dirección.</span></label>` : ""}
             <div id="captchaBox"></div>
             <div id="authMsg" aria-live="polite"></div>
-            <button class="btn primary block" id="authBtn">${up ? "Crear cuenta" : "Entrar"}</button>
-          </form></div></div></div></div>`;
+            <button class="btn primary block" id="authBtn">${label()}</button>
+          </form>
+          ${up ? "" : `<p class="small gate-alt">¿Quieres vender tus cartas? <button type="button" class="link" id="toSeller">Crea tu cuenta de vendedor</button></p>`}</div></div></div></div>`;
     app.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { if (b.dataset.m !== mode) { mode = b.dataset.m; render(); app.querySelector(`.tabs [data-m="${mode}"]`)?.focus(); } }));
+    $("#toSeller")?.addEventListener("click", () => { mode = "registro"; seller = true; render(); app.querySelector(".seg input:checked")?.focus(); });
+    // Comprador / Vendedor: shows the seller fields without re-rendering, so what was typed stays.
+    app.querySelectorAll("input[name=accountType]").forEach((r) => r.addEventListener("change", () => {
+      seller = r.value === "seller";
+      app.querySelectorAll(".seg label").forEach((lb) => lb.classList.toggle("on", lb.querySelector("input").checked));
+      const box = $("#sellerBox");
+      box.hidden = !seller;
+      box.querySelectorAll("input, textarea").forEach((el) => { el.disabled = !seller; });
+      const [title, sub] = copy();
+      $("#authTitle").textContent = title; $("#authSub").textContent = sub;
+      $("#kindHint").textContent = kindHint();
+      $("#authBtn").textContent = label();
+    }));
     captcha = mountCaptcha($("#captchaBox"));
     const myCaptcha = captcha;
     $("#authForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target), btn = $("#authBtn"), msg = $("#authMsg"), signup = mode === "registro";
       if (btn.disabled) return; // already submitting
-      const label = signup ? "Crear cuenta" : "Entrar";
+      // A seller sign-up carries the phone and pickup address in the account metadata: the sign-up
+      // trigger of migration 0031 saves them as the seller account (before 0031 they wait there).
+      let sellerMeta = null;
+      if (signup && seller) {
+        const phone = paPhone(fd.get("sellerPhone")), address = cleanAddress(fd.get("pickupAddress"));
+        const bad = sellerProblem(phone, address);
+        if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
+        sellerMeta = { account_type: "seller", seller_phone: phone, pickup_address: address };
+      }
+      const text0 = label();
       btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Un momento…`; msg.innerHTML = "";
       const cap = await myCaptcha, captchaToken = (await cap?.token()) || undefined;
       if (!btn.isConnected) return;
       if (CONFIG.TURNSTILE_SITE_KEY && !captchaToken) {
-        btn.disabled = false; btn.textContent = label;
+        btn.disabled = false; btn.textContent = text0;
         msg.innerHTML = `<p class="notice bad">Completa la verificación de seguridad.</p>`; return;
       }
       const email = String(fd.get("email")).trim().toLowerCase(), password = String(fd.get("password"));
       const res = await (signup
-        ? sb.auth.signUp({ email, password, options: { captchaToken, data: { display_name: String(fd.get("displayName")).trim(), terms_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString() } } })
+        ? sb.auth.signUp({ email, password, options: { captchaToken, data: { display_name: String(fd.get("displayName")).trim(), terms_version: TERMS_VERSION, terms_accepted_at: new Date().toISOString(), ...sellerMeta } } })
         : sb.auth.signInWithPassword({ email, password, options: { captchaToken } })).catch(() => ({ error: { code: "network" } }));
       cap?.reset(); // Turnstile tokens are single-use
       if (!btn.isConnected) return;
-      btn.disabled = false; btn.textContent = label;
+      btn.disabled = false; btn.textContent = text0;
       if (res.error) {
         const c = res.error.code;
-        const text = c === "user_already_exists" ? "Ya existe una cuenta con ese correo. Usa “Entrar”." : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "email_not_confirmed" ? "Confirma tu correo: te enviamos un enlace al crear la cuenta." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "captcha_failed" ? "La verificación de seguridad falló. Intenta de nuevo." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
+        const text = c === "user_already_exists" ? (sellerMeta ? "Ya existe una cuenta con ese correo. Entra con ella y pásala a cuenta de vendedor desde “Vender”." : "Ya existe una cuenta con ese correo. Usa “Entrar”.") : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "email_not_confirmed" ? "Confirma tu correo: te enviamos un enlace al crear la cuenta." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "captcha_failed" ? "La verificación de seguridad falló. Intenta de nuevo." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
         msg.innerHTML = `<p class="notice bad">${esc(text)}</p>`; return;
       }
       if (signup) track("registro");
-      if (signup && !res.data.session) { msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.</p>`; return; }
-      toast(signup ? "Cuenta creada" : "Sesión iniciada");
-      go(next);
+      if (signup && !res.data.session) { msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.${sellerMeta ? " Cuando la confirmes, entra y publica tu primera carta." : ""}</p>`; return; }
+      toast(signup ? (sellerMeta ? "Cuenta de vendedor creada" : "Cuenta creada") : "Sesión iniciada");
+      go(sellerMeta && next === "/" ? "/vender" : next);
     });
   };
   render();
+}
+
+// ------------------------------------------------------------- seller accounts (migration 0031)
+// Accounts are buyer accounts (buy and consult) or seller accounts. To sell, an account gives a phone
+// and the exact residence address where the MarketZlab team picks up the cards it sells: people sign
+// up as sellers, or turn a buyer account into a seller account from "Vender" or Mi cuenta. The data
+// lives in public.seller_accounts (only the person and staff read it). The account metadata carries
+// account_type, which the menus read from the session, and a copy of the phone and address: until
+// 0031 runs that copy is all there is, and 0031 moves it into the table.
+const isSeller = (s = session) => s?.user?.user_metadata?.account_type === "seller";
+/** "+507…" for a Panamanian mobile (8 digits, starts with 6) or landline (7 digits); null otherwise. Same rule as pa_phone() in 0031. */
+function paPhone(raw) {
+  const d = String(raw ?? "").replace(/\D/g, "").replace(/^(00)?507(?=\d{7,8}$)/, "");
+  return /^(6\d{7}|[2-57-9]\d{6})$/.test(d) ? `+507${d}` : null;
+}
+const fmtPhone = (p) => { const d = String(p ?? "").replace(/^\+507/, ""); return d.length === 8 ? `${d.slice(0, 4)}-${d.slice(4)}` : d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : d; };
+const cleanAddress = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
+const SELLER_MSG = {
+  phone: "Escribe un teléfono de Panamá: celular de 8 dígitos (6XXX-XXXX) o fijo de 7.",
+  address: "Escribe la dirección completa: barrio, calle, casa o edificio y apartamento.",
+  save: "No pudimos guardar tus datos. Revisa tu conexión e intenta de nuevo.",
+};
+const sellerProblem = (phone, address) => !phone ? SELLER_MSG.phone : address.length < 10 ? SELLER_MSG.address
+  : address.length > 240 ? "La dirección es muy larga: máximo 240 caracteres." : null;
+// Until 0031 runs, the table and its functions are missing: the page falls back to the account metadata.
+const sellerTableMissing = (e) => ["PGRST205", "PGRST202", "42P01", "42883"].includes(e?.code);
+/** Phone and pickup address inputs (sign-up, "Vender" and Mi cuenta). With `email`, the account's e-mail too, read-only. */
+function sellerFields({ phone = "", address = "", email = null, disabled = false } = {}) {
+  const off = disabled ? " disabled" : "";
+  return `${email != null ? `<label class="f">Correo<input class="input" type="email" value="${esc(email)}" readonly aria-readonly="true"><span class="hint xs">El de tu cuenta: no tienes que escribirlo otra vez.</span></label>` : ""}
+    <label class="f">Teléfono (WhatsApp)<input class="input" name="sellerPhone" type="tel" required inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="6123-4567" value="${esc(phone ? fmtPhone(phone) : "")}"${off}><span class="hint xs">Por aquí coordinamos contigo cada venta.</span></label>
+    <label class="f">Dirección exacta de residencia<textarea class="textarea" name="pickupAddress" required minlength="10" maxlength="240" rows="3" autocomplete="street-address" placeholder="Ej.: San Francisco, calle 74, PH Las Palmas, apto 3B, frente al parque"${off}>${esc(address)}</textarea></label>
+    <p class="notice soft pickup-note">${ic("pin")}<span><b>Aquí retiramos tus cartas.</b> Cuando vendas una, el equipo de ${esc(CONFIG.APP_NAME)} pasa a buscarla a esta dirección. Solo la ve nuestro equipo: nunca sale en tus anuncios.</span></p>`;
+}
+/** Marks the account as a seller in its metadata (with a copy of the data). Resolves to an error, or null. */
+function rememberSeller(acc) {
+  return sb.auth.updateUser({ data: { account_type: "seller", seller_phone: acc.phone, pickup_address: acc.address } }).then(({ data, error }) => {
+    if (error) { console.warn("seller metadata", error); return error; }
+    if (data?.user && session) session.user = data.user;
+    renderNav();
+    return null;
+  }, (err) => { console.warn("seller metadata", err); return err; });
+}
+/** The signed-in person's seller data { phone, address }, or null for a buyer account. */
+async function loadSellerAccount() {
+  const meta = session.user.user_metadata ?? {};
+  const fromMeta = isSeller() && paPhone(meta.seller_phone) ? { phone: paPhone(meta.seller_phone), address: cleanAddress(meta.pickup_address) } : null;
+  const { data, error } = await sb.from("seller_accounts").select("phone, pickup_address").eq("user_id", session.user.id).maybeSingle();
+  if (error) { if (!sellerTableMissing(error)) console.warn("seller account", error); return fromMeta; }
+  if (data) {
+    const acc = { phone: data.phone, address: data.pickup_address };
+    if (!isSeller()) rememberSeller(acc); // saved in the database but the session doesn't know yet
+    return acc;
+  }
+  // A seller whose data is only in the metadata (e.g. signed up before 0031 and missed by its backfill).
+  if (fromMeta) sb.rpc("save_seller_account", { p_phone: fromMeta.phone, p_pickup_address: fromMeta.address }).then(({ error: e }) => e && console.warn("seller account sync", e));
+  return fromMeta;
+}
+/** Whether the signed-in account can sell: the session says so for sellers; the database is asked only otherwise. */
+const sellerReady = async () => isSeller() || !!(await loadSellerAccount());
+/** Saves the seller data (becoming a seller, or a new phone or address). Returns an error message, or null. */
+async function saveSellerAccount(acc) {
+  const r = await sb.rpc("save_seller_account", { p_phone: acc.phone, p_pickup_address: acc.address }).then((x) => x, () => ({ error: { code: "network" } }));
+  if (r.error && !sellerTableMissing(r.error)) {
+    console.error(r.error);
+    const m = r.error.message ?? "";
+    return /phone/.test(m) ? SELLER_MSG.phone : /address/.test(m) ? SELLER_MSG.address : SELLER_MSG.save;
+  }
+  const metaError = await rememberSeller(acc);
+  // After 0031 the database already has it, so the account sells even if the metadata lags behind
+  // (loadSellerAccount() fixes the metadata later). Before 0031 the metadata is the only copy.
+  return metaError && r.error ? SELLER_MSG.save : null;
+}
+/** Wires a form made with sellerFields(): validates, saves and calls done(acc). */
+function bindSellerForm(form, done) {
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector(".seller-save"), msg = form.querySelector(".seller-msg");
+    if (btn.disabled) return;
+    const acc = { phone: paPhone(form.sellerPhone.value), address: cleanAddress(form.pickupAddress.value) };
+    const bad = sellerProblem(acc.phone, acc.address);
+    if (bad) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(bad)}</p>`; (acc.phone ? form.pickupAddress : form.sellerPhone).focus(); return; }
+    const text = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Guardando…`; msg.innerHTML = "";
+    const err = await saveSellerAccount(acc);
+    if (!form.isConnected) return;
+    btn.disabled = false; btn.innerHTML = text;
+    if (err) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(err)}</p>`; return; }
+    done(acc);
+  });
+}
+// "Vender" with a buyer account: it becomes a seller account first (same data as a seller sign-up).
+function viewBecomeSeller(app) {
+  setTitle("Pasar a cuenta de vendedor");
+  app.innerHTML = `<div class="wrap page"><h1>Vende tu carta</h1>
+    <p class="lead">Tu cuenta es de comprador. Pásala a cuenta de vendedor para publicar: es gratis y toma un minuto.</p>
+    <section class="panel seller-panel"><h2 class="ptitle">${ic("store")}Pasar a cuenta de vendedor</h2>
+      <form id="sellerForm" class="col seller-form" style="gap:14px;margin-top:16px" novalidate>${sellerFields({ email: session.user.email ?? "" })}
+        <div class="seller-msg" aria-live="polite"></div>
+        <button class="btn primary block seller-save">${ic("check")}Pasar a cuenta de vendedor</button></form></section>
+    ${sellIntro()}</div>`;
+  bindSellerForm($("#sellerForm"), () => {
+    toast("Tu cuenta ya es de vendedor", { description: "Ya puedes publicar tus cartas." });
+    route();
+  });
 }
 
 // ------------------------------------------------------------- sell
@@ -3922,7 +4074,7 @@ function sellIntro(mode = "view") {
     <h2 class="ptitle" id="sellIntroTitle">${ic("info")}Antes de publicar</h2>
     <ul class="si-list">
       <li>${ic("tag")}<div><p class="si-t">Publicar es gratis</p>
-        <p class="sub">Los compradores consultan por tus cartas con el equipo de ${esc(CONFIG.APP_NAME)} por WhatsApp. Cuando alguien quiere una, te escribimos para coordinar la venta.</p></div></li>
+        <p class="sub">Los compradores consultan por tus cartas con el equipo de ${esc(CONFIG.APP_NAME)} por WhatsApp. Cuando alguien quiere una, te escribimos para coordinar la venta y pasamos a retirarla a tu dirección.</p></div></li>
       <li>${ic("alert")}<div><p class="si-t">Cero tolerancia con las falsificaciones</p>
         <p class="sub">Está prohibido vender cartas falsas, réplicas o alteradas. Revisamos los reportes y los reclamos, y si detectamos una falsificación retiramos el anuncio, cerramos la cuenta y tomamos medidas legales.</p></div></li>
       <li>${ic("shield")}<div><p class="si-t">Tus responsabilidades al publicar</p>
@@ -3939,8 +4091,8 @@ function viewSell(app) {
   if (!sb) { app.innerHTML = `<div class="wrap"><p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p></div>`; return; }
   if (!session) {
     app.innerHTML = `<div class="wrap page"><h1>Vende tu carta</h1><p class="lead">Publicar es gratis.</p>${sellIntro()}
-      <div class="panel" style="max-width:440px;margin-top:24px;padding:24px"><p style="font-weight:600">Entra o crea tu cuenta para publicar.</p><p class="small muted" style="margin:4px 0 16px">Toma menos de un minuto.</p>
-      <a class="btn primary block" href="#/entrar?next=/vender">Entrar o crear cuenta</a></div></div>`;
+      <div class="panel" style="max-width:440px;margin-top:24px;padding:24px"><p style="font-weight:600">Para publicar necesitas una cuenta de vendedor.</p><p class="small muted" style="margin:4px 0 16px">Toma menos de un minuto. Si ya tienes cuenta, entra y pásala a vendedor.</p>
+      <div class="col" style="gap:8px"><a class="btn primary block" href="#/entrar?next=/vender&amp;cuenta=vendedor">Crear cuenta de vendedor</a><a class="btn outline block" href="#/entrar?next=/vender">Ya tengo cuenta: entrar</a></div></div></div>`;
     return;
   }
   const st = { files: [], previews: [], catalog: [], picked: null, graded: false, grading: null, slabUnread: false, idRun: 0, ident: null, autoDesc: "", autoTitle: "", hist: null, range: 90, pickRun: 0, chartRun: 0 };
@@ -4249,6 +4401,7 @@ function viewSell(app) {
       return fail(t);
     };
     const dbMessage = (err, t) =>
+      /seller_account_required/.test(err?.message ?? "") ? "Para publicar necesitas una cuenta de vendedor: completa tu teléfono y dirección en Mi cuenta ▸ Cuenta de vendedor." :
       err?.code === "42501" ? "Tu sesión no tiene permiso para publicar. Sal y vuelve a entrar." :
       err?.code === "23503" ? "Tu cuenta no tiene perfil de vendedor. Sal y vuelve a entrar, o escríbenos." :
       /grading_from_photo/.test(err?.message ?? "") ? "La graduación tiene que verse en la foto del slab. Sube una foto donde se lea la etiqueta y vuelve a intentar." :
@@ -5708,6 +5861,44 @@ async function renderShopRequest(uid, open = false) {
     renderShopRequest(uid);
   });
 }
+// Mi cuenta ▸ Cuenta de vendedor: the phone and pickup address, or the way to become a seller
+// (#/cuenta?vendedor=1 opens the form; the account menu links there).
+async function renderSellerSection(box, open = false) {
+  box.innerHTML = `<section class="panel"><p class="loading"><span class="spinner"></span>Cargando…</p></section>`;
+  const acc = await loadSellerAccount();
+  if (!box.isConnected) return;
+  const kind = $("#accKind");
+  if (kind) kind.textContent = acc ? "Vendedor" : "Comprador";
+  const head = `<div class="phead"><h2>Cuenta de vendedor</h2>${acc ? `<span class="b good">${ic("check")}Activa</span>` : `<span class="b neutral">Tu cuenta es de comprador</span>`}</div>`;
+  const showForm = () => {
+    const save = acc ? "Guardar cambios" : "Pasar a cuenta de vendedor";
+    box.innerHTML = `<section class="panel col">${head}
+      <p class="small muted" style="margin:0">${acc ? "Cambia el teléfono o la dirección donde retiramos tus cartas." : "Para vender necesitamos un teléfono y la dirección donde retiramos tus cartas."}</p>
+      <form class="col seller-form" style="gap:14px" novalidate>${sellerFields(acc ?? { email: session.user.email ?? "" })}
+        <div class="seller-msg" aria-live="polite"></div>
+        <div class="share-row" style="margin-top:0"><button class="btn primary seller-save">${save}</button><button type="button" class="btn outline" data-cancel>Cancelar</button></div></form></section>`;
+    const form = box.querySelector("form");
+    bindSellerForm(form, () => {
+      toast(acc ? "Datos de vendedor guardados" : "Tu cuenta ya es de vendedor", acc ? {} : { description: "Ya puedes publicar tus cartas." });
+      if (parseHash().params.get("vendedor")) history.replaceState(null, "", "#/cuenta"); // a reload shouldn't reopen the form
+      renderSellerSection(box);
+    });
+    box.querySelector("[data-cancel]").addEventListener("click", () => renderSellerSection(box));
+    form.sellerPhone.focus({ preventScroll: true });
+  };
+  if (open) {
+    showForm();
+    box.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+    return;
+  }
+  box.innerHTML = acc
+    ? `<section class="panel col">${head}<p class="xs muted" style="margin:0">Solo el equipo de ${esc(CONFIG.APP_NAME)} ve estos datos.</p>
+        <dl class="seller-data"><div><dt>Teléfono</dt><dd>${esc(fmtPhone(acc.phone))}</dd></div><div><dt>Dirección donde retiramos tus cartas</dt><dd>${esc(acc.address)}</dd></div></dl>
+        <button type="button" class="btn outline block" data-edit>Cambiar teléfono o dirección</button></section>`
+    : `<section class="panel col">${head}<p class="small muted" style="margin:0">Con tu cuenta de comprador compras y consultas cartas. Para publicar las tuyas, pásala a cuenta de vendedor: te pedimos un teléfono y la dirección donde las retiramos.</p>
+        <button type="button" class="btn primary block" data-edit>${ic("store")}Pasar a cuenta de vendedor</button></section>`;
+  box.querySelector("[data-edit]").addEventListener("click", showForm);
+}
 const PROFILE_COLS = "display_name, is_shop, verified, avatar_path, shop_description, shop_photo_path";
 async function viewAccount(app) {
   setTitle("Mi cuenta");
@@ -5723,10 +5914,11 @@ async function viewAccount(app) {
   const st = { avatar: null, shopPhoto: null };
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
   app.innerHTML = `<div class="account dash">
-    <div class="dash-head"><div class="dash-me">${sellerAvatar(profileToSeller(uid, prof), 56)}<div style="min-width:0"><p class="kicker">Mi cuenta</p><h1 class="dash-name">${esc(prof.display_name)}</h1>${session.user.email ? `<p class="xs muted" style="margin-top:2px">${esc(session.user.email)}</p>` : ""}</div></div>
+    <div class="dash-head"><div class="dash-me">${sellerAvatar(profileToSeller(uid, prof), 56)}<div style="min-width:0"><p class="kicker">Mi cuenta · <span id="accKind">${isSeller() ? "Vendedor" : "Comprador"}</span></p><h1 class="dash-name">${esc(prof.display_name)}</h1>${session.user.email ? `<p class="xs muted" style="margin-top:2px">${esc(session.user.email)}</p>` : ""}</div></div>
       <div class="dash-actions"><a class="btn outline sm" href="#/vendedor/${encodeURIComponent(uid)}">Ver mi perfil público</a><a class="btn primary sm" href="#/vender">${ic("plus")}Publicar carta</a></div></div>
     <div id="dash" class="dash-body"><p class="loading"><span class="spinner"></span>Cargando tus cartas…</p></div>
-    <div id="accInquiries" class="col" style="margin-top:24px"></div>
+    <div id="accSeller" class="col" style="margin-top:24px"></div>
+    <div id="accInquiries" class="col" style="margin-top:16px"></div>
     <div id="accIdentity" class="col" style="margin-top:16px"></div>
     <div id="accRef" class="col" style="margin-top:16px"></div>
     <div id="accEvents" class="col" style="margin-top:16px"></div>
@@ -5758,6 +5950,7 @@ async function viewAccount(app) {
       <button class="btn primary block" id="accBtn">Guardar cambios</button>
     </form></div>`;
 
+  renderSellerSection($("#accSeller"), parseHash().params.get("vendedor") === "1");
   renderMyInquiries($("#accInquiries"));
   renderIdentity(uid, prof, $("#accIdentity"));
   renderReferrals($("#accRef"));
@@ -5832,14 +6025,15 @@ async function viewAdmin(app, params) {
     app.innerHTML = `<div style="padding:64px 0;text-align:center"><p>Esta sección es solo para el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="#/">Volver al inicio</a></div>`;
     return;
   }
-  const tab = ["consultas", "revisiones", "planes", "anuncios", "tiendas", "identidad", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "consultas";
-  const tabs = [["consultas", "Consultas"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["identidad", "Identidad"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
+  const tab = ["consultas", "vendedores", "revisiones", "planes", "anuncios", "tiendas", "identidad", "reportes", "analitica", "resumen"].includes(params.get("tab")) ? params.get("tab") : "consultas";
+  const tabs = [["consultas", "Consultas"], ["vendedores", "Vendedores"], ["revisiones", "Revisiones"], ["planes", "Planes"], ["anuncios", "Anuncios"], ["tiendas", "Tiendas"], ["identidad", "Identidad"], ["reportes", "Reportes"], ["analitica", "Analítica"], ["resumen", "Resumen"]];
   app.innerHTML = `<div class="wrap admin"><h1 class="display" style="font-size:30px">Panel de staff</h1>
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
   const body = $("#adminBody");
   try {
     if (tab === "consultas") await adminInquiries(body, params.get("estado") || "abiertas");
+    else if (tab === "vendedores") await adminSellers(body, params.get("q") ?? "");
     else if (tab === "revisiones") await adminChecks(body);
     else if (tab === "planes") await adminPlans(body, params.get("q") ?? "");
     else if (tab === "anuncios") await adminListings(body, params.get("q") ?? "");
@@ -5874,7 +6068,7 @@ async function adminInquiries(body, filter) {
     if (inquiryMissing(error)) { body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0030 en Supabase para ver las consultas.</p>`; return; }
     throw error;
   }
-  const people = await profilesById(data.map((q) => q.user_id));
+  const [people, pickups] = await Promise.all([profilesById(data.map((q) => q.user_id)), pickupsFor(data.map((q) => q.listing_id))]);
   const filters = [["abiertas", "Abiertas"], ["nueva", "Recibidas"], ["en_curso", "En curso"], ["cerrada", "Cerradas"], ["todas", "Todas"]];
   body.innerHTML = `<p class="small muted">Lo que la gente pregunta desde “Consultar por WhatsApp”. El código va en su mensaje de WhatsApp${CONFIG.WHATSAPP ? "" : " (el número de WhatsApp de la página todavía no está configurado: respóndeles al WhatsApp que dejaron)"}.</p>
     <div class="row-input" style="justify-content:flex-start;flex-wrap:wrap">${filters.map(([k, t]) => `<a class="btn sm ${k === filter ? "primary" : "outline"}" href="#/admin?tab=consultas&estado=${k}">${t}</a>`).join("")}</div>
@@ -5882,6 +6076,7 @@ async function adminInquiries(body, filter) {
       <div class="phead"><span><span class="inq-code">${esc(q.code)}</span> · ${q.listing_id ? `<a href="#/carta/${encodeURIComponent(q.listing_id)}" style="font-weight:600">${esc(q.subject)}</a>` : `<b>${esc(q.subject)}</b>`}</span><span class="b ${INQUIRY_STATUS[q.status]?.[1] ?? "neutral"}">${INQUIRY_STATUS[q.status]?.[0] ?? esc(q.status)}</span></div>
       <p class="xs muted" style="margin:4px 0 0">${esc(people.get(q.user_id)?.display_name ?? "—")} · ${esc(INQUIRY_SOURCE[q.source] ?? q.source)}${q.price_cents ? ` · ${formatUsd(q.price_cents)}` : ""}${q.catalog_ref ? ` · ${esc(q.catalog_ref)}` : ""} · ${fmtDate(q.created_at)}</p>
       ${q.message ? `<p class="small" style="margin:6px 0 0">“${esc(q.message)}”</p>` : ""}
+      ${pickupLine(pickups.get(q.listing_id))}
       ${q.contact_phone ? `<p class="small" style="margin:6px 0 0">WhatsApp: <a class="link" target="_blank" rel="noopener" href="https://wa.me/${esc(waNumber(q.contact_phone))}?text=${encodeURIComponent(`Hola, te escribimos de ${CONFIG.APP_NAME} por tu consulta ${q.code}: “${q.subject}”.`)}">${esc(q.contact_phone)}</a></p>` : ""}
       <div class="order-actions" style="margin-top:8px"><select class="select iq-status" aria-label="Estado">${Object.entries(INQUIRY_STATUS).map(([k, [t]]) => `<option value="${k}"${k === q.status ? " selected" : ""}>${t}</option>`).join("")}</select>
         <input class="input iq-note" maxlength="1000" placeholder="Nota interna (opcional)" value="${esc(q.staff_note ?? "")}" aria-label="Nota interna"><button class="btn" data-save>Guardar</button></div><div class="order-msg"></div></li>`).join("")}</ul>`
@@ -5894,6 +6089,43 @@ async function adminInquiries(body, filter) {
     if (e) return adminFail(e, msg);
     msg.innerHTML = `<p class="notice good" style="margin:0">Guardado.</p>`;
   }));
+}
+
+// ------------------------------------------------------------- sellers (migration 0031)
+/** Who sells each listing and where we pick the card up. Before 0031 only the seller's name is known. */
+async function pickupsFor(listingIds) {
+  const ids = [...new Set(listingIds.filter(Boolean))];
+  if (!ids.length) return new Map();
+  const { data: ls } = await sb.from("listings").select("id, seller_id").in("id", ids);
+  const sellerIds = [...new Set((ls ?? []).map((l) => l.seller_id))];
+  if (!sellerIds.length) return new Map();
+  const [names, accs] = await Promise.all([profilesById(sellerIds), sb.from("seller_accounts").select("user_id, phone, pickup_address").in("user_id", sellerIds)]);
+  const byUser = new Map((accs.data ?? []).map((a) => [a.user_id, a]));
+  return new Map(ls.map((l) => [l.id, { name: names.get(l.seller_id)?.display_name ?? "—", known: !accs.error, ...byUser.get(l.seller_id) }]));
+}
+const pickupLine = (p) => !p ? "" : `<p class="small ic-line" style="margin:6px 0 0">${ic("pin")}Retiro: <a class="link" href="#/admin?tab=vendedores&amp;q=${encodeURIComponent(p.name)}">${esc(p.name)}</a>${p.phone
+  ? ` · <a class="link" target="_blank" rel="noopener" href="https://wa.me/${esc(waNumber(p.phone))}">${esc(fmtPhone(p.phone))}</a> · ${esc(p.pickup_address)}`
+  : p.known ? ` · <span class="muted">no nos ha dado teléfono ni dirección de retiro</span>` : ""}</p>`;
+
+// Seller accounts with the phone and the address where we pick up their cards, plus people selling
+// without having given them (accounts from before seller accounts existed).
+async function adminSellers(body, q) {
+  const { data, error } = await sb.rpc("staff_seller_accounts", { p_query: q || null });
+  if (error) {
+    if (sellerTableMissing(error)) { body.innerHTML = `<p class="notice bad">Falta aplicar la migración 0031 en Supabase para ver los vendedores, su teléfono y su dirección de retiro.</p>`; return; }
+    throw error;
+  }
+  const missing = data.filter((s) => !s.phone).length;
+  const since = (d) => new Date(d).toLocaleDateString("es-PA", { day: "numeric", month: "short", year: "numeric" });
+  body.innerHTML = `<p class="small muted">Cuentas de vendedor con su teléfono y la dirección donde retiramos sus cartas. Solo el staff ve estos datos.${missing ? ` <b style="color:var(--ink)">${fmtN(missing)} sin datos de retiro:</b> venden desde antes de las cuentas de vendedor; pídeles que completen “Cuenta de vendedor” en Mi cuenta.` : ""}</p>
+    <form id="slSearch" class="row-input" style="margin-bottom:12px"><input class="input" name="q" value="${esc(q)}" placeholder="Nombre, correo, teléfono o dirección" aria-label="Buscar vendedor"><button class="btn" style="border-radius:12px">Buscar</button></form>
+    ${data.length ? `<ul class="admin-list">${data.map((s) => `<li class="panel">
+      <div class="phead"><a href="#/vendedor/${encodeURIComponent(s.user_id)}" style="font-weight:600">${esc(s.display_name)}</a>${s.phone ? `<span class="b good">${ic("check")}Vendedor</span>` : `<span class="b warn">Sin datos de retiro</span>`}</div>
+      <p class="xs muted" style="margin:4px 0 0">${esc(s.email ?? "")} · ${fmtN(s.cards_on_sale)} ${s.cards_on_sale === 1 ? "carta" : "cartas"} en venta${s.seller_since ? ` · vendedor desde el ${since(s.seller_since)}` : ""}</p>
+      ${s.phone ? `<p class="small" style="margin:8px 0 0">WhatsApp: <a class="link" target="_blank" rel="noopener" href="https://wa.me/${esc(waNumber(s.phone))}">${esc(fmtPhone(s.phone))}</a></p>
+        <p class="small ic-line" style="margin:4px 0 0">${ic("pin")}${esc(s.pickup_address)} · <a class="link" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(`${s.pickup_address}, Panamá`)}">Ver en el mapa</a></p>` : ""}</li>`).join("")}</ul>`
+      : `<p class="muted small">${q ? "Ningún vendedor coincide con esa búsqueda." : "Todavía no hay cuentas de vendedor."}</p>`}`;
+  $("#slSearch").addEventListener("submit", (e) => { e.preventDefault(); go(`/admin?tab=vendedores&q=${encodeURIComponent(e.target.q.value.trim())}`); });
 }
 
 // ------------------------------------------------------------- listings
@@ -6226,7 +6458,7 @@ function viewTerms(app) {
     ["Quiénes somos", `<p>${esc(CONFIG.APP_NAME)} es una plataforma panameña para comprar y vender cartas coleccionables (Pokémon, NBA, NFL y otras). La opera ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Contacto: ${legalVal("EMAIL")}.</p>`],
     ["Qué hace y qué no hace " + esc(CONFIG.APP_NAME), `<p>${esc(CONFIG.APP_NAME)} publica anuncios de vendedores y atiende las consultas de los compradores por WhatsApp, donde coordina la compra con el vendedor (sección 6). <b>No somos dueños de las cartas que publican los vendedores.</b> <b>No revisamos las cartas que se publican</b> (sección 7).</p>`],
     ["Tu cuenta", `<ul><li>Debes tener 18 años o más, o usar la plataforma con permiso y supervisión de tu madre, padre o tutor.</li><li>Los datos que nos das deben ser verdaderos. Eres responsable de lo que se haga con tu cuenta; no compartas tu contraseña.</li><li>Podemos suspender o cerrar cuentas que incumplan estas reglas.</li></ul>`],
-    ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>El producto sellado (cajas de sobres, Elite Trainer Box, sobres, latas y similares) tiene que estar sellado de fábrica. Está prohibido vender producto abierto, resellado o con sobres cambiados, pesados o seleccionados.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Publicar es gratis. Cuando un comprador consulta por tu carta, el equipo de ${esc(CONFIG.APP_NAME)} te escribe para coordinar la venta.</li><li>Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
+    ["Publicar cartas", `<ul><li>Solo puedes publicar cartas que tienes y puedes entregar.</li><li>Está prohibido publicar réplicas, falsificaciones, cartas alteradas o recortadas sin decirlo, y fotos que no sean tuyas.</li><li>El producto sellado (cajas de sobres, Elite Trainer Box, sobres, latas y similares) tiene que estar sellado de fábrica. Está prohibido vender producto abierto, resellado o con sobres cambiados, pesados o seleccionados.</li><li>La descripción, la condición, la graduación y el precio deben ser honestos. Eres responsable de lo que publicas.</li><li>Para publicar necesitas una <b>cuenta de vendedor</b>: nos das un teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Mantenlos al día desde Mi cuenta.</li><li>Publicar es gratis. Cuando un comprador consulta por tu carta, el equipo de ${esc(CONFIG.APP_NAME)} te escribe para coordinar la venta y pasa a retirarla a tu dirección.</li><li>Podemos retirar anuncios que incumplan estas reglas o que otros usuarios reporten con fundamento.</li></ul>`],
     ["Precio estimado", `<p>El precio estimado y la gráfica de valor son <b>referencias informativas</b> calculadas con fuentes públicas (ventas en otros mercados, catálogos y ventas en Panamá). <b>No son una garantía, una oferta de compra ni una tasación oficial.</b> El precio final lo acuerdan comprador y vendedor.</p>`],
     ["Consultas y compras", `<p>Cuando una carta te interesa, tocas “Consultar por WhatsApp”. Guardamos tu consulta con un código y la seguimos por el WhatsApp de ${esc(CONFIG.APP_NAME)}: te damos la información que pidas y coordinamos la compra con el vendedor. El precio final, la entrega y la forma de pago te los confirmamos por ese medio antes de que pagues.</p><p>También puedes consultarnos por cartas que todavía no están publicadas; buscarlas no nos obliga a conseguirlas. <b>Nunca le pagues a nadie por fuera de lo que coordinamos contigo</b> desde el WhatsApp oficial de ${esc(CONFIG.APP_NAME)}.</p>`],
     ["Autenticidad de las cartas", `<p><b>${esc(CONFIG.APP_NAME)} no revisa ni garantiza que las cartas publicadas sean originales</b> ni que coincidan con su descripción. Cada vendedor es el único responsable de lo que publica y vende.</p><p>En la medida que permita la ley, <b>${esc(CONFIG.APP_NAME)} no se hace responsable si un usuario vende una carta falsa, réplica o alterada</b>, ni de las pérdidas que eso cause. Si te pasa, repórtalo: retiramos el anuncio, podemos suspender la cuenta del vendedor y colaboramos con las autoridades si lo piden.</p>`],
@@ -6245,13 +6477,13 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Eventos:</b> los eventos de tiendas que marcas con “Me interesa”, para recordártelos. La tienda solo ve cuántas personas están interesadas, no quiénes.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>. Nunca pedimos tu dirección.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
-    ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Responder tus consultas y coordinar las compras.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Eventos:</b> los eventos de tiendas que marcas con “Me interesa”, para recordártelos. La tienda solo ve cuántas personas están interesadas, no quiénes.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Responder tus consultas y coordinar las compras.</li><li>Coordinar contigo y retirar en tu dirección las cartas que vendes.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
-    ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo y tu teléfono nunca se muestran.</b></p>`],
+    ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo, tu teléfono y tu dirección nunca se muestran.</b></p>`],
     ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>Tiendas aliadas</b>: si pides una Revisión en tienda, le damos a la tienda tu nombre para mostrar y los datos de la carta para coordinar la cita.</li><li><b>Yappy (Banco General)</b>: procesa los pagos en línea. Recibe el monto y la referencia de tu compra; tus datos de pago los das directamente en la app de Yappy y nunca pasan por ${esc(CONFIG.APP_NAME)}.</li><li><b>WhatsApp (Meta)</b>: cuando haces una consulta o nos escribes por ahí.</li><li><b>Cloudflare Turnstile</b>: el captcha de entrar y crear cuenta. Revisa datos técnicos de tu navegador para distinguir personas de robots.</li><li><b>Google Fonts y jsDelivr</b>: sirven la letra y el código de la página; reciben tu IP al descargarlos, como cualquier sitio web.</li><li><b>Catálogos y guías de precios</b> (TCGdex, Pokémon TCG API, PriceCharting, Cardmarket y otros): les pedimos datos de la carta, nunca datos tuyos.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
     ["Cuánto tiempo los guardamos", `<p>Mientras tengas tu cuenta. Si la cierras, borramos tus datos en un plazo razonable, salvo lo que debamos conservar por obligaciones legales o contables (por ejemplo, registros de pagos) o para resolver disputas.</p>`],
-    ["Tus derechos", `<p>Tienes derecho a <b>acceder</b> a tus datos, <b>rectificarlos</b>, <b>cancelarlos</b> (borrarlos), <b>oponerte</b> a su uso y pedir su <b>portabilidad</b>. Puedes cambiar tu nombre y fotos desde <a href="#/cuenta">Mi cuenta</a>; para lo demás escribe a ${legalVal("EMAIL")} y te respondemos en los plazos de la ley. Si no quedas conforme, puedes acudir a la Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI).</p>`],
+    ["Tus derechos", `<p>Tienes derecho a <b>acceder</b> a tus datos, <b>rectificarlos</b>, <b>cancelarlos</b> (borrarlos), <b>oponerte</b> a su uso y pedir su <b>portabilidad</b>. Puedes cambiar tu nombre, tus fotos y, si vendes, tu teléfono y tu dirección de retiro desde <a href="#/cuenta">Mi cuenta</a>; para lo demás escribe a ${legalVal("EMAIL")} y te respondemos en los plazos de la ley. Si no quedas conforme, puedes acudir a la Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI).</p>`],
     ["Cookies y almacenamiento en tu navegador", `<p>No usamos cookies de publicidad ni rastreadores de terceros (como Google Analytics o el píxel de Meta). Guardamos en el almacenamiento local de tu navegador solo esto:</p><ul><li><b>Tu sesión</b>, para que no tengas que entrar cada vez.</li><li><b>Un identificador anónimo de uso</b>, para contar visitas sin saber quién eres.</li><li><b>Una copia temporal de precios</b>, para que la página cargue más rápido.</li></ul><p>Puedes borrarlo cuando quieras desde la configuración de tu navegador; si lo haces, se cierra tu sesión.</p>`],
     ["Seguridad", `<p>Los datos viajan cifrados, el acceso está restringido por reglas de seguridad en la base de datos y solo el equipo autorizado puede ver la información de consultas y reportes. Ningún sistema es 100% seguro; si ocurre un incidente que afecte tus datos, te avisaremos como indica la ley.</p>`],
     ["Menores de edad", `<p>Si tienes menos de 18 años, usa ${esc(CONFIG.APP_NAME)} con permiso y supervisión de tu madre, padre o tutor.</p>`],
