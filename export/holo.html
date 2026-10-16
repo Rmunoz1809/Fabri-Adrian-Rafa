@@ -531,6 +531,16 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .scan .drop.card-ratio { aspect-ratio: auto; height: 180px; max-width: none; }
 .scan-result { display: grid; gap: 16px; margin-top: 20px; grid-template-columns: minmax(0, 1fr); scroll-margin-top: calc(var(--header-h) + 16px); }
 .scan-card { padding: 16px; display: flex; justify-content: center; }
+.pf-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.pf-card .pf-rows { display: grid; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.pf-val { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0; }
+.pf-val .k { color: var(--fg-3); font-size: 12px; font-weight: 600; }
+.pf-val b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pf-sale { margin: 0; font-size: 12px; line-height: 1.35; color: var(--fg-2); }
+.pf-sale b { color: var(--fg); }
+.pf-qty { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--fg); color: var(--bg); font-size: 12px; font-weight: 700; }
+.pf-edit { display: grid; gap: 10px; margin-top: 14px; }
+@media (min-width: 640px) { .pf-edit { grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.4fr); align-items: end; } }
 .scan-card img { width: 100%; max-width: 280px; aspect-ratio: 63 / 88; object-fit: contain; border-radius: 10px; }
 @media (min-width: 900px) { .scan-result { grid-template-columns: 320px minmax(0, 1fr); align-items: start; } }
 .legal-page h2 { font-size: 18px; margin: 28px 0 8px; }
@@ -2010,7 +2020,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/busco" || path === "/consultas");
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/busco" || path === "/consultas" || path === "/portafolio" || path.startsWith("/portafolio/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -2033,6 +2043,8 @@ async function route() {
     if (path === "/vender/lote") return viewSellLot(app);
     if (path === "/busco") { app.innerHTML = `<div class="wrap"></div>`; return await viewWanted(app.firstElementChild, params); }
     if (path === "/consultas") { app.innerHTML = `<div class="wrap"></div>`; return await viewInquiries(app.firstElementChild); }
+    if (path === "/portafolio") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild); }
+    if (path.startsWith("/portafolio/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolioItem(app.firstElementChild, safeDecode(path.slice(12))); }
     // Account and staff pages render into a padded column.
     if (path === "/cuenta" || path === "/admin") {
       app.innerHTML = `<div class="wrap"></div>`;
@@ -2051,8 +2063,8 @@ async function route() {
 const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["eventos", "#/eventos", "Eventos", "calendar"], ["consultas", "#/consultas", "Consultas", "chat"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/eventos": "eventos", "/consultas": "consultas", "/cuenta": "cuenta", "/admin": "admin", "/busco": "busco" }[path] ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(session ? [["cuenta", "#/cuenta", "Mi cuenta", "user"], ["busco", "#/busco", "Busco…", "search"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
+  const current = { "/eventos": "eventos", "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/busco": "busco" }[path] ?? (path.startsWith("/portafolio/") ? "portafolio" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi portafolio", "trend"], ["cuenta", "#/cuenta", "Mi cuenta", "user"], ["busco", "#/busco", "Busco…", "search"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span></a>`).join("");
@@ -2734,6 +2746,7 @@ async function loadPriceChart(l) {
     if (box.clientWidth !== width) { width = box.clientWidth; draw(false); }
   });
   ro.observe(box);
+  return h;
 }
 
 // ============================================================= views
@@ -5307,11 +5320,37 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
         ${ai?.is_graded && !grading ? `<p class="notice warn small" style="margin:10px 0 0">Vimos un slab pero no pudimos leer la nota. Mostramos el valor sin graduar.</p>` : ""}
         ${retryWithAI ? `<p class="small" style="margin:12px 0 0">¿No es tu carta? <button type="button" class="link" data-ai style="background:none;border:0;padding:0;cursor:pointer;font:inherit">Analizarla con IA</button> <span class="xs muted">(no gasta otro escaneo)</span></p>` : ""}</section>
       <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy…</p></section>
-      <div class="share-row"><button type="button" class="btn primary" data-sell>${ic("tag")}Véndela en ${esc(CONFIG.APP_NAME)}</button><button type="button" class="btn outline" data-share>${ic("external")}Compartir</button>${again}</div>
+      <div class="share-row"><button type="button" class="btn primary" data-keep>${ic("plus")}Guardar en mi portafolio</button><button type="button" class="btn outline" data-sell>${ic("tag")}Véndela en ${esc(CONFIG.APP_NAME)}</button><button type="button" class="btn outline" data-share>${ic("external")}Compartir</button>${again}</div>
+      <p class="xs muted" style="margin:0">En tu portafolio la guardas sin publicarla: ves cuánto vale y en cuánto se vende, y la publicas cuando quieras.</p>
       <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
     </div></div>`;
-  loadPriceChart(l);
+  const history = loadPriceChart(l);
   bind();
+  out.querySelector("[data-keep]").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const h = await history?.catch(() => null);
+    const usd = h ? marketValueOf(h) : null;
+    const https = (u) => (/^https:\/\//.test(u ?? "") && u.length <= 500 ? u : null);
+    const row = {
+      category: card.category, subject: String(card.subject).slice(0, 120), set_name: card.setName ? String(card.setName).slice(0, 120) : null,
+      year: card.year ? String(card.year).slice(0, 10) : null, number: card.number ? String(card.number).slice(0, 40) : null,
+      variant: card.variant ? String(card.variant).slice(0, 80) : null, catalog_id: card.catalogId ?? null,
+      grading_company: grading?.company ?? null, grade: grading?.grade ?? null, condition: grading ? null : "NM",
+      image_url: https(c?.images?.large || c?.images?.small), quantity: 1,
+      value_cents: usd ? Math.round(usd * 100) : null, value_at: usd ? new Date().toISOString() : null,
+    };
+    try {
+      const { item } = await savePortfolioItem(row, file);
+      if (!btn.isConnected) return;
+      btn.outerHTML = `<a class="btn primary" href="#/portafolio/${encodeURIComponent(item.id)}">${ic("checkCircle")}En tu portafolio</a>`;
+      toast("Guardada en tu portafolio", { description: "No se publica: la ves en Mi portafolio con su valor de hoy." });
+    } catch (err) {
+      console.error(err);
+      btn.disabled = false;
+      toast(err?.userMsg ?? "No pudimos guardarla. Intenta de nuevo.", { type: "error" });
+    }
+  });
   out.firstElementChild.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
   out.querySelector("[data-ai]")?.addEventListener("click", () => retryWithAI());
   out.querySelector("[data-sell]").addEventListener("click", () => { pendingSellFiles = [file]; go("/vender"); });
@@ -5322,6 +5361,313 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
     track("compartir");
     if (navigator.share) { try { await navigator.share({ text, url }); return; } catch (err) { if (err?.name === "AbortError") return; } }
     window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, "_blank", "noopener");
+  });
+}
+
+// ============================================================= Mi portafolio (#/portafolio, migration 0033)
+// The cards a person owns, saved from "¿Cuánto vale tu carta?" without publishing them. Each one shows
+// what it is worth today (the listing page's price sources), what it sells for on MarketZlab and in
+// Panamá, and keeps the scanned photo: "Vender esta carta" opens #/vender with it (a sale draft).
+// Private to its owner. Until 0033 runs, the list lives in this browser (without photos) and moves to
+// the account the first time the table is there.
+let portfolioOn = true;
+const PF_LOCAL = "holo.portfolio.v1";
+const PF_COLS = "id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, condition, image_url, photo_path, quantity, paid_cents, value_cents, value_at, note, created_at";
+const PF_FIELDS = ["category", "subject", "set_name", "year", "number", "variant", "catalog_id", "grading_company", "grade", "condition", "image_url", "quantity", "paid_cents", "value_cents", "value_at", "note"];
+const PF_FRESH_MS = 12 * 3600000;
+const pfMissing = (e) => ["42P01", "PGRST205", "PGRST204", "42703"].includes(e?.code);
+const pfRow = (o) => Object.fromEntries(PF_FIELDS.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
+const pfLocal = {
+  read() { try { const v = JSON.parse(localStorage.getItem(PF_LOCAL) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; } },
+  write(list) { try { localStorage.setItem(PF_LOCAL, JSON.stringify(list.slice(0, 500))); return true; } catch { return false; } },
+};
+const pfItems = new Map(); // id → item, so the detail page opens without another query
+/** The value today of a fetchPriceHistory() result, in USD (condition already applied), or null. */
+function marketValueOf(h) {
+  const v = h.market.at(-1)?.v ?? h.cardmarket.at(-1)?.v ?? h.quote?.market_price ?? median(h.sales.filter((p) => p.t >= Date.now() - 180 * DAY_MS).map((p) => p.v));
+  return v > 0 ? v : null;
+}
+const pfListing = (it) => ({
+  id: `portafolio-${it.id}`, isDemo: false, photos: [], priceUsd: it.paid_cents ? it.paid_cents / 100 : null, priceLabel: "Lo que pagaste",
+  card: { category: it.category, subject: it.subject, setName: it.set_name ?? "", year: it.year ?? "", number: it.number ?? "", variant: it.variant ?? "", catalogId: it.catalog_id ?? null },
+  grading: it.grading_company ? { company: it.grading_company, grade: Number(it.grade) } : null,
+  condition: it.grading_company ? null : it.condition ?? "NM",
+});
+const pfGradingKey = (it) => (it.grading_company ? `${it.grading_company}${Number(it.grade)}` : "raw");
+const pfLabel = (it) => (it.grading_company ? `${it.grading_company} ${Number(it.grade)}` : CONDITIONS.find((c) => c.code === (it.condition ?? "NM"))?.code ?? "NM");
+
+async function loadPortfolio() {
+  if (sb && session && portfolioOn) {
+    const { data, error } = await sb.from("portfolio_items").select(PF_COLS).order("created_at", { ascending: false }).limit(500);
+    if (!error) {
+      const local = pfLocal.read();
+      if (local.length) {
+        const ins = await sb.from("portfolio_items").insert(local.map((it) => ({ ...pfRow(it), user_id: session.user.id }))).select(PF_COLS);
+        if (!ins.error) { pfLocal.write([]); data.unshift(...ins.data); } else console.warn("portfolio: local cards not moved", ins.error);
+      }
+      data.forEach((it) => pfItems.set(it.id, it));
+      return { items: data, local: false };
+    }
+    if (pfMissing(error)) portfolioOn = false; else throw error;
+  }
+  const items = pfLocal.read();
+  items.forEach((it) => pfItems.set(it.id, it));
+  return { items, local: true };
+}
+async function savePortfolioItem(row, file) {
+  if (sb && session && portfolioOn) {
+    const { data, error } = await sb.from("portfolio_items").insert({ ...pfRow(row), user_id: session.user.id }).select(PF_COLS).single();
+    if (!error) {
+      pfItems.set(data.id, data);
+      // The scanned photo makes it a sale draft. If it fails, the card is still saved.
+      if (file) {
+        const ext = { "image/png": "png", "image/webp": "webp" }[file.type] ?? "jpg";
+        const path = `${session.user.id}/${data.id}.${ext}`;
+        const up = await sb.storage.from("portfolio-photos").upload(path, file, { contentType: file.type || "image/jpeg", upsert: true });
+        if (up.error) console.warn("portfolio photo", up.error);
+        else {
+          const { error: e2 } = await sb.from("portfolio_items").update({ photo_path: path }).eq("id", data.id);
+          if (e2) { console.warn("portfolio photo path", e2); sb.storage.from("portfolio-photos").remove([path]); } else data.photo_path = path;
+        }
+      }
+      return { item: data, local: false };
+    }
+    if (/limit 500/.test(error.message ?? "")) throw Object.assign(error, { userMsg: "Tu portafolio llegó a 500 cartas." });
+    if (!pfMissing(error)) throw error;
+    portfolioOn = false; // migration 0033 not applied yet: keep it in this browser
+  }
+  const list = pfLocal.read();
+  if (list.length >= 500) throw Object.assign(new Error("portfolio: limit 500"), { userMsg: "Tu portafolio llegó a 500 cartas." });
+  const item = { ...pfRow(row), id: crypto.randomUUID(), photo_path: null, created_at: new Date().toISOString(), local: true };
+  list.unshift(item);
+  if (!pfLocal.write(list)) throw Object.assign(new Error("portfolio: storage"), { userMsg: "Tu navegador no deja guardar datos. Revisa que no estés en modo privado." });
+  pfItems.set(item.id, item);
+  return { item, local: true };
+}
+async function updatePortfolioItem(it, patch) {
+  if (it.local) {
+    pfLocal.write(pfLocal.read().map((x) => (x.id === it.id ? { ...x, ...patch } : x)));
+  } else {
+    const { error } = await sb.from("portfolio_items").update(patch).eq("id", it.id);
+    if (error) throw error;
+  }
+  Object.assign(it, patch);
+}
+async function removePortfolioItem(it) {
+  if (it.local) pfLocal.write(pfLocal.read().filter((x) => x.id !== it.id));
+  else {
+    const { error } = await sb.from("portfolio_items").delete().eq("id", it.id);
+    if (error) throw error;
+    if (it.photo_path) sb.storage.from("portfolio-photos").remove([it.photo_path]);
+  }
+  pfItems.delete(it.id);
+}
+// Signed links for the private scanned photos (1 hour).
+async function pfPhotoUrls(items) {
+  const paths = items.map((it) => it.photo_path).filter(Boolean);
+  if (!sb || !paths.length) return new Map();
+  const { data, error } = await sb.storage.from("portfolio-photos").createSignedUrls(paths, 3600);
+  if (error) { console.warn("portfolio photos", error); return new Map(); }
+  return new Map((data ?? []).filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
+}
+// Value today: the saved one if it is recent, else the price sources again (then saved for next time).
+async function pfValue(it, force = false) {
+  if (!force && it.value_cents != null && it.value_at && Date.now() - Date.parse(it.value_at) < PF_FRESH_MS) return it.value_cents / 100;
+  const h = await fetchPriceHistory(pfListing(it)).catch((e) => { console.warn("portfolio value", e); return null; });
+  const usd = h ? marketValueOf(h) : null;
+  if (usd) updatePortfolioItem(it, { value_cents: Math.round(usd * 100), value_at: new Date().toISOString() }).catch((e) => console.warn("portfolio value not saved", e));
+  return usd ?? (it.value_cents != null ? it.value_cents / 100 : null);
+}
+// What the same cards sell for: active listings on MarketZlab (demo listings don't count) and sales in
+// Panamá in the last year, matched by catalog id (and grade). Cards without a catalog id match by name.
+async function pfMarket(items) {
+  const out = new Map(items.map((it) => [it.id, { listings: [], sales: [] }]));
+  if (!sb || !items.length) return out;
+  const ids = [...new Set(items.map((it) => it.catalog_id).filter(Boolean))].slice(0, 200);
+  const since = new Date(Date.now() - 366 * DAY_MS).toISOString();
+  const [ls, sl] = await Promise.all([
+    ids.length ? sb.from("listings").select("id, catalog_id, title, price_cents, grading_company, grade").eq("status", "active").in("catalog_id", ids).limit(1000) : { data: [] },
+    ids.length ? sb.from("sales").select("catalog_id, grading_key, price_cents, sold_at").in("catalog_id", ids).gte("sold_at", since).order("sold_at", { ascending: false }).limit(1000) : { data: [] },
+  ]);
+  const sameGrade = (it, company, grade) => (it.grading_company ?? null) === (company ?? null) && (!company || Number(it.grade) === Number(grade));
+  for (const it of items) {
+    const o = out.get(it.id);
+    if (it.catalog_id) {
+      o.listings = (ls.data ?? []).filter((r) => r.catalog_id === it.catalog_id && sameGrade(it, r.grading_company, r.grade));
+      o.sales = (sl.data ?? []).filter((r) => r.catalog_id === it.catalog_id && r.grading_key === pfGradingKey(it));
+    }
+  }
+  // NBA/NFL and other cards without a catalog id: every word of the name (and number) in the listing.
+  await Promise.all(items.filter((it) => !it.catalog_id).slice(0, 20).map(async (it) => {
+    let q = sb.from("listings").select("id, title, price_cents, grading_company, grade").eq("status", "active").limit(20);
+    for (const t of searchTokens([it.subject, it.number].filter(Boolean).join(" "))) q = q.or(searchFilter(t, ["title", "subject", "set_name", "number"]));
+    const { data } = await q;
+    out.get(it.id).listings = (data ?? []).filter((r) => sameGrade(it, r.grading_company, r.grade));
+  }));
+  return out;
+}
+function pfSaleLine(m) {
+  if (m.listings.length) {
+    const min = Math.min(...m.listings.map((r) => r.price_cents));
+    return `<b>${m.listings.length} en venta</b> en ${esc(CONFIG.APP_NAME)} desde <b>${formatUsd(min)}</b>`;
+  }
+  if (m.sales.length) return `Se vendió en <b>${formatUsd(m.sales[0].price_cents)}</b> en Panamá ${daysAgo(m.sales[0].sold_at)}`;
+  return `Nadie la vende en ${esc(CONFIG.APP_NAME)} todavía`;
+}
+const pfArt = (it, photos) => {
+  const src = it.image_url || photos.get(it.photo_path);
+  return src ? `<img class="card loading-img" src="${esc(src)}" alt="${esc(it.subject)}" loading="lazy" decoding="async">`
+    : `<div class="card" style="display:grid;place-items:center;height:100%;background:var(--muted);color:var(--fg-3)">${ic("camera")}</div>`;
+};
+
+async function viewPortfolio(app) {
+  setTitle("Mi portafolio");
+  if (sb && !session) return go("/entrar?next=/portafolio");
+  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tu portafolio…</p>`;
+  const holder = app.firstElementChild;
+  let res;
+  try { res = await loadPortfolio(); } catch (e) { console.error(e); if (holder.isConnected) app.innerHTML = `<p class="notice bad">No pudimos cargar tu portafolio. Recarga la página.</p>`; return; }
+  if (!holder.isConnected) return;
+  const { items, local } = res;
+  const photos = await pfPhotoUrls(items);
+  if (!holder.isConnected) return;
+  const qty = items.reduce((n, it) => n + (it.quantity ?? 1), 0);
+  const paidItems = items.filter((it) => it.paid_cents != null);
+  const tile = (icon, label, value, note, id = "") => `<div class="dtile"><p class="k">${ic(icon)}${label}</p><p class="v"${id ? ` id="${id}"` : ""}>${value}</p><p class="s"${id ? ` id="${id}S"` : ""}>${note}</p></div>`;
+  app.innerHTML = `<div class="col" style="gap:20px;margin-top:24px">
+    <div class="pf-head"><div><p class="kicker">Solo tú lo ves · no se publica</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi portafolio</h1>
+      <p class="muted" style="margin:6px 0 0;max-width:620px">Tus cartas, lo que valen hoy y en cuánto se están vendiendo. Agrégalas escaneándolas en “¿Cuánto vale tu carta?” y publícalas cuando quieras.</p></div>
+      <a class="btn primary" href="#/escanear">${ic("camera")}Agregar con una foto</a></div>
+    ${local && items.length ? `<p class="notice soft" style="margin:0">Por ahora tu portafolio se guarda en este navegador. Pronto se guardará en tu cuenta y lo verás en todos tus dispositivos.</p>` : ""}
+    ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu portafolio">
+      ${tile("grid", "Cartas", fmtN(qty), `${fmtN(items.length)} ${items.length === 1 ? "distinta" : "distintas"}`)}
+      ${tile("trend", "Valor estimado", `<span class="spinner"></span>`, "calculando…", "pfTotal")}
+      ${paidItems.length ? tile("tag", "Pagaste", formatUsd(paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0)), `en ${fmtN(paidItems.length)} ${paidItems.length === 1 ? "carta" : "cartas"}`, "pfPaid") : ""}
+      ${tile("store", `En venta en ${esc(CONFIG.APP_NAME)}`, `<span class="spinner"></span>`, "de tus cartas", "pfOnSale")}
+    </section>
+    <ul class="grid live" id="pfGrid">${items.map((it, i) => `<li style="--i:${Math.min(i, 16)}"><a class="pcard pf-card" href="#/portafolio/${encodeURIComponent(it.id)}" data-pf="${esc(it.id)}">
+      <div class="media card-ratio"><div class="inner">${pfArt(it, photos)}</div>
+        <div class="corner-l"><span class="cond">${esc(pfLabel(it))}</span></div>${(it.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${it.quantity}</span></div>` : ""}</div>
+      <p class="title">${esc(it.subject)}</p>
+      <p class="set">${esc([it.set_name, it.number].filter(Boolean).join(" · ") || categoryName(it.category))}</p>
+      <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b data-val>${it.value_cents != null ? formatUsd(it.value_cents) : `<span class="spinner"></span>`}</b></p>
+        <p class="pf-sale" data-sale><span class="spinner"></span></p></div></a></li>`).join("")}</ul>`
+    : `<div class="empty-state"><span class="ico">${ic("trend")}</span><p style="font-weight:600">Tu portafolio está vacío.</p>
+      <p class="small muted" style="margin:4px 0 16px;max-width:420px">Escanea una carta en “¿Cuánto vale tu carta?” y toca “Guardar en mi portafolio”. No se publica: aquí ves cuánto vale y en cuánto se vende.</p>
+      <a class="btn primary" href="#/escanear">${ic("camera")}Escanear una carta</a></div>`}
+  </div>`;
+  if (!items.length) return;
+  const cardOf = (it) => app.querySelector(`[data-pf="${CSS.escape(it.id)}"]`);
+  // Where they sell, all at once.
+  pfMarket(items).then((m) => {
+    if (!app.isConnected) return;
+    let onSale = 0;
+    for (const it of items) {
+      const x = m.get(it.id), el = cardOf(it)?.querySelector("[data-sale]");
+      if (x.listings.length) onSale++;
+      if (el) el.innerHTML = pfSaleLine(x);
+    }
+    const n = $("#pfOnSale"); if (n) { n.textContent = fmtN(onSale); $("#pfOnSaleS").textContent = `de tus ${fmtN(items.length)} cartas`; }
+  }).catch((e) => console.warn("portfolio market", e));
+  // Values, three at a time (the price sources rate-limit).
+  let total = 0, missing = 0, next = 0;
+  const work = async () => {
+    while (next < items.length) {
+      const it = items[next++];
+      const usd = await pfValue(it);
+      if (!app.isConnected) return;
+      const el = cardOf(it)?.querySelector("[data-val]");
+      if (usd) { total += usd * (it.quantity ?? 1); if (el) el.textContent = fmtEstimate(usd); } else { missing++; if (el) el.textContent = "—"; }
+    }
+  };
+  await Promise.all([work(), work(), work()]);
+  if (!app.isConnected) return;
+  const t = $("#pfTotal");
+  if (t) { t.textContent = formatUsd(Math.round(total * 100)); $("#pfTotalS").textContent = missing ? `sin contar ${fmtN(missing)} ${missing === 1 ? "carta" : "cartas"} sin precio` : "a precio de mercado de hoy"; }
+  const paid = $("#pfPaid");
+  if (paid && !missing) {
+    const cost = paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0) / 100;
+    const worth = paidItems.reduce((n, it) => n + ((it.value_cents ?? 0) / 100) * (it.quantity ?? 1), 0);
+    const d = worth - cost;
+    $("#pfPaidS").innerHTML = `${d >= 0 ? "ganancia" : "pérdida"} de <b>${formatUsd(Math.round(Math.abs(d) * 100))}</b> hoy`;
+  }
+}
+
+async function viewPortfolioItem(app, id) {
+  if (sb && !session) return go(`/entrar?next=${encodeURIComponent(`/portafolio/${id}`)}`);
+  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando…</p>`;
+  const holder = app.firstElementChild;
+  if (!pfItems.has(id)) await loadPortfolio().catch((e) => console.error(e));
+  if (!holder.isConnected) return;
+  const it = pfItems.get(id);
+  if (!it) { setTitle("Carta no encontrada"); app.innerHTML = `<div class="empty-state" style="margin-top:32px"><p style="font-weight:600">Esta carta ya no está en tu portafolio.</p><a class="btn primary" style="margin-top:12px" href="#/portafolio">Ir a Mi portafolio</a></div>`; return; }
+  setTitle(it.subject);
+  const photos = await pfPhotoUrls([it]);
+  if (!holder.isConnected) return;
+  const photo = photos.get(it.photo_path);
+  const meta = [it.set_name, it.year, it.number, it.variant].filter(Boolean).map(esc).join(" · ");
+  app.innerHTML = `<nav class="crumbs" aria-label="Ruta" style="margin-top:16px"><a href="#/portafolio">Mi portafolio</a>${ic("chevronRight")}<span aria-current="page">${esc(it.subject)}</span></nav>
+    <div class="scan-result">
+      <div class="col" style="gap:12px">
+        <div class="panel scan-card">${it.image_url || photo ? `<img src="${esc(it.image_url || photo)}" alt="${esc(it.subject)}" class="card">` : `<div class="card" style="display:grid;place-items:center;width:100%;max-width:280px;aspect-ratio:63/88;background:var(--muted)">${ic("camera")}</div>`}</div>
+        ${photo && it.image_url ? `<div class="panel" style="padding:12px"><p class="xs muted" style="margin:0 0 8px">Tu foto</p><img src="${esc(photo)}" alt="Tu foto de la carta" style="width:100%;border-radius:10px"></div>` : ""}
+      </div>
+      <div class="col" style="gap:16px;min-width:0">
+        <section class="panel"><p class="eyebrow" style="margin:0">${esc(categoryName(it.category))} · en tu portafolio</p>
+          <h1 style="margin:6px 0 4px;font-size:24px">${esc(it.subject)}</h1>${meta ? `<p class="small muted" style="margin:0">${meta}</p>` : ""}
+          <div class="dbadges" style="margin-top:10px"><span class="b ${it.grading_company ? "prot" : "neutral"}">${it.grading_company ? esc(pfLabel(it)) : "Sin graduar · Near Mint"}</span></div>
+          <form class="pf-edit" id="pfEdit" novalidate>
+            <label class="f">Cantidad<input class="input" name="qty" type="number" min="1" max="999" step="1" inputmode="numeric" value="${it.quantity ?? 1}"></label>
+            <label class="f">Lo que pagaste (opcional)<input class="input" name="paid" type="number" min="0" step="0.01" inputmode="decimal" placeholder="USD por carta" value="${it.paid_cents != null ? it.paid_cents / 100 : ""}"></label>
+            <label class="f">Nota (opcional)<input class="input" name="note" maxlength="300" placeholder="Dónde la tienes, de quién la compraste…" value="${esc(it.note ?? "")}"></label>
+            <button class="btn" style="justify-self:start">Guardar cambios</button>
+          </form></section>
+        <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
+        <section class="panel" id="pfSale"><h2 class="ptitle">${ic("store")}En venta en ${esc(CONFIG.APP_NAME)}</h2><p class="loading" style="padding:12px 0"><span class="spinner"></span></p></section>
+        <div class="share-row"><button type="button" class="btn primary" id="pfSell">${ic("tag")}Vender esta carta</button><button type="button" class="btn outline" id="pfRemove">${ic("trash")}Quitar del portafolio</button></div>
+        <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
+      </div></div>`;
+  loadPriceChart(pfListing(it))?.then((h) => {
+    const usd = h ? marketValueOf(h) : null;
+    if (usd) updatePortfolioItem(it, { value_cents: Math.round(usd * 100), value_at: new Date().toISOString() }).catch((e) => console.warn("portfolio value not saved", e));
+  });
+  pfMarket([it]).then(async (m) => {
+    const box = $("#pfSale");
+    if (!box) return;
+    const x = m.get(it.id);
+    const full = x.listings.length ? await sb.from("listings").select(listingCols()).in("id", x.listings.slice(0, 12).map((r) => r.id)).then(({ data }) => withProfiles(data ?? [])).catch(() => []) : [];
+    if (!box.isConnected) return;
+    box.innerHTML = `<h2 class="ptitle">${ic("store")}En venta en ${esc(CONFIG.APP_NAME)}</h2>
+      ${full.length ? `<p class="sub">${pfSaleLine(x)}.</p><ul class="grid" style="margin-top:12px">${sortListings(full, "precio-asc").map(tile).join("")}</ul>`
+        : `<p class="sub">${pfSaleLine(x)}.${x.sales.length > 1 ? ` ${fmtN(x.sales.length)} ventas en Panamá en el último año.` : ""} Si la publicas, serías ${x.sales.length ? "de los pocos" : "el primero"} en venderla aquí.</p>`}`;
+  }).catch((e) => console.warn("portfolio market", e));
+  $("#pfEdit").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget, q = Math.round(Number(f.qty.value)), raw = f.paid.value.trim();
+    if (!(q >= 1 && q <= 999)) return toast("La cantidad va de 1 a 999.", { type: "error" });
+    const paid = raw === "" ? null : Math.round(Number(raw) * 100);
+    if (paid != null && !(paid >= 0 && paid <= 100000000)) return toast("Escribe un precio válido o déjalo vacío.", { type: "error" });
+    try {
+      await updatePortfolioItem(it, { quantity: q, paid_cents: paid, note: f.note.value.trim().slice(0, 300) || null });
+      toast("Listo, quedó guardado.");
+    } catch (err) { console.error(err); toast("No pudimos guardar. Intenta de nuevo.", { type: "error" }); }
+  });
+  $("#pfSell").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    // The scanned photo goes straight into the sale form; the form identifies the card again.
+    if (photo) {
+      try {
+        const blob = await (await fetch(photo)).blob();
+        pendingSellFiles = [new File([blob], `${it.id}.${blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg"}`, { type: blob.type || "image/jpeg" })];
+      } catch (err) { console.warn("portfolio photo for sale", err); }
+    }
+    if (!pendingSellFiles) toast("Sube fotos reales de tu carta para publicarla.");
+    go("/vender");
+  });
+  $("#pfRemove").addEventListener("click", async () => {
+    if (!(await confirmDialog({ title: "¿Quitar esta carta de tu portafolio?", body: "Se borra de tu lista. No afecta tus anuncios.", confirm: "Quitar", danger: true }))) return;
+    try { await removePortfolioItem(it); toast("La quitamos de tu portafolio."); go("/portafolio"); } catch (err) { console.error(err); toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
   });
 }
 
