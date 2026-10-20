@@ -553,6 +553,44 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .pf-stats dt { font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .pf-stats dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pf-stats dd small { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; color: var(--fg-2); }
+/* Public collection and "Me interesa" (0036) */
+.wl-add.int-btn.on { background: var(--brand-soft); border-color: var(--border-strong); }
+.wl-add.int-btn.on .i, .int-count.on .i, .int-list .n .i { color: var(--down); fill: currentColor; }
+.grid.coll-grid, .grid.int-grid { align-items: stretch; }
+.coll-grid > li > .pcard, .int-grid > li { height: 100%; }
+.int-grid > li { display: flex; flex-direction: column; }
+.int-grid > li > .pcard { flex: 1; }
+.coll-card .pf-rows { margin-bottom: auto; }
+.int-count { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.pf-rows .int-count { margin: 0; }
+.int-count .i { flex-shrink: 0; width: 14px; height: 14px; }
+.int-count.on { color: var(--fg); }
+.coll-head { margin-top: 36px; }
+.coll-sub { margin: 4px 0 14px; max-width: 640px; }
+.int-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 12px; }
+.int-big .v { margin: 0; font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.int-big .s { flex: 1 1 260px; margin: 0; font-size: 14px; color: var(--fg-2); }
+.int-big .s b { color: var(--fg); }
+.int-list { list-style: none; display: grid; gap: 6px; margin: 14px 0 0; padding: 0; }
+.int-list a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); color: inherit; text-decoration: none; transition: border-color .2s var(--ease), background-color .2s var(--ease); }
+.int-list a:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.int-list img, .int-list .ph { flex-shrink: 0; width: 34px; aspect-ratio: 63 / 88; border-radius: 4px; object-fit: cover; }
+.int-list .ph { display: grid; place-items: center; background: var(--muted); color: var(--fg-3); }
+.int-list .ph .i { width: 16px; height: 16px; }
+.int-list .nm { display: grid; flex: 1; min-width: 0; }
+.int-list .nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.int-list .nm small { font-size: 12px; color: var(--fg-3); }
+.int-list .n { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.int-list .n .i { width: 15px; height: 15px; }
+.int-more summary { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--fg-2); cursor: pointer; list-style: none; }
+.int-more summary::-webkit-details-marker { display: none; }
+.int-more summary .i { width: 15px; height: 15px; transition: transform .2s var(--ease); }
+.int-more[open] summary .i { transform: rotate(180deg); }
+.int-more .int-list { margin-top: 8px; }
+.pf-public .phead .share-row, .pf-pubrow .share-row { margin-top: 0; }
+.pf-public .share-row .btn { flex: 0 0 auto; }
+.pf-pubrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pf-pubrow p { flex: 1 1 320px; }
 .pf-qty { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--fg); color: var(--bg); font-size: 12px; font-weight: 700; }
 .pf-edit { display: grid; gap: 10px; margin-top: 14px; }
 @media (min-width: 640px) { .pf-edit { grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.4fr); align-items: end; } }
@@ -1320,6 +1358,7 @@ const ICONS = {
   users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
   cart: '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
   bookmark: '<path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>',
+  heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>',
 };
 const ic = (name, cls = "") => `<svg class="i${cls ? ` ${cls}` : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -2942,8 +2981,9 @@ function sellerPanel(s) {
 async function viewSeller(app, id, params = new URLSearchParams()) {
   app.innerHTML = `<div class="wrap"><p class="loading"><span class="spinner"></span>Cargando perfil…</p></div>`;
   const placeholder = app.firstElementChild;
-  let seller = null, listings = [], since = null;
+  let seller = null, listings = [], since = null, coll = [], marked = new Set(), counts = null;
   const demo = Object.values(DEMO_SELLERS).find((d) => d.id === id);
+  const isMe = session?.user.id === id;
   if (demo) {
     seller = demo;
     listings = CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => l.seller.id === id) : [];
@@ -2952,7 +2992,9 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     if (prof) {
       seller = profileToSeller(id, prof);
       since = prof.created_at;
-      listings = await fetchSellerListings(id, prof);
+      // Cards on sale, the public collection, and either what I marked here or (my own profile) the counts.
+      [listings, coll, marked, counts] = await Promise.all([fetchSellerListings(id, prof), fetchPublicCollection(id),
+        isMe ? new Set() : myInterestKeys(id), isMe ? myCardInterests() : null]);
       await applySellerStats([seller]);
       rememberListings(listings);
     }
@@ -2963,7 +3005,11 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     app.innerHTML = `<div class="wrap"><div class="empty-state" style="margin-top:48px"><span class="ico">${ic("search")}</span><p style="font-weight:600">Este perfil no existe.</p><p class="small muted" style="margin:4px 0 16px">Puede que el enlace esté mal escrito.</p><a class="btn primary" href="#/">Ver cartas</a></div></div>`;
     return;
   }
-  const s = seller, shop = s.isShop, isMe = session?.user.id === id;
+  const s = seller, shop = s.isShop;
+  // "Me interesa" on every card of someone else's real profile (signed out, it asks to sign in first).
+  const canMark = !demo && !!sb && interestsOn && !isMe;
+  const cardExtra = (key) => (canMark ? interestBtn(key, marked.has(key)) : counts ? interestCount(counts.byKey.get(key)?.people ?? 0) : "");
+  const onlyCollection = !listings.length && coll.length > 0 && !isMe;
   setTitle(s.displayName);
   let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null;
   const inCat = (c) => listings.filter((l) => !c || l.card.category === c);
@@ -2977,7 +3023,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
       ${shop && s.shopPhotoUrl ? `<img class="shop-photo" src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}">` : ""}
       <div class="sp-body">
         <div class="seller">${sellerAvatar(s, 64)}
-          <div style="min-width:0"><p class="kicker">${shop ? "Tienda" : "Vendedor particular"}</p><h1 class="sh-name">${esc(s.displayName)}</h1>
+          <div style="min-width:0"><p class="kicker">${shop ? "Tienda" : onlyCollection ? "Coleccionista" : "Vendedor particular"}</p><h1 class="sh-name">${esc(s.displayName)}</h1>
           <p class="xs muted" style="margin-top:2px">${meta}</p>
           <div class="tbadges" style="margin-top:8px">${sellerBadge(s)}</div></div></div>
         ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
@@ -2989,22 +3035,37 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     <section class="panel" id="sellerReviews" hidden></section></aside>
     <section class="seller-cards" aria-labelledby="forSaleTitle">
     <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
-    <nav class="chips seller-chips" aria-label="Categorías">${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}</nav>
+    ${onlyCollection ? "" : `<nav class="chips seller-chips" aria-label="Categorías">${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}</nav>`}
     <div id="sellerList"></div>
+    <div id="sellerColl"></div>
     </section></div>
   </div>`;
   const renderList = () => {
     const list = inCat(cat);
     $("#sellerCount").textContent = `${list.length} ${list.length === 1 ? "carta" : "cartas"}`;
-    $("#sellerList").innerHTML = list.length ? `<ul class="grid live">${list.map(tile).join("")}</ul>`
+    $("#sellerList").innerHTML = list.length ? `<ul class="grid live${canMark || counts ? " int-grid" : ""}">${list.map((l, i) => tile(l, i, { after: cardExtra(intKey("l", l.id)) })).join("")}</ul>`
+      : onlyCollection ? `<p class="small muted">${esc(s.displayName)} no tiene cartas en venta ahora, pero puedes ver su colección y marcar las que te interesan.</p>`
       : !listings.length
       ? `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "Todavía no tienes cartas en venta." : `${esc(s.displayName)} no tiene cartas en venta ahora.`}</p>${isMe ? `<a class="btn primary" style="margin-top:16px" href="#/vender">Publicar una carta</a>` : `<p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p>`}</div>`
       : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "No tienes" : `${esc(s.displayName)} no tiene`} cartas de ${esc(categoryName(cat))} en venta.</p><button type="button" class="btn outline" style="margin-top:16px" data-cat="">Ver todas sus cartas</button></div>`;
   };
   renderList();
+  // The collection: cards the person has, on sale or not. Your own profile shows how many want each one.
+  const collBox = $("#sellerColl");
+  if (coll.length) {
+    collBox.innerHTML = `<div class="rhead coll-head"><h2>${isMe ? "Tu colección" : "Su colección"}</h2><p class="small muted num">${fmtN(coll.length)} ${coll.length === 1 ? "carta" : "cartas"}</p></div>
+      <p class="small muted coll-sub">${isMe ? "Las cartas de tu portafolio que muestras en tu perfil. Debajo de cada una ves cuántas personas la quieren (nunca quiénes)." : `Cartas que ${esc(s.displayName)} tiene, estén o no en venta. Si alguna te interesa, márcala: verá cuántas personas la quieren, sin saber quiénes.`}</p>
+      <ul class="grid live coll-grid">${coll.map((c, i) => collectionTile(c, i, cardExtra(intKey("p", c.id)), isMe)).join("")}</ul>`;
+  } else if (isMe && interestsOn && sb) {
+    collBox.innerHTML = `<div class="rhead coll-head"><h2>Tu colección</h2></div>
+      <div class="empty-state"><span class="ico">${ic("eye")}</span><p style="font-weight:600">Todavía no muestras cartas de tu portafolio.</p>
+      <p class="small muted" style="margin:4px 0 16px;max-width:420px">Elige en Mi portafolio cuáles se ven aquí. Cualquiera podrá marcar “Me interesa”, estén o no en venta.</p><a class="btn primary" href="#/portafolio">Ir a Mi portafolio</a></div>`;
+  }
   if (!demo && sb) renderSellerReviews(id, isMe);
   if (!demo && sb && isVerifiedShop(s)) renderShopEventsPublic(id, $("#shopEvents"));
   app.querySelector(".seller-cards").addEventListener("click", (e) => {
+    const ib = e.target.closest("button[data-int]");
+    if (ib) return toggleInterestBtn(ib, marked, s.displayName, `/vendedor/${id}`);
     const b = e.target.closest("button[data-cat]");
     if (!b) return;
     cat = b.dataset.cat || null;
@@ -6179,22 +6240,27 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
 // Private to its owner. Until 0033 runs, the list lives in this browser (without photos) and moves to
 // the account the first time the table is there.
 let portfolioOn = true;
-// Entry value and daily value log (migration 0035). Until it runs, the cards load without them.
-let pfPerfCols = true;
+// Entry value and daily value log (migration 0035) and "show on my profile" (0036). Until they run,
+// the cards load without those columns.
+let pfPerfCols = true, pfPublicCol = true;
 const PF_LOCAL = "holo.portfolio.v1";
-const pfCols = () => `id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, condition, image_url, photo_path, quantity, paid_cents, value_cents, value_at, note, created_at${pfPerfCols ? ", added_value_cents, value_log" : ""}`;
-const PF_FIELDS = ["category", "subject", "set_name", "year", "number", "variant", "catalog_id", "grading_company", "grade", "condition", "image_url", "quantity", "paid_cents", "value_cents", "value_at", "note", "added_value_cents", "value_log"];
+const pfCols = () => `id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, condition, image_url, photo_path, quantity, paid_cents, value_cents, value_at, note, created_at${pfPerfCols ? ", added_value_cents, value_log" : ""}${pfPublicCol ? ", is_public" : ""}`;
+const PF_FIELDS = ["category", "subject", "set_name", "year", "number", "variant", "catalog_id", "grading_company", "grade", "condition", "image_url", "quantity", "paid_cents", "value_cents", "value_at", "note", "added_value_cents", "value_log", "is_public"];
 const PF_PERF = ["added_value_cents", "value_log"];
 const PF_FRESH_MS = 12 * 3600000;
 const pfMissing = (e) => ["42P01", "PGRST205", "PGRST204", "42703"].includes(e?.code);
 const pfRow = (o) => Object.fromEntries(PF_FIELDS.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
-/** The row as the table takes it: without the 0035 columns while that migration is missing. */
-const pfDb = (o) => (pfPerfCols ? o : Object.fromEntries(Object.entries(o).filter(([k]) => !PF_PERF.includes(k))));
-/** Runs a portfolio query; if it fails only because 0035 is missing, again without those columns. */
+/** The row as the table takes it: without the columns of a migration that is still missing. */
+const pfDb = (o) => Object.fromEntries(Object.entries(o).filter(([k]) => (pfPerfCols || !PF_PERF.includes(k)) && (pfPublicCol || k !== "is_public")));
+/** Runs a portfolio query; if it fails only because 0035 or 0036 is missing, again without those columns. */
 async function pfQuery(run) {
-  const res = await run();
-  if (pfPerfCols && pfMissing(res.error) && /added_value_cents|value_log/.test(res.error.message ?? "")) { pfPerfCols = false; return run(); }
-  return res;
+  for (;;) {
+    const res = await run();
+    const m = pfMissing(res.error) ? res.error.message ?? "" : "";
+    if (pfPerfCols && /added_value_cents|value_log/.test(m)) pfPerfCols = false;
+    else if (pfPublicCol && /is_public/.test(m)) pfPublicCol = false;
+    else return res;
+  }
 }
 const pfLocal = {
   read() { try { const v = JSON.parse(localStorage.getItem(PF_LOCAL) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; } },
@@ -6539,6 +6605,64 @@ const pfArt = (it, photos) => {
     : `<div class="card" style="display:grid;place-items:center;height:100%;background:var(--muted);color:var(--fg-3)">${ic("camera")}</div>`;
 };
 
+/** Mi portafolio ▸ "Interesados en tus cartas": how many people want which cards (collection and on sale),
+ *  and which cards show on the profile. */
+async function pfPublicPanel(app, items, ints) {
+  const me = session.user.id, link = `${location.origin}${location.pathname}#/vendedor/${encodeURIComponent(me)}`;
+  const paintPublic = () => {
+    const n = items.filter((it) => it.is_public).length;
+    $("#pfPubLine").innerHTML = n
+      ? `<b>${fmtN(n)} de ${fmtN(items.length)}</b> ${n === 1 ? "carta se ve" : "cartas se ven"} en tu perfil. Ahí cualquiera puede marcar “Me interesa”; nunca ve lo que pagaste, tus notas ni tus fotos.`
+      : "Ninguna carta de tu portafolio se ve en tu perfil todavía. Muéstralas para que cualquiera pueda marcar “Me interesa”, estén o no en venta. Nunca se ve lo que pagaste, tus notas ni tus fotos.";
+    for (const it of items) {
+      const corner = app.querySelector(`[data-pf="${CSS.escape(it.id)}"] [data-pubchip]`);
+      if (corner) corner.innerHTML = `<span class="cond">${esc(pfLabel(it))}</span>${it.is_public ? `<span class="chip-img good" title="Se ve en tu perfil">${ic("eye")}<span class="sr-only">Se ve en tu perfil</span></span>` : ""}`;
+    }
+  };
+  paintPublic();
+  app.querySelectorAll("[data-pub]").forEach((b) => b.addEventListener("click", async () => {
+    const on = b.dataset.pub === "1", change = items.filter((it) => !it.local && !!it.is_public !== on);
+    if (!change.length) return toast(on ? "Ya se ven todas en tu perfil." : "Ninguna se ve en tu perfil.");
+    b.disabled = true;
+    const { error } = await sb.from("portfolio_items").update({ is_public: on }).in("id", change.map((it) => it.id));
+    b.disabled = false;
+    if (error) { console.error(error); return toast("No pudimos cambiarlo. Intenta de nuevo.", { type: "error" }); }
+    change.forEach((it) => { it.is_public = on; });
+    paintPublic();
+    toast(on ? "Tus cartas ya se ven en tu perfil" : "Ocultaste tus cartas de tu perfil", on ? { description: "Comparte el enlace para que la gente marque las que le interesan." } : {});
+  }));
+  $("#pfShare")?.addEventListener("click", async () => {
+    const text = `Mira mi colección de cartas en ${CONFIG.APP_NAME}`;
+    if (navigator.share) { try { await navigator.share({ text, url: link }); return; } catch (err) { if (err?.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(link); toast("Copiamos el enlace a tu perfil"); } catch { window.open(`https://wa.me/?text=${encodeURIComponent(`${text}: ${link}`)}`, "_blank", "noopener"); }
+  });
+  // Per card, most wanted first. Cards on sale need their title from listings.
+  const box = $("#pfInt");
+  if (!ints.cards.length) {
+    box.innerHTML = `<div class="int-big"><p class="v">0</p><p class="s">Todavía nadie marcó “Me interesa” en tus cartas. Muéstralas en tu perfil y comparte el enlace.</p></div>`;
+    return;
+  }
+  const lids = ints.cards.filter((c) => c.key.startsWith("l:")).map((c) => c.key.slice(2));
+  const ls = lids.length ? (await sb.from("listings").select("id, title, status").in("id", lids)).data ?? [] : [];
+  if (!box.isConnected) return;
+  const byListing = new Map(ls.map((l) => [l.id, l])), byItem = new Map(items.map((it) => [it.id, it]));
+  const rows = ints.cards.map((c) => {
+    const id = c.key.slice(2);
+    if (c.key.startsWith("p:")) {
+      const it = byItem.get(id);
+      return it && { ...c, href: `#/portafolio/${encodeURIComponent(id)}`, name: `${it.subject}${it.grading_company ? ` · ${pfLabel(it)}` : ""}`, img: it.image_url, tag: it.is_public ? "En tu colección" : "En tu colección · ya no se ve en tu perfil" };
+    }
+    const l = byListing.get(id);
+    return l && { ...c, href: `#/carta/${encodeURIComponent(id)}`, name: l.title, img: null, tag: { active: "En venta", reserved: "Reservada", sold: "Vendida" }[l.status] ?? "Retirada" };
+  }).filter(Boolean);
+  const row = (r) => `<li><a href="${esc(r.href)}">${r.img ? `<img src="${esc(r.img)}" alt="" loading="lazy">` : `<span class="ph">${ic("tag")}</span>`}
+      <span class="nm"><b>${esc(r.name)}</b><small>${esc(r.tag)} · último interés ${daysAgo(r.lastAt)}</small></span>
+      <span class="n">${ic("heart")}${peopleN(r.people)}</span></a></li>`;
+  box.innerHTML = `<div class="int-big"><p class="v">${fmtN(ints.people)}</p><p class="s">${ints.people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(rows.length)} de tus cartas</b>. No te mostramos quiénes: solo cuántas quieren cada una.</p></div>
+    <ol class="int-list">${rows.slice(0, 5).map(row).join("")}</ol>
+    ${rows.length > 5 ? `<details class="int-more"><summary>Ver las otras ${fmtN(rows.length - 5)}${ic("chevronDown")}</summary><ol class="int-list">${rows.slice(5).map(row).join("")}</ol></details>` : ""}`;
+}
+
 async function viewPortfolio(app) {
   setTitle("Mi portafolio");
   if (sb && !session) return go("/entrar?next=/portafolio");
@@ -6548,16 +6672,27 @@ async function viewPortfolio(app) {
   try { res = await loadPortfolio(); } catch (e) { console.error(e); if (holder.isConnected) app.innerHTML = `<p class="notice bad">No pudimos cargar tu portafolio. Recarga la página.</p>`; return; }
   if (!holder.isConnected) return;
   const { items, local } = res;
-  const photos = await pfPhotoUrls(items);
+  // Interest counts also tell whether 0036 is there: without it there is no public collection.
+  const [photos, ints] = await Promise.all([pfPhotoUrls(items), local ? null : myCardInterests()]);
   if (!holder.isConnected) return;
+  const canShow = !!ints && pfPublicCol;
   const qty = items.reduce((n, it) => n + (it.quantity ?? 1), 0);
   const paidItems = items.filter((it) => it.paid_cents != null);
   const tile = (icon, label, value, note, id = "") => `<div class="dtile"><p class="k">${ic(icon)}${label}</p><p class="v"${id ? ` id="${id}"` : ""}>${value}</p><p class="s"${id ? ` id="${id}S"` : ""}>${note}</p></div>`;
+  const pubChip = (it) => (it.is_public ? `<span class="chip-img good" title="Se ve en tu perfil">${ic("eye")}<span class="sr-only">Se ve en tu perfil</span></span>` : "");
+  const pubPanel = canShow ? `<section class="panel pf-public" aria-labelledby="pfIntTitle">
+      <div class="phead"><h2 class="ptitle" id="pfIntTitle">${ic("heart")}Interesados en tus cartas</h2>
+        <div class="share-row"><a class="btn outline sm" href="#/vendedor/${encodeURIComponent(session.user.id)}">${ic("eye")}Ver mi perfil</a><button type="button" class="btn outline sm" id="pfShare">${ic("share")}Compartir</button></div></div>
+      <div id="pfInt"></div>
+      <div class="pf-pubrow"><p class="small muted" id="pfPubLine" style="margin:0"></p>
+        ${items.length ? `<div class="share-row"><button type="button" class="btn sm" data-pub="1">Mostrar todas en mi perfil</button><button type="button" class="btn ghost sm" data-pub="0">Ocultar todas</button></div>` : ""}</div>
+    </section>` : "";
   app.innerHTML = `<div class="col" style="gap:20px;margin-top:24px">
-    <div class="pf-head"><div><p class="kicker">Solo tú lo ves · no se publica</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi portafolio</h1>
+    <div class="pf-head"><div><p class="kicker">${canShow ? "Privado · tú eliges qué cartas se ven en tu perfil" : "Solo tú lo ves · no se publica"}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi portafolio</h1>
       <p class="muted" style="margin:6px 0 0;max-width:620px">Tus cartas, lo que valen hoy y en cuánto se están vendiendo. Agrégalas escaneándolas en “¿Cuánto vale tu carta?” y publícalas cuando quieras.</p></div>
       <a class="btn primary" href="#/escanear">${ic("camera")}Agregar con una foto</a></div>
     ${local && items.length ? `<p class="notice soft" style="margin:0">Por ahora tu portafolio se guarda en este navegador. Pronto se guardará en tu cuenta y lo verás en todos tus dispositivos.</p>` : ""}
+    ${items.length ? "" : pubPanel}
     ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu portafolio">
       ${tile("grid", "Cartas", fmtN(qty), `${fmtN(items.length)} ${items.length === 1 ? "distinta" : "distintas"}`)}
       ${tile("trend", "Valor estimado", `<span class="spinner"></span>`, "calculando…", "pfTotal")}
@@ -6565,18 +6700,21 @@ async function viewPortfolio(app) {
       ${paidItems.length ? tile("tag", "Pagaste", formatUsd(paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0)), `en ${fmtN(paidItems.length)} ${paidItems.length === 1 ? "carta" : "cartas"}`, "pfPaid") : ""}
       ${tile("store", `En venta en ${esc(CONFIG.APP_NAME)}`, `<span class="spinner"></span>`, "de tus cartas", "pfOnSale")}
     </section>
+    ${pubPanel}
     <ul class="grid live" id="pfGrid">${items.map((it, i) => `<li style="--i:${Math.min(i, 16)}"><a class="pcard pf-card" href="#/portafolio/${encodeURIComponent(it.id)}" data-pf="${esc(it.id)}">
       <div class="media card-ratio"><div class="inner">${pfArt(it, photos)}</div>
-        <div class="corner-l"><span class="cond">${esc(pfLabel(it))}</span></div>${(it.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${it.quantity}</span></div>` : ""}</div>
+        <div class="corner-l" data-pubchip><span class="cond">${esc(pfLabel(it))}</span>${pubChip(it)}</div>${(it.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${it.quantity}</span></div>` : ""}</div>
       <p class="title">${esc(it.subject)}</p>
       <p class="set">${esc([it.set_name, it.number].filter(Boolean).join(" · ") || categoryName(it.category))}</p>
       <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b data-val>${it.value_cents != null ? formatUsd(it.value_cents) : `<span class="spinner"></span>`}</b></p>
         <p class="pf-chg" data-chg>${pfChgLine(it)}</p>
+        ${ints?.byKey.get(intKey("p", it.id)) ? interestCount(ints.byKey.get(intKey("p", it.id)).people) : ""}
         <p class="pf-sale" data-sale><span class="spinner"></span></p></div></a></li>`).join("")}</ul>`
     : `<div class="empty-state"><span class="ico">${ic("trend")}</span><p style="font-weight:600">Tu portafolio está vacío.</p>
       <p class="small muted" style="margin:4px 0 16px;max-width:420px">Escanea una carta en “¿Cuánto vale tu carta?” y toca “Guardar en mi portafolio”. No se publica: aquí ves cuánto vale y en cuánto se vende.</p>
       <a class="btn primary" href="#/escanear">${ic("camera")}Escanear una carta</a></div>`}
   </div>`;
+  if (canShow) pfPublicPanel(app, items, ints);
   if (!items.length) return;
   const cardOf = (it) => app.querySelector(`[data-pf="${CSS.escape(it.id)}"]`);
   // Where they sell, all at once.
@@ -6635,9 +6773,9 @@ async function viewPortfolioItem(app, id) {
   const it = pfItems.get(id);
   if (!it) { setTitle("Carta no encontrada"); app.innerHTML = `<div class="empty-state" style="margin-top:32px"><p style="font-weight:600">Esta carta ya no está en tu portafolio.</p><a class="btn primary" style="margin-top:12px" href="#/portafolio">Ir a Mi portafolio</a></div>`; return; }
   setTitle(it.subject);
-  const photos = await pfPhotoUrls([it]);
+  const [photos, ints] = await Promise.all([pfPhotoUrls([it]), it.local ? null : myCardInterests()]);
   if (!holder.isConnected) return;
-  const photo = photos.get(it.photo_path);
+  const photo = photos.get(it.photo_path), canShow = !!ints && pfPublicCol;
   const meta = [it.set_name, it.year, it.number, it.variant].filter(Boolean).map(esc).join(" · ");
   app.innerHTML = `<nav class="crumbs" aria-label="Ruta" style="margin-top:16px"><a href="#/portafolio">Mi portafolio</a>${ic("chevronRight")}<span aria-current="page">${esc(it.subject)}</span></nav>
     <div class="scan-result">
@@ -6655,6 +6793,10 @@ async function viewPortfolioItem(app, id) {
             <label class="f">Nota (opcional)<input class="input" name="note" maxlength="300" placeholder="Dónde la tienes, de quién la compraste…" value="${esc(it.note ?? "")}"></label>
             <button class="btn" style="justify-self:start">Guardar cambios</button>
           </form></section>
+        ${canShow ? `<section class="panel pf-pubone"><h2 class="ptitle">${ic("eye")}En tu perfil</h2>
+          <label class="check" style="margin-top:10px"><input type="checkbox" id="pfPublicT"${it.is_public ? " checked" : ""}><span><b>Mostrar esta carta en mi perfil.</b> Cualquiera la ve en tu colección y puede marcar “Me interesa”, aunque no esté en venta. No se ve lo que pagaste, tu nota ni tu foto.</span></label>
+          ${interestCount(ints.byKey.get(intKey("p", it.id))?.people ?? 0)}
+          <a class="link small" href="#/vendedor/${encodeURIComponent(session.user.id)}" style="display:inline-block;margin-top:8px">Ver mi perfil</a></section>` : ""}
         <section class="panel" id="pfPerf"><h2 class="ptitle">${ic("trend")}Rendimiento</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Viendo cuánto ha subido o bajado desde que la agregaste…</p></section>
         <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
         <section class="panel" id="pfSale"><h2 class="ptitle">${ic("store")}En venta en ${esc(CONFIG.APP_NAME)}</h2><p class="loading" style="padding:12px 0"><span class="spinner"></span></p></section>
@@ -6672,6 +6814,15 @@ async function viewPortfolioItem(app, id) {
       ${full.length ? `<p class="sub">${pfSaleLine(x)}.</p><ul class="grid" style="margin-top:12px">${sortListings(full, "precio-asc").map(tile).join("")}</ul>`
         : `<p class="sub">${pfSaleLine(x)}.${x.sales.length > 1 ? ` ${fmtN(x.sales.length)} ventas en Panamá en el último año.` : ""} Si la publicas, serías ${x.sales.length ? "de los pocos" : "el primero"} en venderla aquí.</p>`}`;
   }).catch((e) => console.warn("portfolio market", e));
+  $("#pfPublicT")?.addEventListener("change", async (e) => {
+    const box = e.currentTarget, on = box.checked;
+    box.disabled = true;
+    try {
+      await updatePortfolioItem(it, { is_public: on });
+      toast(on ? "Ahora se ve en tu perfil" : "Ya no se ve en tu perfil", on ? { description: "Quien entre a tu perfil puede marcar que le interesa." } : {});
+    } catch (err) { console.error(err); box.checked = !on; toast("No pudimos cambiarlo. Intenta de nuevo.", { type: "error" }); }
+    box.disabled = false;
+  });
   $("#pfEdit").addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.currentTarget, q = Math.round(Number(f.qty.value)), raw = f.paid.value.trim();
@@ -6700,6 +6851,76 @@ async function viewPortfolioItem(app, id) {
     if (!(await confirmDialog({ title: "¿Quitar esta carta de tu portafolio?", body: "Se borra de tu lista. No afecta tus anuncios.", confirm: "Quitar", danger: true }))) return;
     try { await removePortfolioItem(it); toast("La quitamos de tu portafolio."); go("/portafolio"); } catch (err) { console.error(err); toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
   });
+}
+
+// ============================================================= public collection and "Me interesa" (migration 0036)
+// The portfolio cards their owner shows on their profile (#/vendedor/<id>), and "Me interesa": anyone
+// signed in marks any of those cards, or a card on sale. The owner sees how many people want each card,
+// never who (my_card_interests). Until 0036 runs, the collection stays private and the buttons don't show.
+let interestsOn = true;
+const intMissing = (e) => ["42P01", "PGRST205", "PGRST204", "PGRST202", "42703"].includes(e?.code);
+const COLL_COLS = "id, user_id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, condition, image_url, quantity, value_cents, created_at";
+const intKey = (kind, id) => `${kind}:${id}`; // "p" a portfolio card, "l" a listing
+async function fetchPublicCollection(uid) {
+  if (!sb || !interestsOn || !isUuid(uid)) return [];
+  const { data, error } = await sb.from("public_collection").select(COLL_COLS).eq("user_id", uid).order("created_at", { ascending: false }).limit(500);
+  if (intMissing(error)) { interestsOn = false; return []; }
+  if (error) { console.warn("collection", error); return []; }
+  return data ?? [];
+}
+/** The cards of one owner that the signed-in person marked, as keys ("p:<id>", "l:<id>"). */
+async function myInterestKeys(ownerId) {
+  if (!sb || !session || !interestsOn) return new Set();
+  const { data, error } = await sb.from("card_interests").select("portfolio_item_id, listing_id").eq("user_id", session.user.id).eq("owner_id", ownerId).limit(1000);
+  if (intMissing(error)) { interestsOn = false; return new Set(); }
+  if (error) console.warn("interests", error);
+  return new Set((data ?? []).map((r) => (r.portfolio_item_id ? intKey("p", r.portfolio_item_id) : intKey("l", r.listing_id))));
+}
+async function setInterest(key, on) {
+  const [kind, id] = key.split(":"), col = kind === "p" ? "portfolio_item_id" : "listing_id";
+  const { error } = on
+    ? await sb.from("card_interests").insert({ user_id: session.user.id, [col]: id })
+    : await sb.from("card_interests").delete().eq("user_id", session.user.id).eq(col, id);
+  if (error && error.code !== "23505") throw error; // 23505: already marked (from another tab)
+}
+/** The owner's counts: { people, cards: [{ key, people, lastAt }], byKey }, or null before 0036 (or signed out). */
+async function myCardInterests() {
+  if (!sb || !session || !interestsOn) return null;
+  const { data, error } = await sb.rpc("my_card_interests");
+  if (intMissing(error)) { interestsOn = false; return null; }
+  if (error) { console.warn("interests", error); return null; }
+  const cards = (data?.cards ?? []).map((c) => ({ key: c.portfolio_item_id ? intKey("p", c.portfolio_item_id) : intKey("l", c.listing_id), people: c.people, lastAt: c.last_at }));
+  return { people: data?.people ?? 0, cards, byKey: new Map(cards.map((c) => [c.key, c])) };
+}
+const peopleN = (n) => `${fmtN(n)} ${n === 1 ? "persona" : "personas"}`;
+const interestBtn = (key, on) => `<button type="button" class="btn outline sm wl-add int-btn${on ? " on" : ""}" data-int="${esc(key)}" aria-pressed="${on}">${ic("heart")}<span>${on ? "Te interesa" : "Me interesa"}</span></button>`;
+/** What the owner sees under a card: how many people want it. */
+const interestCount = (n) => `<p class="int-count${n ? " on" : ""}">${ic("heart")}<span>${n ? `${peopleN(n)} ${n === 1 ? "interesada" : "interesadas"}` : "Nadie la ha marcado todavía"}</span></p>`;
+/** A card of someone's public collection (not a link: it has no page of its own). */
+const collectionTile = (c, i, after = "", own = false) => `<li style="--i:${Math.min(i, 16)}"><div class="pcard pf-card coll-card">
+    <div class="media card-ratio"><div class="inner">${pfArt(c, new Map())}</div>
+      <div class="corner-l"><span class="${c.grading_company ? "graded" : "cond"}">${esc(pfLabel(c))}</span></div>${(c.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${c.quantity}</span></div>` : ""}</div>
+    <p class="title">${esc(c.subject)}</p>
+    <p class="set">${esc([c.set_name, c.number].filter(Boolean).join(" · ") || categoryName(c.category))}</p>
+    <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b>${c.value_cents != null ? fmtEstimate(c.value_cents / 100) : "—"}</b></p>
+      <p class="pf-sale">En ${own ? "tu" : "su"} colección · no está en venta</p></div>
+    ${after}</div></li>`;
+/** Marks or unmarks the card behind a "Me interesa" button, in place. */
+async function toggleInterestBtn(b, marked, ownerName, next) {
+  if (!session) return go(`/entrar?next=${encodeURIComponent(next)}`);
+  const key = b.dataset.int, on = !marked.has(key);
+  b.disabled = true;
+  try {
+    await setInterest(key, on);
+    if (on) marked.add(key); else marked.delete(key);
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-pressed", String(on));
+    b.querySelector("span").textContent = on ? "Te interesa" : "Me interesa";
+    toast(on ? "Marcaste que te interesa" : "Quitaste tu interés", on ? { description: `${ownerName} verá que alguien quiere esta carta. No le mostramos quién eres.` } : {});
+  } catch (err) {
+    console.error(err);
+    toast(/not available/.test(err?.message ?? "") ? "Esta carta ya no está disponible." : "No pudimos guardarlo. Intenta de nuevo.", { type: "error" });
+  } finally { b.disabled = false; }
 }
 
 // ============================================================= account
