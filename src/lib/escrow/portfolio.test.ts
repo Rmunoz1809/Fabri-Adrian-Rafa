@@ -46,6 +46,25 @@ describe("portfolio_items", () => {
     for (const p of policies) expect(`${p.qual ?? ""} ${p.with_check ?? ""}`).toMatch(/auth\.uid\(\)/);
   });
 
+  it("keeps the entry value once and a daily value log (0035)", async () => {
+    const [{ id }] = await db.as<{ id: string }>(user(ANA),
+      "insert into public.portfolio_items (user_id, subject, value_cents, added_value_cents) values ($1, 'Pikachu', 1000, 1000) returning id", [ANA]);
+    await db.as(user(ANA), "update public.portfolio_items set added_value_cents = 1, value_cents = 1250, value_log = $2 where id = $1",
+      [id, JSON.stringify([["2026-10-19", 1000], ["2026-10-20", 1250]])]);
+    const row = await db.one<{ added_value_cents: number; value_cents: number; value_log: unknown }>(
+      "select added_value_cents, value_cents, value_log from public.portfolio_items where id = $1", [id]);
+    expect(row).toEqual({ added_value_cents: 1000, value_cents: 1250, value_log: [["2026-10-19", 1000], ["2026-10-20", 1250]] });
+    // Older cards have no entry value: the first one written stays.
+    const [old] = await db.as<{ id: string }>(user(ANA), "insert into public.portfolio_items (user_id, subject) values ($1, 'Eevee') returning id", [ANA]);
+    await db.as(user(ANA), "update public.portfolio_items set added_value_cents = 500 where id = $1", [old.id]);
+    await db.as(user(ANA), "update public.portfolio_items set added_value_cents = 900 where id = $1", [old.id]);
+    expect((await db.one<{ added_value_cents: number }>("select added_value_cents from public.portfolio_items where id = $1", [old.id])).added_value_cents).toBe(500);
+    await expect(db.as(user(ANA), "update public.portfolio_items set value_log = '{}' where id = $1", [id])).rejects.toThrow(/value_log_shape/);
+    await expect(db.as(user(ANA), "update public.portfolio_items set value_log = $2 where id = $1",
+      [id, JSON.stringify(Array.from({ length: 401 }, () => ["2026-10-20", 1]))])).rejects.toThrow(/value_log_shape/);
+    await db.q("delete from public.portfolio_items where subject in ('Pikachu', 'Eevee')");
+  });
+
   it("stops at 500 cards per account", async () => {
     await db.q("insert into public.portfolio_items (user_id, subject) select $1, 'Carta ' || g from generate_series(1, 500) g", [BETO]);
     await expect(db.as(user(BETO), "insert into public.portfolio_items (user_id, subject) values ($1, 'Una más')", [BETO])).rejects.toThrow(/limit 500/);

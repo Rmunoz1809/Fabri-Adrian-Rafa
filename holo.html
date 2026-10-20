@@ -538,6 +538,21 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .pf-val b { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .pf-sale { margin: 0; font-size: 12px; line-height: 1.35; color: var(--fg-2); }
 .pf-sale b { color: var(--fg); }
+.pf-chg { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0; font-size: 12px; color: var(--fg-3); }
+.pf-chg:empty { display: none; }
+.pf-move { display: inline-flex; align-items: baseline; gap: 4px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-move > span { font-size: .75em; }
+.pf-move.up { color: var(--up); } .pf-move.down { color: var(--down); } .pf-move.flat { color: var(--fg-2); }
+.pf-quote { margin-top: 12px; }
+.pf-quote .now { margin: 0; font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.pf-quote .delta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 6px 0 0; font-size: 16px; }
+.pf-quote .delta .when { font-size: 13px; color: var(--fg-2); }
+.pf-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 14px 0 0; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--border); overflow: hidden; }
+@media (min-width: 640px) { .pf-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.pf-stats > div { min-width: 0; padding: 10px 12px; background: var(--card); }
+.pf-stats dt { font-size: 12px; font-weight: 600; color: var(--fg-3); }
+.pf-stats dd { margin: 2px 0 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pf-stats dd small { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; color: var(--fg-2); }
 .pf-qty { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--fg); color: var(--bg); font-size: 12px; font-weight: 700; }
 .pf-edit { display: grid; gap: 10px; margin-top: 14px; }
 @media (min-width: 640px) { .pf-edit { grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1.4fr); align-items: end; } }
@@ -6130,6 +6145,8 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
       grading_company: grading?.company ?? null, grade: grading?.grade ?? null, condition: grading ? null : "NM",
       image_url: https(c?.images?.large || c?.images?.small), quantity: 1,
       value_cents: usd ? Math.round(usd * 100) : null, value_at: usd ? new Date().toISOString() : null,
+      // Its "entry price": the portfolio measures how much it went up or down from here.
+      added_value_cents: usd ? Math.round(usd * 100) : null, value_log: usd ? [[isoDay(new Date()), Math.round(usd * 100)]] : [],
     };
     try {
       const { item } = await savePortfolioItem(row, file);
@@ -6162,12 +6179,23 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
 // Private to its owner. Until 0033 runs, the list lives in this browser (without photos) and moves to
 // the account the first time the table is there.
 let portfolioOn = true;
+// Entry value and daily value log (migration 0035). Until it runs, the cards load without them.
+let pfPerfCols = true;
 const PF_LOCAL = "holo.portfolio.v1";
-const PF_COLS = "id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, condition, image_url, photo_path, quantity, paid_cents, value_cents, value_at, note, created_at";
-const PF_FIELDS = ["category", "subject", "set_name", "year", "number", "variant", "catalog_id", "grading_company", "grade", "condition", "image_url", "quantity", "paid_cents", "value_cents", "value_at", "note"];
+const pfCols = () => `id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, condition, image_url, photo_path, quantity, paid_cents, value_cents, value_at, note, created_at${pfPerfCols ? ", added_value_cents, value_log" : ""}`;
+const PF_FIELDS = ["category", "subject", "set_name", "year", "number", "variant", "catalog_id", "grading_company", "grade", "condition", "image_url", "quantity", "paid_cents", "value_cents", "value_at", "note", "added_value_cents", "value_log"];
+const PF_PERF = ["added_value_cents", "value_log"];
 const PF_FRESH_MS = 12 * 3600000;
 const pfMissing = (e) => ["42P01", "PGRST205", "PGRST204", "42703"].includes(e?.code);
 const pfRow = (o) => Object.fromEntries(PF_FIELDS.filter((k) => o[k] !== undefined).map((k) => [k, o[k]]));
+/** The row as the table takes it: without the 0035 columns while that migration is missing. */
+const pfDb = (o) => (pfPerfCols ? o : Object.fromEntries(Object.entries(o).filter(([k]) => !PF_PERF.includes(k))));
+/** Runs a portfolio query; if it fails only because 0035 is missing, again without those columns. */
+async function pfQuery(run) {
+  const res = await run();
+  if (pfPerfCols && pfMissing(res.error) && /added_value_cents|value_log/.test(res.error.message ?? "")) { pfPerfCols = false; return run(); }
+  return res;
+}
 const pfLocal = {
   read() { try { const v = JSON.parse(localStorage.getItem(PF_LOCAL) ?? "[]"); return Array.isArray(v) ? v : []; } catch { return []; } },
   write(list) { try { localStorage.setItem(PF_LOCAL, JSON.stringify(list.slice(0, 500))); return true; } catch { return false; } },
@@ -6189,11 +6217,11 @@ const pfLabel = (it) => (it.grading_company ? `${it.grading_company} ${Number(it
 
 async function loadPortfolio() {
   if (sb && session && portfolioOn) {
-    const { data, error } = await sb.from("portfolio_items").select(PF_COLS).order("created_at", { ascending: false }).limit(500);
+    const { data, error } = await pfQuery(() => sb.from("portfolio_items").select(pfCols()).order("created_at", { ascending: false }).limit(500));
     if (!error) {
       const local = pfLocal.read();
       if (local.length) {
-        const ins = await sb.from("portfolio_items").insert(local.map((it) => ({ ...pfRow(it), user_id: session.user.id }))).select(PF_COLS);
+        const ins = await pfQuery(() => sb.from("portfolio_items").insert(local.map((it) => ({ ...pfDb(pfRow(it)), user_id: session.user.id }))).select(pfCols()));
         if (!ins.error) { pfLocal.write([]); data.unshift(...ins.data); } else console.warn("portfolio: local cards not moved", ins.error);
       }
       data.forEach((it) => pfItems.set(it.id, it));
@@ -6207,8 +6235,9 @@ async function loadPortfolio() {
 }
 async function savePortfolioItem(row, file) {
   if (sb && session && portfolioOn) {
-    const { data, error } = await sb.from("portfolio_items").insert({ ...pfRow(row), user_id: session.user.id }).select(PF_COLS).single();
+    const { data, error } = await pfQuery(() => sb.from("portfolio_items").insert({ ...pfDb(pfRow(row)), user_id: session.user.id }).select(pfCols()).single());
     if (!error) {
+      data.added_value_cents ??= row.added_value_cents ?? null; // kept for this visit while 0035 is missing
       pfItems.set(data.id, data);
       // The scanned photo makes it a sale draft. If it fails, the card is still saved.
       if (file) {
@@ -6239,7 +6268,7 @@ async function updatePortfolioItem(it, patch) {
   if (it.local) {
     pfLocal.write(pfLocal.read().map((x) => (x.id === it.id ? { ...x, ...patch } : x)));
   } else {
-    const { error } = await sb.from("portfolio_items").update(patch).eq("id", it.id);
+    const { error } = await pfQuery(() => { const row = pfDb(patch); return Object.keys(row).length ? sb.from("portfolio_items").update(row).eq("id", it.id) : { error: null }; });
     if (error) throw error;
   }
   Object.assign(it, patch);
@@ -6262,12 +6291,211 @@ async function pfPhotoUrls(items) {
   return new Map((data ?? []).filter((x) => x.signedUrl).map((x) => [x.path, x.signedUrl]));
 }
 // Value today: the saved one if it is recent, else the price sources again (then saved for next time).
+// Cards without an entry value yet (saved before 0035) always go to the sources once, to get it.
 async function pfValue(it, force = false) {
-  if (!force && it.value_cents != null && it.value_at && Date.now() - Date.parse(it.value_at) < PF_FRESH_MS) return it.value_cents / 100;
+  if (!force && it.added_value_cents != null && it.value_cents != null && it.value_at && Date.now() - Date.parse(it.value_at) < PF_FRESH_MS) return it.value_cents / 100;
   const h = await fetchPriceHistory(pfListing(it)).catch((e) => { console.warn("portfolio value", e); return null; });
-  const usd = h ? marketValueOf(h) : null;
-  if (usd) updatePortfolioItem(it, { value_cents: Math.round(usd * 100), value_at: new Date().toISOString() }).catch((e) => console.warn("portfolio value not saved", e));
+  const usd = h ? pfRecord(it, h) : null;
   return usd ?? (it.value_cents != null ? it.value_cents / 100 : null);
+}
+
+// ------------------------------------------------- the card as a stock (migration 0035)
+// Entry value = what the card was worth the day it was added; the change is measured from it, like a
+// stock from the price it was bought at. The line since that day comes from the same price source as
+// the value (TCGplayer, else Cardmarket, else PriceCharting/web, else sales in Panamá) plus the value
+// the page saw each day (value_log), so it fills in even when a source only gives today's price.
+/** The series the value comes from, in the same order as marketValueOf(). */
+function pfSeries(h) {
+  if (h.market.length) return { pts: h.market, src: "TCGplayer (EE.UU.)" };
+  if (h.cardmarket.length) return { pts: h.cardmarket, src: "Cardmarket (Europa)" };
+  if (h.web?.length) return { pts: h.web, src: h.quote?.via === "pricecharting" ? `${h.quote.sources[0].name} · ${h.quote.grade}` : "ventas recientes en internet" };
+  return { pts: h.sales, src: "ventas en Panamá" };
+}
+const pfDay = (t) => isoDay(new Date(t));
+/** Value of a series on a day: its last point up to that day, or its first one if it starts later. */
+function valueOn(pts, t) {
+  const day = pfDay(t);
+  let v = null;
+  for (const p of pts) { if (pfDay(p.t) > day) break; v = p.v; }
+  return v ?? pts[0]?.v ?? null;
+}
+/** Saves today's value from a fetchPriceHistory() result (and the entry value, the first time). Returns it in USD. */
+function pfRecord(it, h) {
+  const usd = marketValueOf(h);
+  if (!usd) return null;
+  const cents = Math.round(usd * 100), day = pfDay(Date.now());
+  const patch = { value_cents: cents, value_at: new Date().toISOString(), value_log: [...(it.value_log ?? []).filter(([d]) => d !== day), [day, cents]].slice(-366) };
+  if (it.added_value_cents == null) {
+    const entry = valueOn(pfSeries(h).pts, Date.parse(it.created_at));
+    if (entry > 0) patch.added_value_cents = Math.round(entry * 100);
+  }
+  Object.assign(it, patch); // the page uses it right away; saving can take a moment
+  updatePortfolioItem(it, patch).catch((e) => console.warn("portfolio value not saved", e));
+  return usd;
+}
+const pfPct = (r) => `${r > 0 ? "+" : r < 0 ? "−" : ""}${new Intl.NumberFormat("es-PA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Math.abs(r * 100))}%`;
+const pfSigned = (usd) => `${usd > 0 ? "+" : usd < 0 ? "−" : ""}${formatUsd(Math.abs(Math.round(usd * 100)))}`;
+/** "▲ +4,6%" in green, "▼ −3,1%" in red; flat under 0.05%. */
+function pfMove(r, withArrow = true) {
+  const dir = Math.abs(r) < 0.0005 ? "flat" : r > 0 ? "up" : "down";
+  return `<span class="pf-move ${dir}">${withArrow ? `<span aria-hidden="true">${{ up: "▲", down: "▼", flat: "■" }[dir]}</span>` : ""}${pfPct(dir === "flat" ? 0 : r)}</span>`;
+}
+/** Change since the card was added, from the saved values only (no sources): { entry, now, pct } in USD, or null. */
+function pfChange(it) {
+  if (it.added_value_cents == null || it.value_cents == null || !it.added_value_cents) return null;
+  return { entry: it.added_value_cents / 100, now: it.value_cents / 100, pct: it.value_cents / it.added_value_cents - 1 };
+}
+const pfChgLine = (it) => { const c = pfChange(it); return c ? `${pfMove(c.pct)}<span>desde que la agregaste</span>` : ""; };
+/** Everything the stock view draws, from a fetchPriceHistory() result. */
+function pfPerformance(it, h) {
+  const { pts, src } = pfSeries(h);
+  const now = Date.now(), cur = marketValueOf(h) ?? (it.value_cents != null ? it.value_cents / 100 : null);
+  const t0 = Math.min(Date.parse(it.created_at) || now, now), day0 = pfDay(t0), today = pfDay(now);
+  const entry = it.added_value_cents != null ? it.added_value_cents / 100 : valueOn(pts, t0);
+  if (!(cur > 0) || !(entry > 0)) return null;
+  // Before the card was added: the source's history (drawn in grey). Since then: one value per day.
+  const before = pts.filter((p) => pfDay(p.t) < day0);
+  const days = new Map();
+  for (const [d, c] of it.value_log ?? []) if (d > day0 && d < today && c > 0) days.set(d, { t: noonUtc(d), v: c / 100, seen: true });
+  for (const p of pts) { const d = pfDay(p.t); if (d > day0 && d < today) days.set(d, { t: p.t, v: p.v, carried: p.carried }); }
+  const since = [{ t: t0, v: entry, entry: true }, ...[...days.values()].sort((a, b) => a.t - b.t), { t: now, v: cur, today: true }];
+  const hi = since.reduce((a, p) => (p.v > a.v ? p : a)), lo = since.reduce((a, p) => (p.v < a.v ? p : a));
+  return { entry, cur, t0, before, since, src, hi, lo, change: cur - entry, pct: cur / entry - 1, qty: it.quantity ?? 1, paid: it.paid_cents != null ? it.paid_cents / 100 : null };
+}
+
+/** The stock view: value now, change since the card was added, a line from that day (green up, red down), and stats. */
+function renderPfPerf(box, p, range, setRange, animate) {
+  const now = Date.now(), dir = Math.abs(p.pct) < 0.0005 ? "flat" : p.pct > 0 ? "up" : "down";
+  const color = { up: "var(--up)", down: "var(--down)", flat: "var(--fg-2)" }[dir];
+  const first = (p.before[0] ?? p.since[0]).t;
+  // "Desde <fecha>" first; the usual periods only when they show something different.
+  const ranges = [[`Desde ${fmtDay(p.t0)}`, 0, `Desde que la agregaste (${fmtDay(p.t0, true)})`], ...CHART_RANGES.filter(([, d]) => now - d * DAY_MS > p.t0 + 2 * DAY_MS || first < p.t0 - 2 * DAY_MS)];
+  let from = range === 0 ? p.t0 : range === Infinity ? first : now - range * DAY_MS;
+  if (now - from < 7 * DAY_MS) from = now - 7 * DAY_MS;
+  // Cut a series at the start of the period, with a point on the edge so the line starts there.
+  const clip = (pts) => {
+    const i = pts.findIndex((q) => q.t >= from);
+    if (i <= 0) return i < 0 ? [] : pts;
+    const a = pts[i - 1], b = pts[i];
+    return [{ t: from, v: a.v + ((b.v - a.v) * (from - a.t)) / (b.t - a.t), edge: true }, ...pts.slice(i)];
+  };
+  const grey = p.t0 > from && p.before.length ? clip([...p.before, p.since[0]]) : [], mine = clip(p.since);
+  const startV = (grey[0] ?? mine[0]).v, full = ranges.find(([, d]) => d === range)?.[2] ?? "";
+  const periodMove = range === 0 ? "" : `<p class="small muted" style="margin:6px 0 0">${range === Infinity ? `Desde el ${fmtDay(first, true)}` : `En ${esc(full.toLowerCase())}`}: ${pfMove(p.cur / startV - 1)} <span>(de ${fmtEstimate(startV)} a ${fmtEstimate(p.cur)})</span></p>`;
+  const held = Math.floor((now - p.t0) / DAY_MS);
+  const stat = (k, v, s = "") => `<div><dt>${k}</dt><dd>${v}${s ? `<small>${s}</small>` : ""}</dd></div>`;
+  box.innerHTML = `<div class="phead"><h2 class="ptitle">${ic("trend")}Rendimiento</h2>
+      <div class="ranges" role="group" aria-label="Periodo">${ranges.map(([t, d, f]) => `<button type="button" data-d="${d}" class="${d === range ? "on" : ""}" aria-pressed="${d === range}" aria-label="${esc(f)}">${esc(t)}</button>`).join("")}</div></div>
+    <div class="pf-quote">
+      <p class="now">${fmtEstimate(p.cur)}</p>
+      <p class="delta">${pfMove(p.pct)}<span class="pf-move ${dir}">${pfSigned(p.change)}</span><span class="when">desde que la agregaste ${held < 1 ? "hoy" : held === 1 ? "ayer" : `hace ${fmtN(held)} días`} (${fmtDay(p.t0, true)})</span></p>
+      ${periodMove}
+    </div>
+    <div class="pchart"></div>
+    <dl class="pf-stats">
+      ${stat("Entrada", fmtEstimate(p.entry), `valor el ${fmtDay(p.t0, true)}`)}
+      ${stat("Hoy", fmtEstimate(p.cur), pfMove(p.pct))}
+      ${stat("Máximo desde entonces", fmtEstimate(p.hi.v), p.hi.today ? "hoy" : fmtDay(p.hi.t, true))}
+      ${stat("Mínimo desde entonces", fmtEstimate(p.lo.v), p.lo.today ? "hoy" : fmtDay(p.lo.t, true))}
+      ${p.qty > 1 ? stat(`Tus ${fmtN(p.qty)} cartas`, fmtEstimate(p.cur * p.qty), `<span class="pf-move ${dir}">${pfSigned(p.change * p.qty)}</span> desde entonces`) : ""}
+      ${p.paid ? stat(`Contra lo que pagaste (${fmtEstimate(p.paid)})`, `<span class="pf-move ${p.cur > p.paid ? "up" : p.cur < p.paid ? "down" : "flat"}">${pfSigned((p.cur - p.paid) * p.qty)}</span>`, pfMove(p.cur / p.paid - 1)) : ""}
+    </dl>
+    <p class="pnotes">Como una acción: el cambio se mide desde lo que valía la carta el día que la agregaste, con la misma fuente del valor de hoy (${esc(p.src)}).${grey.length ? " La línea gris es su historial de antes." : ""} Es una referencia, no una garantía.</p>`;
+  box.querySelectorAll(".ranges button").forEach((b) => b.addEventListener("click", () => { if (Number(b.dataset.d) !== range) setRange(Number(b.dataset.d)); }));
+
+  const wrap = box.querySelector(".pchart");
+  const W = Math.max(260, Math.round(wrap.clientWidth)), H = 220, m = { l: 46, r: 10, t: 22, b: 26 };
+  const vals = [...grey, ...mine].map((q) => q.v).concat(p.entry);
+  const ticks = niceTicks(Math.min(...vals) * 0.96, Math.max(...vals) * 1.03);
+  const yMin = ticks[0], yMax = ticks.at(-1), xMin = from, xMax = now, base = H - m.b;
+  const X = (t) => m.l + ((t - xMin) / (xMax - xMin)) * (W - m.l - m.r);
+  const Y = (v) => m.t + (1 - (v - yMin) / (yMax - yMin)) * (base - m.t);
+  const path = (pts) => monotonePath(pts.map((q) => [X(q.t), Y(q.v)]));
+  const line = path(mine), last = mine.at(-1);
+  const area = mine.length > 1 ? `${line}L${X(last.t).toFixed(1)},${base}L${X(mine[0].t).toFixed(1)},${base}Z` : "";
+  const xTicks = [0, 1 / 3, 2 / 3, 1].map((f) => xMin + f * (xMax - xMin));
+  const spansYear = new Date(xMin).getFullYear() !== new Date(xMax).getFullYear();
+  const ex = X(p.t0), ey = Y(p.entry), showEntry = p.t0 >= from;
+  // The entry label goes on the side of the line that has room (below it when the card went up), away from the entry dot.
+  const labelY = p.cur >= p.entry ? Math.min(base - 4, ey + 15) : Math.max(m.t + 10, ey - 7), labelLeft = showEntry && ex > W / 2;
+  wrap.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" tabindex="0" role="img" aria-label="Gráfica del valor de tu carta desde que la agregaste, comparado con su valor de entrada. Usa las flechas para recorrer los puntos.">
+    <defs>
+      <linearGradient id="pfFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient>
+      <clipPath id="pfClip"><rect x="0" y="0" width="${animate ? 0 : W}" height="${H}"/></clipPath>
+    </defs>
+    ${ticks.map((v) => `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3"/><text class="axis" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${fmtAxis(v)}</text>`).join("")}
+    ${xTicks.map((t, i) => `<text class="axis" x="${X(t)}" y="${H - 6}" text-anchor="${i === 0 ? "start" : i === 3 ? "end" : "middle"}">${i === 3 ? "Hoy" : fmtDay(t, spansYear)}</text>`).join("")}
+    <line x1="${m.l}" x2="${W - m.r}" y1="${ey}" y2="${ey}" stroke="var(--fg-2)" stroke-width="1.5" stroke-dasharray="4 4" opacity=".7"/>
+    <text class="axis" x="${labelLeft ? m.l + 4 : W - m.r}" y="${labelY}" text-anchor="${labelLeft ? "start" : "end"}" style="fill:var(--fg);font-weight:600">Entrada ${fmtEstimate(p.entry)}</text>
+    ${showEntry ? `<line x1="${ex}" x2="${ex}" y1="${m.t - 4}" y2="${base}" stroke="var(--fg-3)" stroke-width="1" stroke-dasharray="2 3"/>
+    <text class="axis" x="${ex}" y="${m.t - 9}" text-anchor="${ex > W - 70 ? "end" : ex < m.l + 40 ? "start" : "middle"}" style="fill:var(--fg-2);font-weight:600">La agregaste</text>` : ""}
+    <g clip-path="url(#pfClip)">
+      ${grey.length > 1 ? `<path d="${path(grey)}" fill="none" stroke="var(--fg-3)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+      ${area ? `<path d="${area}" fill="url(#pfFill)"/>` : ""}
+      ${mine.length > 1 ? `<path d="${line}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ""}
+      ${showEntry ? `<circle cx="${ex}" cy="${ey}" r="4.5" fill="var(--card)" stroke="${color}" stroke-width="2"/>` : ""}
+      <circle class="ping" cx="${X(last.t)}" cy="${Y(last.v)}" r="4.5" fill="${color}" opacity=".75"/><circle cx="${X(last.t)}" cy="${Y(last.v)}" r="4.5" fill="${color}" stroke="var(--card)" stroke-width="2"/>
+    </g>
+    <g class="cross" style="display:none"><line y1="${m.t}" y2="${base}" stroke="var(--fg-3)" stroke-width="1"/><circle r="5.5" fill="var(--card)" stroke="var(--fg)" stroke-width="2"/></g>
+  </svg><div class="ptip" role="status"></div>`;
+  if (animate) revealChart(wrap.querySelector("#pfClip rect"), W);
+
+  // Hover / keyboard: each day with a value, and how it compares with the entry.
+  const stops = [...grey.filter((q) => !q.entry), ...mine].filter((q) => !q.edge);
+  const svg = wrap.querySelector("svg"), tip = wrap.querySelector(".ptip"), cross = svg.querySelector(".cross");
+  let idx = stops.length - 1;
+  const row = (c, value, label) => {
+    const r = document.createElement("div"); r.className = "r";
+    const k = document.createElement("i"); k.className = "k"; k.style.background = c;
+    const b = document.createElement("b"); b.textContent = value;
+    r.append(k, b, document.createTextNode(label)); return r;
+  };
+  const show = (i) => {
+    idx = Math.max(0, Math.min(stops.length - 1, i));
+    const q = stops[idx], x = X(q.t), y = Y(q.v), pre = q.t < p.t0;
+    cross.style.display = "";
+    cross.querySelector("line").setAttribute("x1", x); cross.querySelector("line").setAttribute("x2", x);
+    cross.querySelector("circle").setAttribute("cx", x); cross.querySelector("circle").setAttribute("cy", y);
+    const d = document.createElement("div"); d.className = "d"; d.textContent = q.today ? "Hoy" : fmtDay(q.t, true);
+    tip.replaceChildren(d, row(pre ? "var(--fg-3)" : color, formatUsd(toCents(q.v)), q.entry ? "la agregaste (entrada)" : q.today ? "valor hoy" : pre ? "antes de agregarla" : q.seen ? "valor ese día" : `${p.src}${q.carried ? " (se repite)" : ""}`));
+    if (!pre && !q.entry) tip.append(row("var(--fg-2)", pfPct(q.v / p.entry - 1), "contra la entrada"));
+    const firstShow = tip.style.display !== "block";
+    tip.style.display = "block";
+    const tw = tip.offsetWidth, left = x > W / 2 ? Math.max(0, x - tw - 12) : Math.min(W - tw, x + 12);
+    tip.classList.toggle("moving", !firstShow);
+    tip.style.transform = `translate(${Math.round(left)}px, 0)`;
+  };
+  const hide = () => { cross.style.display = "none"; tip.style.display = "none"; tip.classList.remove("moving"); };
+  svg.addEventListener("pointermove", (e) => {
+    const r = svg.getBoundingClientRect(), px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0;
+    stops.forEach((s, i) => { if (Math.abs(X(s.t) - px) < Math.abs(X(stops[best].t) - px)) best = i; });
+    if (best !== idx || tip.style.display !== "block") show(best);
+  });
+  svg.addEventListener("pointerleave", () => { if (document.activeElement !== svg) hide(); });
+  svg.addEventListener("focus", () => show(idx));
+  svg.addEventListener("blur", hide);
+  svg.addEventListener("keydown", (e) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (step) { e.preventDefault(); show(idx + step); }
+    else if (e.key === "Home" || e.key === "End") { e.preventDefault(); show(e.key === "Home" ? 0 : stops.length - 1); }
+  });
+}
+/** Fills #pfPerf once the price history is in, and redraws it when its width changes. */
+function showPfPerf(it, h) {
+  const box = $("#pfPerf");
+  if (!box) return;
+  box._ro?.disconnect();
+  const p = h ? pfPerformance(it, h) : null;
+  if (!p) { box.innerHTML = `<h2 class="ptitle">${ic("trend")}Rendimiento</h2><p class="sub" style="margin-top:8px">Todavía no encontramos el precio de esta carta, así que no podemos mostrar cómo se ha movido desde que la agregaste.</p>`; return; }
+  let range = 0, width = box.clientWidth;
+  const draw = (animate) => renderPfPerf(box, p, range, (r) => { range = r; draw(true); }, animate);
+  draw(true);
+  box._ro = new ResizeObserver(() => {
+    if (!box.isConnected) return box._ro.disconnect();
+    if (box.clientWidth !== width) { width = box.clientWidth; draw(false); }
+  });
+  box._ro.observe(box);
 }
 // What the same cards sell for: active listings on MarketZlab (demo listings don't count) and sales in
 // Panamá in the last year, matched by catalog id (and grade). Cards without a catalog id match by name.
@@ -6333,6 +6561,7 @@ async function viewPortfolio(app) {
     ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu portafolio">
       ${tile("grid", "Cartas", fmtN(qty), `${fmtN(items.length)} ${items.length === 1 ? "distinta" : "distintas"}`)}
       ${tile("trend", "Valor estimado", `<span class="spinner"></span>`, "calculando…", "pfTotal")}
+      ${tile("trend", "Desde que las agregaste", `<span class="spinner"></span>`, "calculando…", "pfMoved")}
       ${paidItems.length ? tile("tag", "Pagaste", formatUsd(paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0)), `en ${fmtN(paidItems.length)} ${paidItems.length === 1 ? "carta" : "cartas"}`, "pfPaid") : ""}
       ${tile("store", `En venta en ${esc(CONFIG.APP_NAME)}`, `<span class="spinner"></span>`, "de tus cartas", "pfOnSale")}
     </section>
@@ -6342,6 +6571,7 @@ async function viewPortfolio(app) {
       <p class="title">${esc(it.subject)}</p>
       <p class="set">${esc([it.set_name, it.number].filter(Boolean).join(" · ") || categoryName(it.category))}</p>
       <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b data-val>${it.value_cents != null ? formatUsd(it.value_cents) : `<span class="spinner"></span>`}</b></p>
+        <p class="pf-chg" data-chg>${pfChgLine(it)}</p>
         <p class="pf-sale" data-sale><span class="spinner"></span></p></div></a></li>`).join("")}</ul>`
     : `<div class="empty-state"><span class="ico">${ic("trend")}</span><p style="font-weight:600">Tu portafolio está vacío.</p>
       <p class="small muted" style="margin:4px 0 16px;max-width:420px">Escanea una carta en “¿Cuánto vale tu carta?” y toca “Guardar en mi portafolio”. No se publica: aquí ves cuánto vale y en cuánto se vende.</p>
@@ -6367,14 +6597,26 @@ async function viewPortfolio(app) {
       const it = items[next++];
       const usd = await pfValue(it);
       if (!app.isConnected) return;
-      const el = cardOf(it)?.querySelector("[data-val]");
+      const el = cardOf(it)?.querySelector("[data-val]"), chg = cardOf(it)?.querySelector("[data-chg]");
       if (usd) { total += usd * (it.quantity ?? 1); if (el) el.textContent = fmtEstimate(usd); } else { missing++; if (el) el.textContent = "—"; }
+      if (chg) chg.innerHTML = pfChgLine(it);
     }
   };
   await Promise.all([work(), work(), work()]);
   if (!app.isConnected) return;
   const t = $("#pfTotal");
   if (t) { t.textContent = formatUsd(Math.round(total * 100)); $("#pfTotalS").textContent = missing ? `sin contar ${fmtN(missing)} ${missing === 1 ? "carta" : "cartas"} sin precio` : "a precio de mercado de hoy"; }
+  // The whole portfolio as a stock: today's value against the entry value of each card.
+  const moved = items.map((it) => [pfChange(it), it.quantity ?? 1]).filter(([c]) => c);
+  const mv = $("#pfMoved");
+  if (mv) {
+    const entry = moved.reduce((n, [c, q]) => n + c.entry * q, 0), diff = moved.reduce((n, [c, q]) => n + (c.now - c.entry) * q, 0);
+    if (!moved.length || !entry) { mv.textContent = "—"; $("#pfMovedS").textContent = "todavía sin precio de entrada"; }
+    else {
+      mv.innerHTML = `<span class="pf-move ${Math.abs(diff / entry) < 0.0005 ? "flat" : diff > 0 ? "up" : "down"}">${pfSigned(diff)}</span>`;
+      $("#pfMovedS").innerHTML = `${pfMove(diff / entry)} ${moved.length < items.length ? `en ${fmtN(moved.length)} de ${fmtN(items.length)} cartas` : "como una acción"}`;
+    }
+  }
   const paid = $("#pfPaid");
   if (paid && !missing) {
     const cost = paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0) / 100;
@@ -6413,15 +6655,13 @@ async function viewPortfolioItem(app, id) {
             <label class="f">Nota (opcional)<input class="input" name="note" maxlength="300" placeholder="Dónde la tienes, de quién la compraste…" value="${esc(it.note ?? "")}"></label>
             <button class="btn" style="justify-self:start">Guardar cambios</button>
           </form></section>
+        <section class="panel" id="pfPerf"><h2 class="ptitle">${ic("trend")}Rendimiento</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Viendo cuánto ha subido o bajado desde que la agregaste…</p></section>
         <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
         <section class="panel" id="pfSale"><h2 class="ptitle">${ic("store")}En venta en ${esc(CONFIG.APP_NAME)}</h2><p class="loading" style="padding:12px 0"><span class="spinner"></span></p></section>
         <div class="share-row"><button type="button" class="btn primary" id="pfSell">${ic("tag")}Vender esta carta</button><button type="button" class="btn outline" id="pfRemove">${ic("trash")}Quitar del portafolio</button></div>
         <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
       </div></div>`;
-  loadPriceChart(pfListing(it))?.then((h) => {
-    const usd = h ? marketValueOf(h) : null;
-    if (usd) updatePortfolioItem(it, { value_cents: Math.round(usd * 100), value_at: new Date().toISOString() }).catch((e) => console.warn("portfolio value not saved", e));
-  });
+  loadPriceChart(pfListing(it), (h) => { pfRecord(it, h); showPfPerf(it, h); });
   pfMarket([it]).then(async (m) => {
     const box = $("#pfSale");
     if (!box) return;
