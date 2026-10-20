@@ -571,6 +571,9 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .int-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #0b1222; background: #fff; box-shadow: var(--shadow-sm); }
 .int-tag .i { width: 12px; height: 12px; }
 .int-cards { margin-top: 14px; }
+.seller-seg.pf-tabs { align-self: stretch; margin: 0; grid-template-columns: 1fr 1fr; }
+@media (min-width: 640px) { .seller-seg.pf-tabs { align-self: flex-start; grid-template-columns: repeat(2, auto); } }
+.pf-sales .tseller { display: none; } /* they are all mine */
 .seller-side > [hidden] { display: none; } /* shop events and reviews stay hidden until they have something */
 .int-count { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .pf-rows .int-count { margin: 0; }
@@ -2235,8 +2238,8 @@ async function route() {
     if (path === "/watchlist") { app.innerHTML = `<div class="wrap"></div>`; return await viewWatchlist(app.firstElementChild, params); }
     if (path.startsWith("/watchlist/carta/")) return await viewWatchCard(app, safeDecode(path.slice(17)), params);
     if (path === "/consultas") { app.innerHTML = `<div class="wrap"></div>`; return await viewInquiries(app.firstElementChild); }
-    if (path === "/portafolio") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild); }
-    if (path === "/portafolio/ejemplo") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild, { example: true }); }
+    if (path === "/portafolio") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild, { params }); }
+    if (path === "/portafolio/ejemplo") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild, { example: true, params }); }
     if (path.startsWith("/portafolio/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolioItem(app.firstElementChild, safeDecode(path.slice(12))); }
     if (path === "/acuerdo-tienda" || path.startsWith("/acuerdo-tienda/")) return await viewShopAgreement(app, safeDecode(path.slice(16)) || null);
     // Account and staff pages render into a padded column.
@@ -3063,7 +3066,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     listings = CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => l.seller.id === id) : [];
     coll = CONFIG.SHOW_DEMO_LISTINGS ? DEMO_COLLECTION.filter((c) => c.user_id === id) : [];
     marked = demoMarks.read();
-    if (id === PF_EXAMPLE_OWNER) ({ items: coll, ints: counts } = examplePortfolio());
+    if (id === PF_EXAMPLE_OWNER) ({ items: coll, sales: listings, ints: counts } = examplePortfolio());
   } else if (sb && isUuid(id)) {
     const prof = await fetchSellerProfile(id);
     if (prof) {
@@ -3088,7 +3091,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   // My own profile with nothing to show yet: the example collection and its people interested, marked as an
   // example, so I can see how it will look before I show my cards.
   const ownExample = isMe && !listings.length && !coll.length && CONFIG.SHOW_DEMO_LISTINGS;
-  if (ownExample) ({ items: coll, ints: counts } = examplePortfolio());
+  if (ownExample) ({ items: coll, sales: listings, ints: counts } = examplePortfolio());
   const showingExample = ownExample || id === PF_EXAMPLE_OWNER;
   // "Me interesa" on every card of someone else's profile (signed out, it asks to sign in first). On the
   // example sellers it works too, kept in this browser.
@@ -6479,8 +6482,11 @@ function examplePortfolio() {
     value_cents, value_at: new Date(Date.now() - (entry ? 0 : DAY_MS)).toISOString(), note: null, added_value_cents: entry, value_log: [],
     is_public: true, created_at: ago(days), example: true, people,
   }));
-  const cards = items.map((it, i) => ({ key: intKey("p", it.id), people: it.people, lastAt: new Date(Date.now() - (i * 17 + 3) * 3600000).toISOString() }));
-  return (pfExample = { items, ints: { people: 8, cards, byKey: new Map(cards.map((c) => [c.key, c])) } });
+  const sales = DEMO.filter((l) => l.seller.id === DEMO_SELLERS.diego.id).map((l) => ({ ...l, seller: DEMO_SELLERS.yo }));
+  const cards = [...items.map((it) => [intKey("p", it.id), it.people]), ...sales.map((l, i) => [intKey("l", l.id), [4, 2, 1][i] ?? 1])]
+    .map(([key, people], i) => ({ key, people, lastAt: new Date(Date.now() - (i * 17 + 3) * 3600000).toISOString() }))
+    .sort((a, b) => b.people - a.people);
+  return (pfExample = { items, sales, ints: { people: 8, cards, byKey: new Map(cards.map((c) => [c.key, c])) } });
 }
 const isPfExamplePath = (path) => path === "/portafolio/ejemplo" || path.startsWith("/portafolio/ej-");
 /** The owner's own profile, or the example one. */
@@ -6802,7 +6808,7 @@ async function pfPublicPanel(app, items, ints) {
   }
   // Cards on sale need their listing (photo, price) to look like they do in the feed.
   const lids = ints.cards.filter((c) => c.key.startsWith("l:")).map((c) => c.key.slice(2));
-  const ls = lids.length ? await sb.from("listings").select(listingCols()).in("id", lids).then(({ data }) => withProfiles(data ?? [])).catch(() => []) : [];
+  const ls = example ? examplePortfolio().sales : lids.length ? await sb.from("listings").select(listingCols()).in("id", lids).then(({ data }) => withProfiles(data ?? [])).catch(() => []) : [];
   if (!box.isConnected) return;
   const byListing = new Map(ls.map((l) => [l.id, l])), byItem = new Map(items.map((it) => [it.id, it]));
   const tiles = ints.cards.map((c, i) => {
@@ -6838,7 +6844,18 @@ function interestPreviewPanel() {
   </section>`;
 }
 
-async function viewPortfolio(app, { example = false } = {}) {
+/** The signed-in person's cards on sale (Mi portafolio ▸ Mis cartas en venta). */
+async function fetchMyListings() {
+  if (!sb || !session) return [];
+  const mine = () => sb.from("listings").select(listingCols()).eq("seller_id", session.user.id).eq("status", "active").order("created_at", { ascending: false }).limit(200);
+  let res = await mine();
+  while (missingCol(res.error)) res = await mine();
+  if (res.error) { console.warn("my listings", res.error); return []; }
+  return withProfiles(res.data ?? []);
+}
+
+async function viewPortfolio(app, { example = false, params = new URLSearchParams() } = {}) {
+  const salesTab = params.get("ver") === "venta";
   setTitle(example ? "Mi portafolio (ejemplo)" : "Mi portafolio");
   if (sb && !session && !example) return go("/entrar?next=/portafolio");
   app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tu portafolio…</p>`;
@@ -6848,12 +6865,34 @@ async function viewPortfolio(app, { example = false } = {}) {
   if (!holder.isConnected) return;
   const { items, local } = res;
   // Interest counts also tell whether 0036 is there: without it there is no public collection.
-  const [photos, ints] = await Promise.all([pfPhotoUrls(items), example ? examplePortfolio().ints : local ? null : myCardInterests()]);
+  const [photos, ints, sales] = await Promise.all([pfPhotoUrls(items), example ? examplePortfolio().ints : local ? null : myCardInterests(),
+    example ? examplePortfolio().sales : fetchMyListings()]);
   if (!holder.isConnected) return;
   const canShow = example || (!!ints && pfPublicCol);
+  // Two tabs at the top: the portfolio, and the cards I have on sale.
+  const base = example ? "#/portafolio/ejemplo" : "#/portafolio";
+  const tabs = `<nav class="seller-seg pf-tabs" aria-label="Mis cartas">
+      <a class="${salesTab ? "" : "on"}" href="${base}"${salesTab ? "" : ' aria-current="page"'}>${ic("grid")}Mi portafolio<span class="chip-n">${fmtN(items.length)}</span></a>
+      <a class="${salesTab ? "on" : ""}" href="${base}?ver=venta"${salesTab ? ' aria-current="page"' : ""}>${ic("tag")}Mis cartas en venta<span class="chip-n">${fmtN(sales.length)}</span></a></nav>`;
+  const exampleNote = example ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> así se ve tu portafolio cuando muestras tus cartas en tu perfil y la gente marca “Me interesa”. Las cartas y los interesados son de ejemplo; los valores son los del mercado de hoy. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : "";
+  if (salesTab) {
+    setTitle(example ? "Mis cartas en venta (ejemplo)" : "Mis cartas en venta");
+    app.innerHTML = `<div class="col" style="gap:20px;margin-top:24px">
+      <div class="pf-head"><div><p class="kicker">En venta en ${esc(CONFIG.APP_NAME)}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mis cartas en venta</h1>
+        <p class="muted" style="margin:6px 0 0;max-width:620px">Las cartas que tienes publicadas. Arriba a la derecha de cada una ves cuántas personas la quieren. Tócala para cambiar el precio, marcarla vendida o retirarla.</p></div>
+        <a class="btn primary" href="#/vender">${ic("plus")}Publicar una carta</a></div>
+      ${tabs}
+      ${exampleNote}
+      ${sales.length ? `<ul class="grid live coll-grid pf-sales">${sales.map((l, i) => tile(l, i, { onSale: true, badge: interestTag(ints?.byKey.get(intKey("l", l.id))?.people ?? 0) })).join("")}</ul>`
+        : `<div class="empty-state"><span class="ico">${ic("tag")}</span><p style="font-weight:600">No tienes cartas en venta.</p>
+          <p class="small muted" style="margin:4px 0 16px;max-width:440px">Publica una carta, o abre una de tu portafolio y toca “Vender esta carta”: se abre el formulario con la foto que escaneaste.</p>
+          <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/vender">${ic("plus")}Publicar una carta</a>${items.length ? `<a class="btn outline" href="${base}">Ver mi portafolio</a>` : ""}</div></div>`}
+    </div>`;
+    return;
+  }
   const qty = items.reduce((n, it) => n + (it.quantity ?? 1), 0);
   const paidItems = items.filter((it) => it.paid_cents != null);
-  const tile = (icon, label, value, note, id = "") => `<div class="dtile"><p class="k">${ic(icon)}${label}</p><p class="v"${id ? ` id="${id}"` : ""}>${value}</p><p class="s"${id ? ` id="${id}S"` : ""}>${note}</p></div>`;
+  const statTile = (icon, label, value, note, id = "") => `<div class="dtile"><p class="k">${ic(icon)}${label}</p><p class="v"${id ? ` id="${id}"` : ""}>${value}</p><p class="s"${id ? ` id="${id}S"` : ""}>${note}</p></div>`;
   const pubChip = (it) => (it.is_public ? `<span class="chip-img good" title="Se ve en tu perfil">${ic("eye")}<span class="sr-only">Se ve en tu perfil</span></span>` : "");
   const pubPanel = canShow ? `<section class="panel pf-public" aria-labelledby="pfIntTitle">
       <div class="phead"><h2 class="ptitle" id="pfIntTitle">${ic("heart")}Interesados en tus cartas</h2>
@@ -6866,15 +6905,16 @@ async function viewPortfolio(app, { example = false } = {}) {
     <div class="pf-head"><div><p class="kicker">${canShow ? "Privado · tú eliges qué cartas se ven en tu perfil" : "Solo tú lo ves · no se publica"}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi portafolio</h1>
       <p class="muted" style="margin:6px 0 0;max-width:620px">Tus cartas, lo que valen hoy y en cuánto se están vendiendo. Agrégalas escaneándolas en “¿Cuánto vale tu carta?” y publícalas cuando quieras.</p></div>
       <a class="btn primary" href="#/escanear">${ic("camera")}Agregar con una foto</a></div>
-    ${example ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> así se ve tu portafolio cuando muestras tus cartas en tu perfil y la gente marca “Me interesa”. Las cartas y los interesados son de ejemplo; los valores son los del mercado de hoy. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : ""}
+    ${tabs}
+    ${exampleNote}
     ${local && items.length ? `<p class="notice soft" style="margin:0">Por ahora tu portafolio se guarda en este navegador. Pronto se guardará en tu cuenta y lo verás en todos tus dispositivos.</p>` : ""}
     ${items.length ? "" : pubPanel}
     ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu portafolio">
-      ${tile("grid", "Cartas", fmtN(qty), `${fmtN(items.length)} ${items.length === 1 ? "distinta" : "distintas"}`)}
-      ${tile("trend", "Valor estimado", `<span class="spinner"></span>`, "calculando…", "pfTotal")}
-      ${tile("trend", "Desde que las agregaste", `<span class="spinner"></span>`, "calculando…", "pfMoved")}
-      ${paidItems.length ? tile("tag", "Pagaste", formatUsd(paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0)), `en ${fmtN(paidItems.length)} ${paidItems.length === 1 ? "carta" : "cartas"}`, "pfPaid") : ""}
-      ${tile("store", `En venta en ${esc(CONFIG.APP_NAME)}`, `<span class="spinner"></span>`, "de tus cartas", "pfOnSale")}
+      ${statTile("grid", "Cartas", fmtN(qty), `${fmtN(items.length)} ${items.length === 1 ? "distinta" : "distintas"}`)}
+      ${statTile("trend", "Valor estimado", `<span class="spinner"></span>`, "calculando…", "pfTotal")}
+      ${statTile("trend", "Desde que las agregaste", `<span class="spinner"></span>`, "calculando…", "pfMoved")}
+      ${paidItems.length ? statTile("tag", "Pagaste", formatUsd(paidItems.reduce((n, it) => n + it.paid_cents * (it.quantity ?? 1), 0)), `en ${fmtN(paidItems.length)} ${paidItems.length === 1 ? "carta" : "cartas"}`, "pfPaid") : ""}
+      ${statTile("store", `En venta en ${esc(CONFIG.APP_NAME)}`, `<span class="spinner"></span>`, "de tus cartas", "pfOnSale")}
     </section>
     ${pubPanel}
     <ul class="grid live" id="pfGrid">${items.map((it, i) => `<li style="--i:${Math.min(i, 16)}"><a class="pcard pf-card" href="#/portafolio/${encodeURIComponent(it.id)}" data-pf="${esc(it.id)}">
