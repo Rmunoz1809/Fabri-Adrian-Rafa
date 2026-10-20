@@ -9,7 +9,7 @@
 
 Ya decidido y fuera de esta lista:
 - Hechos: Compra Protegida sin verificación en persona y Revisión en tienda.
-- Aprobados, para más adelante: Tienda Pro y Plan Coleccionista.
+- Aprobado, para más adelante: Tienda Pro. (El Plan Coleccionista se descartó el 2026-10-20.)
 - Descartado: el envío grupal a graduar.
 
 ---
