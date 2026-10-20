@@ -300,6 +300,10 @@ img.card.broken { visibility: hidden; }
 .media:has(img.card.loading-img), .media:has(img.card.broken), .big-art .inner:has(img.card.broken) { background: var(--muted); border-radius: 8px; }
 .corner-l { position: absolute; left: 6px; top: 6px; display: flex; gap: 4px; z-index: 1; }
 .corner-r { position: absolute; right: 6px; bottom: 6px; z-index: 1; }
+/* Profile collection: cards that are also on sale on MarketZlab (top right of the card). */
+.corner-tr { position: absolute; right: 6px; top: 6px; z-index: 1; }
+.sale-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #04261a; background: var(--up); box-shadow: var(--shadow-sm); }
+.sale-tag .i { width: 12px; height: 12px; }
 .pcard .title { margin-top: 12px; font-size: 15px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pcard .set { margin-top: 3px; font-size: 12px; color: var(--fg-2); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--deco); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pcard .meta { display: flex; align-items: center; gap: 4px; margin-top: 2px; font-size: 12px; color: var(--fg-2); white-space: nowrap; overflow: hidden; }
@@ -2342,10 +2346,11 @@ function marketDelta(l) {
   return `<p class="delta ${tone}" title="Comparado con el valor estimado de ${esc(fmtEstimate(est.mid))}">${diff < 0 ? TRI.down : TRI.up}<span>${diff < 0 ? "−" : "+"}${fmtEstimate(Math.abs(diff))} (${fmtPct(pct)}%)</span><span class="vs">vs. estimado</span></p>`;
 }
 function tile(l, i = 0, opts = {}) {
-  const { before = "", after = "" } = Array.isArray(opts) ? {} : opts; // list.map(tile) passes the array third
+  const { before = "", after = "", onSale = false } = Array.isArray(opts) ? {} : opts; // list.map(tile) passes the array third
   return `<li style="--i:${Math.min(i, 16)}">${before}<a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
     <div class="media card-ratio"><div class="inner">${cardArt(l)}</div>
       <div class="corner-l">${conditionBadge(l)}${l.verificationPhoto ? `<span class="chip-img good" title="Tiene foto de verificación">${ic("camera")}<span class="sr-only">Tiene foto de verificación</span></span>` : ""}${l.authCheck ? `<span class="chip-img good" title="Revisada por ${esc(l.authCheck.shop)}">${ic("check")}<span class="sr-only">Revisada por ${esc(l.authCheck.shop)}</span></span>` : ""}</div>
+      ${onSale ? `<div class="corner-tr"><span class="sale-tag" title="Carta en venta en ${esc(CONFIG.APP_NAME)}">${ic("tag")}En venta<span class="sr-only"> en ${esc(CONFIG.APP_NAME)}</span></span></div>` : ""}
       ${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
     <p class="title">${esc(l.title)}</p>
     <p class="set">${esc([l.card.setName, l.card.number].filter(Boolean).join(" · "))}</p>
@@ -3088,7 +3093,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   // One collection: the cards on sale and the ones shown from the portfolio, newest first. Category chips
   // and "En venta" narrow it down.
   const entries = [
-    ...listings.map((l) => ({ category: l.card.category, sale: true, at: Date.parse(l.createdAt) || 0, html: (i) => tile(l, i, { after: cardExtra(intKey("l", l.id)) }) })),
+    ...listings.map((l) => ({ category: l.card.category, sale: true, at: Date.parse(l.createdAt) || 0, html: (i) => tile(l, i, { after: cardExtra(intKey("l", l.id)), onSale: true }) })),
     ...coll.map((c) => ({ category: c.category, sale: false, at: Date.parse(c.created_at) || 0, html: (i) => collectionTile(c, i, cardExtra(intKey("p", c.id)), ownerView) })),
   ].sort((a, b) => b.at - a.at);
   setTitle(s.displayName);
