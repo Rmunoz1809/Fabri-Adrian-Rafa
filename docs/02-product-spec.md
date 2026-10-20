@@ -39,7 +39,7 @@ La paga **solo el vendedor**, descontada de lo que recibe; el comprador paga el 
 
 | Concepto | Valor |
 |---|---|
-| Tasa | 5% del precio, al vendedor (el comprador no paga comisión) |
+| Tasa | 5% del precio, al vendedor (el comprador no paga comisión). Tiendas con acuerdo firmado: 5% los primeros 6 meses desde la firma, después 8% (`docs/material/tiendas-acuerdo.pdf`; todavía no está en el código) |
 | Mínimo / máximo | Sin mínimo ni máximo |
 | ITBMS | 7% sobre la comisión |
 | Envío (lo paga el comprador) | $4 (configurable; $0 con retiro en tienda) |
