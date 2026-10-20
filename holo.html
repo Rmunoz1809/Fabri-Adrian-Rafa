@@ -494,6 +494,7 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
 
 /* shared helpers used by the account page and the staff panel */
 .col { display: flex; flex-direction: column; gap: 16px; }
+.col[hidden] { display: none; } /* the sign-up type boxes (#sellerBox, #shopBox) hide with the attribute */
 .display { letter-spacing: -.025em; font-weight: 800; }
 .panel h2:not(.ptitle) { font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
 label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
@@ -848,6 +849,10 @@ label.check input { margin-top: 3px; flex-shrink: 0; }
 .seg label, .tabs button { position: relative; display: flex; align-items: center; justify-content: center; height: 36px; border: 0; border-radius: 10px; background: transparent; color: var(--fg-2); font-size: 14px; font-weight: 600; cursor: pointer; transition: color .15s var(--ease), background-color .15s var(--ease), box-shadow .15s var(--ease); }
 .seg label:hover, .tabs button:hover { color: var(--fg); }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg.three { grid-template-columns: repeat(3, 1fr); }
+.shop-signup { gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--field); }
+.shop-signup ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+.shop-signup input[type=file] { font-size: 13px; }
 .seg label.on, .tabs button.on { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm); }
 .tabs button.on { background: var(--brand); color: var(--brand-ink); }
 .seg label:has(input:focus-visible), .tabs button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
@@ -3699,12 +3704,18 @@ function viewAuth(app, next, kind = null) {
   if (session) return go(next);
   if (!sb) { app.innerHTML = `<div class="wrap"><p class="notice bad" style="margin-top:24px">No hay conexión con el servidor. Revisa tu internet y recarga.</p></div>`; return; }
   gateBackground();
-  // kind "vendedor" (#/entrar?cuenta=vendedor, from "Vender" without a session) opens "Crear cuenta" as a seller.
-  let mode = kind === "vendedor" ? "registro" : "entrar", seller = kind === "vendedor", captcha = null;
-  const label = () => mode === "registro" ? (seller ? "Crear cuenta de vendedor" : "Crear cuenta") : "Entrar";
+  // "Crear cuenta" is Comprador by default. kind "vendedor" (#/entrar?cuenta=vendedor, from "Vender" without a
+  // session) or "tienda" (#/entrar?cuenta=tienda, or the shops' QR #/cuenta?tienda=1) opens it with that type.
+  let acct = kind === "vendedor" ? "seller" : kind === "tienda" || /[?&]tienda=1(&|$)/.test(next) ? "shop" : "buyer";
+  let mode = acct === "buyer" ? "entrar" : "registro", captcha = null;
+  const label = () => mode !== "registro" ? "Entrar" : { seller: "Crear cuenta de vendedor", shop: "Crear cuenta de tienda" }[acct] ?? "Crear cuenta";
   const copy = () => mode !== "registro" ? ["Bienvenido", "Entra para ver y publicar cartas."]
-    : seller ? ["Crea tu cuenta de vendedor", "Publica tus cartas y nosotros pasamos a retirarlas."] : ["Crea tu cuenta", "Es gratis y toma un minuto."];
-  const kindHint = () => seller ? "Publica tus cartas. Te pedimos un teléfono y la dirección donde las retiramos." : "Compra y consulta cartas. Puedes pasarte a vendedor cuando quieras.";
+    : acct === "seller" ? ["Crea tu cuenta de vendedor", "Publica tus cartas y nosotros pasamos a retirarlas."]
+    : acct === "shop" ? ["Crea la cuenta de tu tienda", "Sube el acuerdo firmado y revisamos tu tienda en 1 a 2 días."] : ["Crea tu cuenta", "Es gratis y toma un minuto."];
+  const kindHint = () => ({
+    seller: "Publica tus cartas. Te pedimos un teléfono y la dirección donde las retiramos.",
+    shop: "Para tiendas con local. Tu cuenta queda en revisión hasta que aprobamos el acuerdo firmado.",
+  })[acct] ?? "Compra y consulta cartas. Puedes pasarte a vendedor o tienda cuando quieras.";
   const render = () => {
     const up = mode === "registro";
     captcha?.then((c) => c?.remove()); // switching tabs re-renders the form: drop the old widget
@@ -3720,34 +3731,39 @@ function viewAuth(app, next, kind = null) {
         <div class="gate-glass">
           <div class="tabs" role="group" aria-label="Tipo de acceso"><button type="button" data-m="entrar" class="${!up ? "on" : ""}" aria-pressed="${!up}">Entrar</button><button type="button" data-m="registro" class="${up ? "on" : ""}" aria-pressed="${up}">Crear cuenta</button></div>
           <form id="authForm" style="display:flex;flex-direction:column;gap:14px;margin-top:20px">
-            ${up ? `<div class="col" style="gap:6px"><div class="seg" role="radiogroup" aria-label="Tipo de cuenta">
-                <label class="${seller ? "" : "on"}"><input type="radio" name="accountType" value="buyer"${seller ? "" : " checked"}>Comprador</label>
-                <label class="${seller ? "on" : ""}"><input type="radio" name="accountType" value="seller"${seller ? " checked" : ""}>Vendedor</label></div>
+            ${up ? `<div class="col" style="gap:6px"><div class="seg three" role="radiogroup" aria-label="Tipo de cuenta">
+                ${[["buyer", "Comprador"], ["seller", "Vendedor"], ["shop", "Tienda"]].map(([v, t]) => `<label class="${acct === v ? "on" : ""}"><input type="radio" name="accountType" value="${v}"${acct === v ? " checked" : ""}>${t}</label>`).join("")}</div>
               <p class="xs muted" id="kindHint" style="margin:0">${kindHint()}</p></div>
-            <label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="nickname"></label>` : ""}
+            <label class="f"><span id="nameLabel">${acct === "shop" ? "Nombre de la tienda" : "Nombre para mostrar"}</span><input class="input" name="displayName" required minlength="2" maxlength="40" autocomplete="${acct === "shop" ? "organization" : "nickname"}"></label>` : ""}
             <label class="f">Correo<input class="input" name="email" type="email" required autocomplete="email" inputmode="email"></label>
             <label class="f">Contraseña<input class="input" name="password" type="password" required minlength="8" autocomplete="${up ? "new-password" : "current-password"}"></label>
-            ${up ? `<div id="sellerBox" class="col" style="gap:14px"${seller ? "" : " hidden"}>${sellerFields({ disabled: !seller })}</div>` : ""}
+            ${up ? `<div id="sellerBox" class="col" style="gap:14px"${acct === "seller" ? "" : " hidden"}>${sellerFields({ disabled: acct !== "seller" })}</div>` : ""}
+            ${up ? `<div id="shopBox" class="col shop-signup"${acct === "shop" ? "" : " hidden"}>${shopSignupFields(acct !== "shop")}</div>` : ""}
             ${up ? `<label class="legal accept"><input type="checkbox" name="accept" required><span>Acepto los <a href="#/terminos" target="_blank" rel="noopener">Términos y condiciones</a> y la <a href="#/privacidad" target="_blank" rel="noopener">Política de privacidad</a>, incluido el tratamiento de mis datos según la Ley 81 de 2019. Nunca mostramos tu correo ni tu dirección.</span></label>` : ""}
             <div id="captchaBox"></div>
             <div id="authMsg" aria-live="polite"></div>
             <button class="btn primary block" id="authBtn">${label()}</button>
           </form>
-          ${up ? "" : `<p class="small gate-alt">¿Quieres vender tus cartas? <button type="button" class="link" id="toSeller">Crea tu cuenta de vendedor</button></p>`}</div></div></div></div>`;
+          ${up ? "" : `<p class="small gate-alt">¿Quieres vender tus cartas? <button type="button" class="link" id="toSeller">Crea tu cuenta de vendedor</button> · <button type="button" class="link" id="toShop">¿Tienes una tienda?</button></p>`}</div></div></div></div>`;
     app.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => { if (b.dataset.m !== mode) { mode = b.dataset.m; render(); app.querySelector(`.tabs [data-m="${mode}"]`)?.focus(); } }));
-    $("#toSeller")?.addEventListener("click", () => { mode = "registro"; seller = true; render(); app.querySelector(".seg input:checked")?.focus(); });
-    // Comprador / Vendedor: shows the seller fields without re-rendering, so what was typed stays.
+    $("#toSeller")?.addEventListener("click", () => { mode = "registro"; acct = "seller"; render(); app.querySelector(".seg input:checked")?.focus(); });
+    $("#toShop")?.addEventListener("click", () => { mode = "registro"; acct = "shop"; render(); app.querySelector(".seg input:checked")?.focus(); });
+    // Comprador / Vendedor / Tienda: shows that type's fields without re-rendering, so what was typed stays.
     app.querySelectorAll("input[name=accountType]").forEach((r) => r.addEventListener("change", () => {
-      seller = r.value === "seller";
+      acct = r.value;
       app.querySelectorAll(".seg label").forEach((lb) => lb.classList.toggle("on", lb.querySelector("input").checked));
-      const box = $("#sellerBox");
-      box.hidden = !seller;
-      box.querySelectorAll("input, textarea").forEach((el) => { el.disabled = !seller; });
+      for (const [id, on] of [["#sellerBox", acct === "seller"], ["#shopBox", acct === "shop"]]) {
+        const box = $(id);
+        box.hidden = !on;
+        box.querySelectorAll("input, textarea").forEach((el) => { el.disabled = !on; });
+      }
+      $("#nameLabel").textContent = acct === "shop" ? "Nombre de la tienda" : "Nombre para mostrar";
       const [title, sub] = copy();
       $("#authTitle").textContent = title; $("#authSub").textContent = sub;
       $("#kindHint").textContent = kindHint();
       $("#authBtn").textContent = label();
     }));
+    $("[name=shopDoc]")?.addEventListener("change", () => { $("#authMsg").innerHTML = ""; });
     captcha = mountCaptcha($("#captchaBox"));
     const myCaptcha = captcha;
     $("#authForm").addEventListener("submit", async (e) => {
@@ -3756,8 +3772,15 @@ function viewAuth(app, next, kind = null) {
       if (btn.disabled) return; // already submitting
       // A seller sign-up carries the phone and pickup address in the account metadata: the sign-up
       // trigger of migration 0031 saves them as the seller account (before 0031 they wait there).
-      let sellerMeta = null;
-      if (signup && seller) {
+      let sellerMeta = null, shopDoc = null;
+      const shopName = String(fd.get("displayName") ?? "").trim();
+      if (signup && acct === "shop") {
+        shopDoc = fd.get("shopDoc");
+        const bad = shopDocProblem(shopDoc);
+        if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
+        sellerMeta = { account_type: "shop", shop_name: shopName };
+      }
+      if (signup && acct === "seller") {
         const phone = paPhone(fd.get("sellerPhone")), address = cleanAddress(fd.get("pickupAddress"));
         const bad = sellerProblem(phone, address);
         if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
@@ -3780,11 +3803,27 @@ function viewAuth(app, next, kind = null) {
       btn.disabled = false; btn.textContent = text0;
       if (res.error) {
         const c = res.error.code;
-        const text = c === "user_already_exists" ? (sellerMeta ? "Ya existe una cuenta con ese correo. Entra con ella y pásala a cuenta de vendedor desde “Vender”." : "Ya existe una cuenta con ese correo. Usa “Entrar”.") : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "email_not_confirmed" ? "Confirma tu correo: te enviamos un enlace al crear la cuenta." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "captcha_failed" ? "La verificación de seguridad falló. Intenta de nuevo." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
+        const text = c === "user_already_exists" ? (shopDoc ? "Ya existe una cuenta con ese correo. Entra con ella y sube el acuerdo desde Mi cuenta ▸ Tu tienda." : sellerMeta ? "Ya existe una cuenta con ese correo. Entra con ella y pásala a cuenta de vendedor desde “Vender”." : "Ya existe una cuenta con ese correo. Usa “Entrar”.") : c === "invalid_credentials" ? "Correo o contraseña incorrectos." : c === "email_not_confirmed" ? "Confirma tu correo: te enviamos un enlace al crear la cuenta." : c === "weak_password" ? "La contraseña es muy débil. Usa al menos 8 caracteres." : c === "captcha_failed" ? "La verificación de seguridad falló. Intenta de nuevo." : c === "over_email_send_rate_limit" || c === "over_request_rate_limit" ? "Demasiados intentos. Prueba en unos minutos." : c === "network" ? "No hay conexión con el servidor. Revisa tu internet." : "No pudimos completar la operación. Intenta de nuevo.";
         msg.innerHTML = `<p class="notice bad">${esc(text)}</p>`; return;
       }
       if (signup) track("registro");
-      if (signup && !res.data.session) { msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.${sellerMeta ? " Cuando la confirmes, entra y publica tu primera carta." : ""}</p>`; return; }
+      if (signup && !res.data.session) {
+        // No session until the e-mail is confirmed: the agreement waits in this browser (finishPendingShopDoc).
+        if (shopDoc) await stashShopDoc(email, shopName, shopDoc);
+        msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.${shopDoc ? " Cuando la confirmes, entra con tu correo y contraseña en este mismo navegador: ahí enviamos tu acuerdo y tu tienda queda en revisión." : sellerMeta ? " Cuando la confirmes, entra y publica tu primera carta." : ""}</p>`;
+        return;
+      }
+      if (shopDoc) {
+        try {
+          await sendShopDocument(res.data.session.user.id, shopName, shopDoc);
+          toast("Cuenta de tienda creada", { description: "Recibimos tu acuerdo. Tu tienda está en revisión." });
+        } catch (err) {
+          console.error(err);
+          await stashShopDoc(email, shopName, shopDoc);
+          toast("Creamos tu cuenta, pero no pudimos subir el acuerdo", { type: "error", description: "Súbelo desde Mi cuenta ▸ Tu tienda." });
+        }
+        return go("/cuenta");
+      }
       toast(signup ? (sellerMeta ? "Cuenta de vendedor creada" : "Cuenta creada") : "Sesión iniciada");
       go(sellerMeta && next === "/" ? "/vender" : next);
     });
@@ -7130,37 +7169,141 @@ const SHOP_REQ_ERR = [
   [/hours/, "Escribe el horario en que podemos retirar las cartas."], [/signature/, "La firma no se guardó bien. Bórrala y firma de nuevo."],
 ];
 
+// The other way to send the agreement (0037): the shop downloads the PDF, fills it in, signs it and uploads
+// it (PDF or a photo), at sign-up or from Mi cuenta. The account stays in review until staff approve it.
+const SHOP_DOC_MAX = 10 * 1024 * 1024;
+const isShopSignup = (s = session) => s?.user?.user_metadata?.account_type === "shop";
+const shopDocProblem = (f) => !f || !f.size ? "Sube el acuerdo para tiendas firmado (PDF o foto)."
+  : !/^(application\/pdf|image\/(jpeg|png|webp))$/.test(f.type) ? "El acuerdo tiene que ser un PDF o una foto (JPG, PNG o WebP)."
+  : f.size > SHOP_DOC_MAX ? "El archivo pesa más de 10 MB. Escanéalo de nuevo o súbelo como foto." : null;
+/** The download link, the 3 steps and the file input (sign-up and Mi cuenta). */
+function shopSignupFields(disabled = false) {
+  return `<p style="margin:0;font-weight:600">Acuerdo para tiendas</p>
+    <ol><li><a class="link" href="${esc(SHOP_AGREEMENT.PDF)}" target="_blank" rel="noopener">Descarga el acuerdo (PDF)</a>.</li>
+      <li>Llénalo con los datos de tu tienda y fírmalo.</li><li>Súbelo aquí en PDF.</li></ol>
+    <label class="f">Acuerdo firmado<input type="file" name="shopDoc" accept="application/pdf,image/jpeg,image/png,image/webp"${disabled ? " disabled" : ""}></label>
+    <p class="xs muted" style="margin:0">Máximo 10 MB. Si lo firmaste en papel, escanea todas las páginas en un solo PDF con el celular (Notas en iPhone o Google Drive en Android). Tu cuenta queda en revisión hasta que lo aprobamos.</p>`;
+}
+async function sendShopDocument(uid, shopName, file) {
+  const f = file.type.startsWith("image/") ? await compressImage(file) : file;
+  const ext = { "application/pdf": "pdf", "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg";
+  const path = `${uid}/acuerdo-${Date.now()}.${ext}`;
+  const up = await sb.storage.from("shop-agreements").upload(path, f, { contentType: f.type || "application/octet-stream", upsert: false });
+  if (up.error) throw up.error;
+  const { error } = await sb.rpc("submit_shop_document", { p_shop_name: shopName, p_document_path: path });
+  if (error) throw error;
+}
+// Signing up before confirming the e-mail gives no session to upload with: the file waits in this browser
+// (IndexedDB keeps the File) and goes out on the first sign-in. On another device, Mi cuenta asks for it again.
+function pendingStore(mode, op) {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open("marketzlab", 1);
+    open.onupgradeneeded = () => open.result.createObjectStore("pending");
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const db = open.result, tx = db.transaction("pending", mode), req = op(tx.objectStore("pending"));
+      tx.oncomplete = () => { db.close(); resolve(req.result); };
+      tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  });
+}
+const stashShopDoc = (email, shopName, file) =>
+  pendingStore("readwrite", (st) => st.put({ email, shopName, file }, "shopDoc")).catch((e) => console.warn("shop agreement not kept", e));
+let shopDocBusy = false;
+async function finishPendingShopDoc() {
+  if (!sb || !session || shopDocBusy || typeof indexedDB === "undefined") return;
+  let p = null;
+  try { p = await pendingStore("readonly", (st) => st.get("shopDoc")); } catch { return; }
+  if (!p?.file || p.email !== (session.user.email ?? "").toLowerCase()) return;
+  shopDocBusy = true;
+  const drop = () => pendingStore("readwrite", (st) => st.delete("shopDoc")).catch(() => undefined);
+  try {
+    await sendShopDocument(session.user.id, p.shopName, p.file);
+    await drop();
+    toast("Recibimos el acuerdo de tu tienda", { description: "Tu tienda está en revisión. Te avisamos cuando la aprobemos." });
+    if (parseHash().path === "/cuenta") route();
+  } catch (e) {
+    if (/already pending/.test(e?.message ?? "")) await drop(); else console.warn("pending shop agreement", e);
+  } finally { shopDocBusy = false; }
+}
+
 // Mi cuenta: the shop sign-up (or, for a shop, its agreement). #/cuenta?tienda=1 opens the form.
 async function renderShopRequest(uid, prof, box, open = false) {
   if (!box || !sb) return;
-  const shell = (inner) => { box.innerHTML = `<section class="panel col" id="shopReq"><h2>${prof.is_shop ? "Acuerdo para tiendas" : "¿Tienes una tienda?"}</h2>${inner}</section>`; };
+  const shopSignup = isShopSignup();
+  const shell = (inner) => { box.innerHTML = `<section class="panel col" id="shopReq"><h2>${prof.is_shop ? "Acuerdo para tiendas" : shopSignup ? "Tu tienda" : "¿Tienes una tienda?"}</h2>${inner}</section>`; };
   shell(`<p class="xs muted" style="margin:0"><span class="spinner"></span></p>`);
   const { data: reqs, error } = await sb.from("shop_requests").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(10);
   if (!box.isConnected) return;
   if (error) { console.error(error); shell(`<p class="xs muted" style="margin:0">Muy pronto podrás pedir la verificación desde aquí.</p>`); return; }
-  const last = reqs[0], signed = reqs.find((r) => r.status === "approved" && r.signature_png);
+  const last = reqs[0], signed = reqs.find((r) => r.status === "approved" && (r.signature_png || r.document_path));
+  // An uploaded agreement opens through a short-lived link (private bucket).
+  const docLink = async (path) => {
+    const a = box.querySelector("[data-doc]");
+    const { data } = await sb.storage.from("shop-agreements").createSignedUrl(path, 600);
+    if (a && data?.signedUrl) { a.href = data.signedUrl; a.removeAttribute("aria-disabled"); }
+  };
+  const docBtn = (text) => `<a class="btn outline block" data-doc target="_blank" rel="noopener" aria-disabled="true" href="#/cuenta">${text}</a>`;
   const pdf = `<a class="link" href="${esc(SHOP_AGREEMENT.PDF)}" target="_blank" rel="noopener">descargar el acuerdo en PDF</a>`;
 
   if (last?.status === "pending") {
-    shell(`<p class="notice soft" style="margin:0">Recibimos la solicitud de <b style="color:var(--ink)">${esc(last.shop_name)}</b> el ${longDate(last.created_at)}. La revisamos en 1 a 2 días y te avisamos.</p>
-      ${last.signature_png ? `<a class="btn outline block" href="#/acuerdo-tienda/${last.id}">Ver lo que firmaste</a>` : ""}`);
+    shell(`<p class="notice soft" style="margin:0"><b style="color:var(--ink)">Tu tienda está en revisión.</b> Recibimos la solicitud de <b style="color:var(--ink)">${esc(last.shop_name)}</b> el ${longDate(last.created_at)}. La revisamos en 1 a 2 días y te avisamos.</p>
+      ${last.signature_png ? `<a class="btn outline block" href="#/acuerdo-tienda/${last.id}">Ver lo que firmaste</a>` : last.document_path ? docBtn("Ver el acuerdo que subiste") : ""}`);
+    if (last.document_path && !last.signature_png) docLink(last.document_path);
     return;
   }
   if (signed) {
-    shell(`<p class="notice good" style="margin:0">${ic("check")} Firmaste el acuerdo el ${longDate(signed.signed_at)} y ${esc(CONFIG.APP_NAME)} lo aprobó el ${longDate(signed.reviewed_at)}.</p>
+    shell(`<p class="notice good" style="margin:0">${ic("check")} ${signed.signature_png ? `Firmaste el acuerdo el ${longDate(signed.signed_at)} y` : `Subiste el acuerdo firmado el ${longDate(signed.created_at)} y`} ${esc(CONFIG.APP_NAME)} lo aprobó el ${longDate(signed.reviewed_at)}.</p>
       <p class="small muted" style="margin:0">Tu comisión: <b style="color:var(--ink)">7% + ITBMS</b> del precio de cada carta vendida.</p>
-      <a class="btn outline block" href="#/acuerdo-tienda/${signed.id}">Ver y descargar la copia firmada</a>`);
+      ${signed.signature_png ? `<a class="btn outline block" href="#/acuerdo-tienda/${signed.id}">Ver y descargar la copia firmada</a>` : docBtn("Ver el acuerdo firmado")}`);
+    if (!signed.signature_png) docLink(signed.document_path);
     return;
   }
   const rejected = last?.status === "rejected"
     ? `<p class="notice warn" style="margin:0">No pudimos aprobar tu solicitud anterior${last.review_note ? `: ${esc(last.review_note.replace(/([^.!?])$/, "$1."))}` : "."} Revisa los datos y vuelve a enviarla.</p>` : "";
+  // A shop that signed up without the file (or whose upload failed) goes straight to uploading it.
+  if (!open && shopSignup && !last) open = "subir";
   if (!open) {
     shell(`${rejected}<p class="small muted" style="margin:0">${prof.is_shop
       ? "Firma el acuerdo para tiendas: explica cómo funciona cada venta, la comisión y cuándo te pagamos."
-      : "Las tiendas verificadas llevan el sello “Tienda verificada”, tienen su página con la foto del local y cobran apenas retiramos la carta vendida. Llena la solicitud y firma el acuerdo para tiendas aquí mismo."}
+      : "Las tiendas verificadas llevan el sello “Tienda verificada”, tienen su página con la foto del local y cobran apenas retiramos la carta vendida. Envía el acuerdo para tiendas firmado: súbelo en PDF o fírmalo aquí mismo."}
       Si quieres leerlo antes, puedes ${pdf}.</p>
-      <button type="button" class="btn block" id="srOpen">Llenar y firmar la solicitud</button>`);
+      <div class="share-row" style="margin-top:0"><button type="button" class="btn primary" id="srUpload">Subir el acuerdo firmado</button><button type="button" class="btn outline" id="srOpen">Firmarlo en la página</button></div>`);
+    $("#srUpload").addEventListener("click", () => renderShopRequest(uid, prof, box, "subir"));
     $("#srOpen").addEventListener("click", () => renderShopRequest(uid, prof, box, true));
+    return;
+  }
+  if (open === "subir") {
+    const name = session.user.user_metadata?.shop_name || (prof.is_shop || shopSignup ? prof.display_name : "");
+    shell(`${rejected}${shopSignup && !last ? `<p class="notice warn" style="margin:0">Falta el acuerdo firmado: tu tienda queda en revisión cuando lo recibamos.</p>` : ""}
+      <form class="col shop-upload" style="gap:14px" novalidate>
+        <label class="f">Nombre de la tienda<input class="input" name="shopName" maxlength="80" value="${esc(name ?? "")}"></label>
+        <div class="col shop-signup">${shopSignupFields()}</div>
+        <div class="shop-msg" aria-live="polite"></div>
+        <div class="share-row" style="margin-top:0"><button class="btn primary">Enviar el acuerdo</button>${shopSignup && !last ? "" : `<button type="button" class="btn outline" data-cancel>Cancelar</button>`}</div>
+      </form>`);
+    const form = box.querySelector("form"), msg = box.querySelector(".shop-msg"), btn = form.querySelector(".btn.primary");
+    form.querySelector("[data-cancel]")?.addEventListener("click", () => renderShopRequest(uid, prof, box));
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const shopName = form.shopName.value.trim(), file = form.shopDoc.files[0];
+      const bad = shopName.length < 2 ? "Escribe el nombre de la tienda." : shopDocProblem(file);
+      if (bad) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(bad)}</p>`; return; }
+      btn.disabled = true; btn.textContent = "Enviando…"; msg.innerHTML = "";
+      try {
+        await sendShopDocument(uid, shopName, file);
+        pendingStore("readwrite", (st) => st.delete("shopDoc")).catch(() => undefined);
+        toast("Recibimos tu acuerdo", { description: "Tu tienda está en revisión. Te avisamos cuando la aprobemos." });
+        if (parseHash().params.get("tienda")) history.replaceState(null, "", "#/cuenta");
+        renderShopRequest(uid, prof, box);
+      } catch (err) {
+        console.error(err);
+        btn.disabled = false; btn.textContent = "Enviar el acuerdo";
+        msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(/already pending/.test(err?.message ?? "") ? "Ya tienes una solicitud en revisión."
+          : /size|too large|413/i.test(`${err?.message} ${err?.statusCode}`) ? "El archivo pesa más de 10 MB." : "No pudimos subir el acuerdo. Revisa tu conexión e intenta de nuevo.")}</p>`;
+      }
+    });
+    box.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
     return;
   }
 
@@ -7299,7 +7442,7 @@ async function renderSellerSection(box, open = false) {
   const acc = await loadSellerAccount();
   if (!box.isConnected) return;
   const kind = $("#accKind");
-  if (kind) kind.textContent = acc ? "Vendedor" : "Comprador";
+  if (kind && !kind.hasAttribute("data-fixed")) kind.textContent = acc ? "Vendedor" : "Comprador";
   const head = `<div class="phead"><h2>Cuenta de vendedor</h2>${acc ? `<span class="b good">${ic("check")}Activa</span>` : `<span class="b neutral">Tu cuenta es de comprador</span>`}</div>`;
   const showForm = () => {
     const save = acc ? "Guardar cambios" : "Pasar a cuenta de vendedor";
@@ -7345,7 +7488,7 @@ async function viewAccount(app) {
   const st = { avatar: null, shopPhoto: null };
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
   app.innerHTML = `<div class="account dash">
-    <div class="dash-head"><div class="dash-me">${sellerAvatar(profileToSeller(uid, prof), 56)}<div style="min-width:0"><p class="kicker">Mi cuenta · <span id="accKind">${isSeller() ? "Vendedor" : "Comprador"}</span></p><h1 class="dash-name">${esc(prof.display_name)}</h1>${session.user.email ? `<p class="xs muted" style="margin-top:2px">${esc(session.user.email)}</p>` : ""}</div></div>
+    <div class="dash-head"><div class="dash-me">${sellerAvatar(profileToSeller(uid, prof), 56)}<div style="min-width:0"><p class="kicker">Mi cuenta · <span id="accKind"${prof.is_shop || isShopSignup() ? " data-fixed" : ""}>${prof.is_shop ? (prof.verified ? "Tienda" : "Tienda en revisión") : isShopSignup() ? "Tienda en revisión" : isSeller() ? "Vendedor" : "Comprador"}</span></p><h1 class="dash-name">${esc(prof.display_name)}</h1>${session.user.email ? `<p class="xs muted" style="margin-top:2px">${esc(session.user.email)}</p>` : ""}</div></div>
       <div class="dash-actions"><a class="btn outline sm" href="#/vendedor/${encodeURIComponent(uid)}">Ver mi perfil público</a><a class="btn primary sm" href="#/vender">${ic("plus")}Publicar carta</a></div></div>
     <div id="dash" class="dash-body"><p class="loading"><span class="spinner"></span>Cargando tus cartas…</p></div>
     <div id="accSeller" class="col" style="margin-top:24px"></div>
@@ -7598,7 +7741,7 @@ async function adminShops(body) {
   const [{ data: reqs, error }, { data: shops }, { data: signed }] = await Promise.all([
     sb.from("shop_requests").select("*").eq("status", "pending").order("created_at"),
     sb.from("public_profiles").select("id, display_name, verified").eq("is_shop", true).order("display_name"),
-    sb.from("shop_requests").select("id, user_id, signed_at").eq("status", "approved").not("signed_at", "is", null).order("signed_at", { ascending: false }),
+    sb.from("shop_requests").select("id, user_id, signed_at, document_path, reviewed_at").eq("status", "approved").or("signed_at.not.is.null,document_path.not.is.null").order("reviewed_at", { ascending: false }),
   ]);
   if (error) throw error;
   const names = await profilesById(reqs.map((r) => r.user_id));
@@ -7620,10 +7763,11 @@ async function adminShops(body) {
         ${row("Instagram", r.instagram ? ext(`https://www.instagram.com/${encodeURIComponent(r.instagram)}/`, "@" + esc(r.instagram)) : esc(r.contact ?? ""))}
         ${row("Yappy", r.yappy_phone ? esc(fmtPhone(r.yappy_phone)) : "")}
         ${row("Horario", esc(r.pickup_hours ?? ""))}
-        ${row("Acuerdo", r.signed_at ? `Firmado ${fmtDate(r.signed_at)} · <a class="link" href="#/acuerdo-tienda/${r.id}">Ver acuerdo</a>` : `<span class="muted">Sin firma (solicitud anterior al acuerdo)</span>`)}
+        ${row("Acuerdo", r.signed_at ? `Firmado en la página ${fmtDate(r.signed_at)} · <a class="link" href="#/acuerdo-tienda/${r.id}">Ver acuerdo</a>`
+          : r.document_path ? `<a class="link" data-doc="${esc(r.document_path)}" target="_blank" rel="noopener" href="#/admin?tab=tiendas">Abrir el acuerdo subido</a>` : `<span class="muted">Sin acuerdo (solicitud anterior)</span>`)}
       </dl>
       ${r.signature_png ? `<img class="sig-thumb" src="${esc(r.signature_png)}" alt="Firma de ${esc(r.owner_name)}">` : ""}
-      <p class="xs muted" style="margin:8px 0">Antes de aprobar: busca el local en Google Maps (o visítalo), revisa su Instagram y que venda cartas originales.</p>
+      <p class="xs muted" style="margin:8px 0">Antes de aprobar: abre el acuerdo y revisa que esté completo y firmado, busca el local en Google Maps (o visítalo), revisa su Instagram y que venda cartas originales.</p>
       <input class="input shop-note" maxlength="300" placeholder="Nota (si la rechazas, la verá la tienda)">
       <div class="order-actions"><button class="btn primary" data-act="approve">Aprobar y firmar</button><button class="btn danger" data-act="reject">Rechazar</button></div>
       <div class="order-msg"></div></li>`;
@@ -7632,10 +7776,16 @@ async function adminShops(body) {
     ${shops?.length ? `<ul class="admin-list">${shops.map((s) => {
       const a = agreement.get(s.id);
       return `<li class="panel" data-user="${s.id}"><div class="phead"><span style="font-weight:600">${esc(s.display_name)}</span>${s.verified ? shopBadge() : `<span class="b neutral">Sin verificar</span>`}</div>
-      <p class="xs muted" style="margin:6px 0 0">${a ? `<a class="link" href="#/acuerdo-tienda/${a.id}">Acuerdo firmado el ${longDate(a.signed_at)}</a>` : "Sin acuerdo firmado en la página"}</p>
+      <p class="xs muted" style="margin:6px 0 0">${!a ? "Sin acuerdo firmado" : a.signed_at ? `<a class="link" href="#/acuerdo-tienda/${a.id}">Acuerdo firmado el ${longDate(a.signed_at)}</a>`
+        : `<a class="link" data-doc="${esc(a.document_path)}" target="_blank" rel="noopener" href="#/admin?tab=tiendas">Acuerdo subido (aprobado el ${longDate(a.reviewed_at)})</a>`}</p>
       <div class="order-actions" style="margin-top:8px">${s.verified ? `<button class="btn danger" data-act="unverify">Quitar verificación</button>` : `<button class="btn primary" data-act="verify">Verificar</button>`}</div><div class="order-msg"></div></li>`;
     }).join("")}</ul>` : `<p class="muted small">Todavía no hay tiendas.</p>`}`;
 
+  // Uploaded agreements (0037) live in a private bucket: each link gets a 10-minute signed URL.
+  const docs = [...body.querySelectorAll("a[data-doc]")];
+  if (docs.length) sb.storage.from("shop-agreements").createSignedUrls(docs.map((a) => a.dataset.doc), 600).then(({ data }) => {
+    (data ?? []).forEach((u, i) => { if (u.signedUrl) docs[i].href = u.signedUrl; });
+  });
   body.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
     const li = b.closest("li"), msg = li.querySelector(".order-msg"), act = b.dataset.act, user = li.dataset.user;
     const note = li.querySelector(".shop-note")?.value.trim() ?? "";
@@ -8066,6 +8216,7 @@ async function loadProfileName() {
   isStaff = Boolean(data?.is_staff);
   renderNav();
   claimPendingRef();
+  finishPendingShopDoc();
   if (isStaff && parseHash().path === "/admin") route(); // staff flag arrived after the first render
 }
 (async () => {

@@ -8,7 +8,7 @@
 - Un teléfono con la página abierta y una sesión iniciada (para mostrarla).
 - La tarjeta con el QR impresa: `docs/material/tarjeta-tiendas.html` (abrir en el navegador → Imprimir; salen 2 tarjetas por hoja).
 - Dos copias impresas del acuerdo para tiendas: `docs/material/tiendas-acuerdo.pdf` (solicitud con dirección, teléfono, Instagram y Yappy, Términos para tiendas con el flujo de la venta y firmas). Una copia queda en la tienda y otra con nosotros.
-- O, mejor, que la tienda lo firme ahí mismo en la página: Mi cuenta ▸ ¿Tienes una tienda? ▸ Llenar y firmar la solicitud (firma con el dedo). La solicitud nos llega a Panel ▸ Tiendas, la aprobamos desde ahí y las dos partes pueden descargar la copia firmada.
+- O, mejor, que la tienda cree su cuenta ahí mismo: Crear cuenta ▸ **Tienda** (nombre de la tienda, correo y contraseña) y sube el acuerdo firmado en PDF; también puede firmarlo con el dedo en Mi cuenta ▸ ¿Tienes una tienda?. La cuenta queda **en revisión**, la solicitud nos llega a Panel ▸ Tiendas y la aprobamos desde ahí. El QR de la tarjeta abre directo la cuenta de tienda.
 - Saber de memoria la comisión: **7% + ITBMS, solo cuando vende. Publicar es gratis.**
 
 ---

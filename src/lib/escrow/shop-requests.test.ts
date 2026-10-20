@@ -147,3 +147,50 @@ describe("permissions", () => {
     expect(grants).toEqual([]);
   });
 });
+
+// Shop sign-up with the agreement uploaded as a file (migration 0037).
+describe("submit_shop_document", () => {
+  const NEW_SHOP = "00000000-0000-4000-a000-000000000041";
+  const OTHER = "00000000-0000-4000-a000-000000000042";
+  const upload = (owner: string, name: string) =>
+    db.q("insert into storage.objects (bucket_id, name, owner) values ('shop-agreements', $1, $2)", [name, owner]);
+  const send = (who: string, path: string, shop = "Tienda Nueva") =>
+    db.as<{ id: string }>(user(who), "select public.submit_shop_document($1, $2) as id", [shop, path]);
+
+  beforeAll(async () => {
+    await db.q(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'nueva@x.test', '{"display_name": "Tienda Nueva", "account_type": "shop"}'),
+                ($2, 'otra@x.test', '{"display_name": "Otra"}')`, [NEW_SHOP, OTHER]);
+    await upload(NEW_SHOP, `${NEW_SHOP}/acuerdo.pdf`);
+    await upload(OTHER, `${OTHER}/acuerdo.pdf`);
+    await upload(NEW_SHOP, `${NEW_SHOP}/acuerdo.exe`);
+  });
+
+  it("only takes the person's own uploaded agreement", async () => {
+    await expect(db.as(admin, "select public.submit_shop_document('Tienda', 'x/acuerdo.pdf')")).rejects.toThrow(/sign in/);
+    await expect(send(NEW_SHOP, `${OTHER}/acuerdo.pdf`)).rejects.toThrow(/document/); // someone else's file
+    await expect(send(NEW_SHOP, `${NEW_SHOP}/no-subido.pdf`)).rejects.toThrow(/document/); // never uploaded
+    await expect(send(NEW_SHOP, `${NEW_SHOP}/acuerdo.exe`)).rejects.toThrow(/document/);
+    await expect(send(NEW_SHOP, `${NEW_SHOP}/../${OTHER}/acuerdo.pdf`)).rejects.toThrow(/document/);
+    await expect(send(NEW_SHOP, `${NEW_SHOP}/acuerdo.pdf`, "X")).rejects.toThrow(/shop name/);
+  });
+
+  it("leaves the account in review and tells staff; approving verifies it", async () => {
+    const [{ id }] = await send(NEW_SHOP, `${NEW_SHOP}/acuerdo.pdf`);
+    expect(await db.one("select status, document_path, shop_name from public.shop_requests where id = $1", [id]))
+      .toEqual({ status: "pending", document_path: `${NEW_SHOP}/acuerdo.pdf`, shop_name: "Tienda Nueva" });
+    expect(await profile(NEW_SHOP)).toMatchObject({ is_shop: false, verified: false });
+    await expect(send(NEW_SHOP, `${NEW_SHOP}/acuerdo.pdf`)).rejects.toThrow(/already pending/);
+    await review(STAFF, id, true);
+    expect(await profile(NEW_SHOP)).toMatchObject({ is_shop: true, verified: true });
+    // No phone or address in an uploaded agreement: the shop adds them in Mi cuenta before selling.
+    expect(await db.q("select 1 from public.seller_accounts where user_id = $1", [NEW_SHOP])).toEqual([]);
+  });
+
+  it("the file can't point outside the owner's folder, and the bucket is private and append-only", async () => {
+    await expect(db.q("update public.shop_requests set document_path = $1 where user_id = $2", [`${OTHER}/acuerdo.pdf`, NEW_SHOP]))
+      .rejects.toThrow(/document_own_folder/);
+    expect(await db.one("select public from storage.buckets where id = 'shop-agreements'")).toEqual({ public: false });
+    const cmds = await db.q<{ cmd: string }>("select cmd from pg_policies where schemaname = 'storage' and policyname in ('shops upload own agreement', 'shops and staff read agreements') order by cmd");
+    expect(cmds.map((c) => c.cmd)).toEqual(["INSERT", "SELECT"]);
+  });
+});
