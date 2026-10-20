@@ -7710,7 +7710,29 @@ matchMedia("(min-width: 1024px)").addEventListener("change", () => $("#fpanel")?
 // Card images fade in once loaded; broken ones leave a neutral box instead of a broken-image icon.
 document.addEventListener("load", (e) => { if (e.target instanceof HTMLImageElement) e.target.classList.remove("loading-img"); }, true);
 document.addEventListener("error", (e) => { if (e.target instanceof HTMLImageElement && e.target.classList.contains("card")) e.target.classList.replace("loading-img", "broken") || e.target.classList.add("broken"); }, true);
-window.addEventListener("hashchange", route);
+// New version: GitHub Pages lets browsers keep holo.html for 10 minutes and a tab can stay open for days,
+// so after a push people kept seeing the old page. When the published file is newer than the one running,
+// the page reloads: right away if it was just opened (it came from the cache), else on the next change of
+// page (so nothing on screen is lost). Checked on load and when the tab comes back, at most every 5 minutes.
+const pageModified = Date.parse(document.lastModified) || Date.now(); // without the header it's "now": never reloads
+let newVersion = false, versionCheckedAt = 0;
+async function checkVersion() {
+  if (newVersion || !/^https?:$/.test(location.protocol) || Date.now() - versionCheckedAt < 5 * 60000) return newVersion;
+  versionCheckedAt = Date.now();
+  try {
+    const r = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
+    newVersion = Date.parse(r.headers.get("last-modified") ?? "") > pageModified + 60000;
+  } catch { /* offline: try again later */ }
+  return newVersion;
+}
+function reloadForNewVersion() {
+  try { if (sessionStorage.getItem("holo.reloadedFor") === String(pageModified)) return false; sessionStorage.setItem("holo.reloadedFor", String(pageModified)); } catch { return false; }
+  location.reload();
+  return true;
+}
+checkVersion().then((v) => { if (v) reloadForNewVersion(); });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
+window.addEventListener("hashchange", () => { if (!(newVersion && reloadForNewVersion())) route(); });
 // The seller row sits inside the card's link: clicking it opens the seller page instead of the card.
 document.addEventListener("click", (e) => {
   const row = e.target.closest?.(".tseller[data-seller]");
