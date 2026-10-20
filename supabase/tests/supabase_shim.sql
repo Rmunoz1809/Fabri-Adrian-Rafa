@@ -16,7 +16,8 @@ create table if not exists auth.users (
   -- The rest of Supabase's columns that seed files fill in (supabase/seed_coleccion_ejemplo.sql).
   instance_id uuid, aud text, role text, encrypted_password text, email_confirmed_at timestamptz,
   raw_app_meta_data jsonb, created_at timestamptz default now(), updated_at timestamptz default now(),
-  confirmation_token text, recovery_token text, email_change_token_new text, email_change text
+  confirmation_token text, recovery_token text, email_change_token_new text, email_change text,
+  last_sign_in_at timestamptz
 );
 create or replace function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
