@@ -957,6 +957,9 @@ body.gate header.top, body.gate footer.bottom { display: none; }
 .pickup-note { display: flex; gap: 10px; align-items: flex-start; margin: 0; font-size: 13px; line-height: 1.45; }
 .pickup-note > .i { flex-shrink: 0; width: 16px; height: 16px; margin-top: 1px; color: var(--fg); }
 .pickup-note b { color: var(--fg); }
+fieldset.addr { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }
+fieldset.addr legend { padding: 0; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+fieldset.addr .grid2 { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .seller-form .input[readonly] { color: var(--fg-2); background: transparent; border-style: dashed; }
 .ic-line .i { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; }
 .seller-panel { max-width: 560px; margin-top: 24px; }
@@ -3772,7 +3775,7 @@ function viewAuth(app, next, kind = null) {
       for (const [id, on] of [["#sellerBox", acct === "seller"], ["#shopBox", acct === "shop"]]) {
         const box = $(id);
         box.hidden = !on;
-        box.querySelectorAll("input, textarea").forEach((el) => { el.disabled = !on; });
+        box.querySelectorAll("input, textarea, select").forEach((el) => { el.disabled = !on; });
       }
       $("#nameLabel").textContent = acct === "shop" ? "Nombre de la tienda" : "Nombre para mostrar";
       const [title, sub] = copy();
@@ -3798,10 +3801,10 @@ function viewAuth(app, next, kind = null) {
         sellerMeta = { account_type: "shop", shop_name: shopName };
       }
       if (signup && acct === "seller") {
-        const phone = paPhone(fd.get("sellerPhone")), address = cleanAddress(fd.get("pickupAddress"));
-        const bad = sellerProblem(phone, address);
+        const parts = addressParts(e.target), phone = paPhone(fd.get("sellerPhone")), address = composeAddress(parts);
+        const bad = sellerProblem(phone, parts);
         if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
-        sellerMeta = { account_type: "seller", seller_phone: phone, pickup_address: address };
+        sellerMeta = { account_type: "seller", seller_phone: phone, pickup_address: address, pickup_parts: parts };
       }
       const text0 = label();
       btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Un momento…`; msg.innerHTML = "";
@@ -3868,21 +3871,45 @@ const SELLER_MSG = {
   address: "Escribe la dirección completa: barrio, calle, casa o edificio y apartamento.",
   save: "No pudimos guardar tus datos. Revisa tu conexión e intenta de nuevo.",
 };
-const sellerProblem = (phone, address) => !phone ? SELLER_MSG.phone : address.length < 10 ? SELLER_MSG.address
-  : address.length > 240 ? "La dirección es muy larga: máximo 240 caracteres." : null;
+// The pickup address is asked in parts, like a delivery form, and saved as one line (seller_accounts.pickup_address,
+// 10 to 240 characters). The parts also go in the account metadata (pickup_parts) so editing fills the same boxes.
+const PA_PROVINCES = ["Panamá", "Panamá Oeste", "Colón", "Chiriquí", "Coclé", "Herrera", "Los Santos", "Veraguas", "Bocas del Toro", "Darién",
+  "Comarca Guna Yala", "Comarca Emberá-Wounaan", "Comarca Ngäbe-Buglé", "Comarca Naso Tjër Di"];
+const ADDR_FIELDS = { province: "addrProvince", district: "addrDistrict", area: "addrArea", street: "addrStreet", house: "addrHouse", unit: "addrUnit", ref: "addrRef" };
+/** The address parts typed in a form made with sellerFields(). */
+const addressParts = (form) => Object.fromEntries(Object.entries(ADDR_FIELDS).map(([k, name]) => [k, cleanAddress(form.elements[name]?.value)]));
+/** "Calle 74, PH Las Palmas, apto 3B, San Francisco, Panamá, Panamá. Referencia: frente al parque" */
+const composeAddress = (a) => cleanAddress([a.street, a.house, a.unit, a.area, a.district, a.province].filter(Boolean).join(", ") + (a.ref ? `. Referencia: ${a.ref}` : ""));
+const addressProblem = (a) => !a.province ? "Elige la provincia de tu dirección." : !a.district ? "Escribe el distrito."
+  : !a.area ? "Escribe el corregimiento o barrio." : !a.street ? "Escribe la calle o avenida."
+  : !a.house ? "Escribe el número de casa, el edificio o el PH." : composeAddress(a).length > 240 ? "La dirección es muy larga: máximo 240 caracteres en total." : null;
+const sellerProblem = (phone, parts) => !phone ? SELLER_MSG.phone : addressProblem(parts);
 // Until 0031 runs, the table and its functions are missing: the page falls back to the account metadata.
 const sellerTableMissing = (e) => ["PGRST205", "PGRST202", "42P01", "42883"].includes(e?.code);
 /** Phone and pickup address inputs (sign-up, "Vender" and Mi cuenta). With `email`, the account's e-mail too, read-only. */
-function sellerFields({ phone = "", address = "", email = null, disabled = false } = {}) {
+function sellerFields({ phone = "", address = "", parts = null, email = null, disabled = false } = {}) {
   const off = disabled ? " disabled" : "";
+  const v = (k) => esc(parts?.[k] ?? "");
+  const opts = (list) => [...new Set(list)].map((x) => `<option value="${esc(x)}">`).join("");
+  const input = (k, label, ph, extra = "") => `<label class="f"><span>${label}</span><input class="input" name="${ADDR_FIELDS[k]}" maxlength="${k === "unit" ? 20 : k === "ref" ? 80 : 60}" placeholder="${ph}" value="${v(k)}"${extra}${off}></label>`;
   return `${email != null ? `<label class="f">Correo<input class="input" type="email" value="${esc(email)}" readonly aria-readonly="true"><span class="hint xs">El de tu cuenta: no tienes que escribirlo otra vez.</span></label>` : ""}
     <label class="f">Teléfono (WhatsApp)<input class="input" name="sellerPhone" type="tel" required inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="6123-4567" value="${esc(phone ? fmtPhone(phone) : "")}"${off}><span class="hint xs">Por aquí coordinamos contigo cada venta.</span></label>
-    <label class="f">Dirección exacta de residencia<textarea class="textarea" name="pickupAddress" required minlength="10" maxlength="240" rows="3" autocomplete="street-address" placeholder="Ej.: San Francisco, calle 74, PH Las Palmas, apto 3B, frente al parque"${off}>${esc(address)}</textarea></label>
+    <fieldset class="addr"><legend>Dirección exacta de residencia</legend>
+      ${address && !parts ? `<p class="xs muted" style="margin:0">Dirección guardada: ${esc(address)}. Escríbela por partes para actualizarla.</p>` : ""}
+      <div class="grid2"><label class="f">Provincia<select class="select" name="addrProvince" autocomplete="address-level1"${off}><option value="">Elige</option>${PA_PROVINCES.map((x) => `<option${parts?.province === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
+        ${input("district", "Distrito", "Ej.: Panamá", ` list="addrDistricts" autocomplete="address-level2"`)}</div>
+      ${input("area", "Corregimiento o barrio", "Ej.: San Francisco", ` list="addrAreas" autocomplete="address-level3"`)}
+      ${input("street", "Calle o avenida", "Ej.: Calle 74", ` autocomplete="address-line1"`)}
+      <div class="grid2">${input("house", "Casa, edificio o PH", "Ej.: PH Las Palmas")}
+        ${input("unit", `Apartamento o piso <span class="muted">(opcional)</span>`, "Ej.: Apto 3B", ` autocomplete="address-line2"`)}</div>
+      ${input("ref", `Punto de referencia <span class="muted">(opcional)</span>`, "Ej.: Frente al parque")}
+      <datalist id="addrDistricts">${opts(LOCATIONS.map((l) => l.district))}</datalist><datalist id="addrAreas">${opts(LOCATIONS.flatMap((l) => l.neighborhoods))}</datalist>
+    </fieldset>
     <p class="notice soft pickup-note">${ic("pin")}<span><b>Aquí retiramos tus cartas.</b> Cuando vendas una, el equipo de ${esc(CONFIG.APP_NAME)} pasa a buscarla a esta dirección. Solo la ve nuestro equipo: nunca sale en tus anuncios.</span></p>`;
 }
 /** Marks the account as a seller in its metadata (with a copy of the data). Resolves to an error, or null. */
 function rememberSeller(acc) {
-  return sb.auth.updateUser({ data: { account_type: "seller", seller_phone: acc.phone, pickup_address: acc.address } }).then(({ data, error }) => {
+  return sb.auth.updateUser({ data: { account_type: "seller", seller_phone: acc.phone, pickup_address: acc.address, ...(acc.parts ? { pickup_parts: acc.parts } : {}) } }).then(({ data, error }) => {
     if (error) { console.warn("seller metadata", error); return error; }
     if (data?.user && session) session.user = data.user;
     renderNav();
@@ -3892,11 +3919,13 @@ function rememberSeller(acc) {
 /** The signed-in person's seller data { phone, address }, or null for a buyer account. */
 async function loadSellerAccount() {
   const meta = session.user.user_metadata ?? {};
-  const fromMeta = isSeller() && paPhone(meta.seller_phone) ? { phone: paPhone(meta.seller_phone), address: cleanAddress(meta.pickup_address) } : null;
+  const fromMeta = isSeller() && paPhone(meta.seller_phone) ? { phone: paPhone(meta.seller_phone), address: cleanAddress(meta.pickup_address), parts: meta.pickup_parts ?? null } : null;
   const { data, error } = await sb.from("seller_accounts").select("phone, pickup_address").eq("user_id", session.user.id).maybeSingle();
   if (error) { if (!sellerTableMissing(error)) console.warn("seller account", error); return fromMeta; }
   if (data) {
-    const acc = { phone: data.phone, address: data.pickup_address };
+    // The boxes are filled again only when the saved parts still make up the saved address.
+    const parts = meta.pickup_parts && composeAddress(meta.pickup_parts) === data.pickup_address ? meta.pickup_parts : null;
+    const acc = { phone: data.phone, address: data.pickup_address, parts };
     if (!isSeller()) rememberSeller(acc); // saved in the database but the session doesn't know yet
     return acc;
   }
@@ -3925,9 +3954,10 @@ function bindSellerForm(form, done) {
     e.preventDefault();
     const btn = form.querySelector(".seller-save"), msg = form.querySelector(".seller-msg");
     if (btn.disabled) return;
-    const acc = { phone: paPhone(form.sellerPhone.value), address: cleanAddress(form.pickupAddress.value) };
-    const bad = sellerProblem(acc.phone, acc.address);
-    if (bad) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(bad)}</p>`; (acc.phone ? form.pickupAddress : form.sellerPhone).focus(); return; }
+    const parts = addressParts(form);
+    const acc = { phone: paPhone(form.sellerPhone.value), address: composeAddress(parts), parts };
+    const bad = sellerProblem(acc.phone, parts);
+    if (bad) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(bad)}</p>`; (acc.phone ? form.querySelector(".addr select, .addr input") : form.sellerPhone).focus(); return; }
     const text = btn.innerHTML;
     btn.disabled = true; btn.innerHTML = `<span class="spinner" style="border-color:currentColor"></span>Guardando…`; msg.innerHTML = "";
     const err = await saveSellerAccount(acc);
