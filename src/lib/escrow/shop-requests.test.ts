@@ -1,4 +1,4 @@
-// Shop sign-up with the signed store agreement (migration 0036): the request keeps the data, the drawn
+// Shop sign-up with the signed store agreement (migration 0037): the request keeps the data, the drawn
 // signature and its evidence hash; only staff approve, and approving verifies the shop in one step.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { TestDb, admin, user } from "./testing/db";
@@ -118,7 +118,7 @@ describe("review_shop_request", () => {
     expect(again).not.toBe(id);
   });
 
-  it("a shop verified before 0036 can sign the agreement; its store page and seller account stay as they were", async () => {
+  it("a shop verified before 0037 can sign the agreement; its store page and seller account stay as they were", async () => {
     const before = await profile(SHOP);
     const [{ id }] = await submit(SHOP, { shop: "Cartas Panamá", address: "Otra dirección, local 99" });
     await review(STAFF, id, true);
@@ -148,7 +148,7 @@ describe("permissions", () => {
   });
 });
 
-// Shop sign-up with the agreement uploaded as a file (migration 0037).
+// Shop sign-up with the agreement uploaded as a file (migration 0038).
 describe("submit_shop_document", () => {
   const NEW_SHOP = "00000000-0000-4000-a000-000000000041";
   const OTHER = "00000000-0000-4000-a000-000000000042";

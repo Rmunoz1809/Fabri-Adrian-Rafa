@@ -1,4 +1,4 @@
--- 0038: The seller's commission goes from 5% to 7% of the price, for every seller (shops and individuals),
+-- 0039: The seller's commission goes from 5% to 7% of the price, for every seller (shops and individuals),
 -- plus 7% ITBMS on the commission as before (decisions, 2026-10-20). Run once in Supabase ▸ SQL Editor
 -- (safe to re-run). protected_quote() and order_quote() (0029) read commission_bps, so new orders use it
 -- right away; orders already created keep the amounts they were created with.

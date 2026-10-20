@@ -1,11 +1,11 @@
--- 0037: Shop sign-up with the agreement uploaded as a file. Run once in Supabase ▸ SQL Editor after 0036
+-- 0038: Shop sign-up with the agreement uploaded as a file. Run once in Supabase ▸ SQL Editor after 0037
 -- (safe to re-run). holo.html works before and after it: until it runs, a shop sign-up still creates the
 -- account and a short request without the file, and the shop can upload the agreement later from Mi cuenta.
 --
 -- "Crear cuenta" offers Comprador (default), Vendedor and Tienda. A shop gives its name, e-mail and
 -- password, downloads the agreement (docs/material/tiendas-acuerdo.pdf), fills it in, signs it and uploads
 -- it (PDF or photo). The account stays "en revisión" until staff approve it in Panel ▸ Tiendas with
--- review_shop_request() (0036). Signing on screen (0036) is still the other way to send the agreement.
+-- review_shop_request() (0037). Signing on screen (0037) is still the other way to send the agreement.
 --
 -- The file is a signed contract: it lives in the private shop-agreements bucket, only the shop and staff
 -- open it, and nobody can replace or delete it from the app (Ley 81: kept while the shop sells with us).

@@ -1,4 +1,4 @@
--- 0036: Shop sign-up with the signed store agreement. Run once in Supabase ▸ SQL Editor after 0035
+-- 0037: Shop sign-up with the signed store agreement. Run once in Supabase ▸ SQL Editor after 0036
 -- (safe to re-run). holo.html works before and after it: until it runs, the form sends the old short
 -- request (name, contact, location) and the staff panel approves it the old way.
 --

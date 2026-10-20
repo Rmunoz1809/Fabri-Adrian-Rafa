@@ -604,7 +604,7 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .legal-page mark.todo { background: var(--warn-bg); color: inherit; padding: 0 4px; border-radius: 4px; }
 .legal-toc ol { columns: 2; column-gap: 24px; font-size: 14px; padding-left: 18px; margin-top: 16px; }
 @media (max-width: 640px) { .legal-toc ol { columns: 1; } }
-/* Shop agreement (0036): the terms box in the sign-up form, the signature pad and the signed copy (a white sheet that prints alone). */
+/* Shop agreement (0037): the terms box in the sign-up form, the signature pad and the signed copy (a white sheet that prints alone). */
 .shop-terms { max-height: 340px; overflow: auto; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--field); font-size: 13.5px; line-height: 1.55; }
 .shop-terms h3, .doc-terms h3 { font-size: 14.5px; margin: 16px 0 6px; }
 .shop-terms p, .doc-terms p { margin: 0 0 8px; }
@@ -7060,11 +7060,11 @@ async function toggleInterestBtn(b, marked, ownerName, next) {
 }
 
 // ============================================================= account
-// ============================================================= shop agreement (migration 0036)
+// ============================================================= shop agreement (migration 0037)
 // A shop signs up from Mi cuenta: the same data as the paper form (docs/material/tiendas-acuerdo.pdf),
 // the Términos y condiciones para tiendas and a signature drawn on screen. Staff approve it in
 // #/admin?tab=tiendas, which is MarketZlab's signature, and both can download the signed copy
-// (#/acuerdo-tienda/<id>, "Descargar PDF" prints it). Until 0036 runs, the form sends the old short
+// (#/acuerdo-tienda/<id>, "Descargar PDF" prints it). Until 0037 runs, the form sends the old short
 // request (0005) without the signature and staff approve it the old way.
 const SHOP_AGREEMENT = {
   VERSION: "tiendas-2026-10-20", // new version of the terms below (and of the PDF) = new value here
@@ -7074,7 +7074,7 @@ const SHOP_AGREEMENT = {
 const shopReqMissing = (e) => ["PGRST202", "42883", "PGRST204", "42703"].includes(e?.code);
 const longDate = (d) => new Date(d).toLocaleDateString("es-PA", { timeZone: "America/Panama", day: "numeric", month: "long", year: "numeric" });
 const longDateTime = (d) => new Date(d).toLocaleString("es-PA", { timeZone: "America/Panama", day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
-/** '@mitienda', 'instagram.com/MiTienda/' -> 'mitienda' (same rule as ig_handle() in 0036). */
+/** '@mitienda', 'instagram.com/MiTienda/' -> 'mitienda' (same rule as ig_handle() in 0037). */
 const igHandle = (s) => { const h = String(s ?? "").trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?(instagram\.com\/)?@?/, "").replace(/[/?#].*$/, ""); return /^[a-z0-9._]{1,30}$/.test(h) ? h : null; };
 
 /** The store terms: the same text as the PDF. Used in the sign-up form and in the signed copy. */
@@ -7169,7 +7169,7 @@ const SHOP_REQ_ERR = [
   [/hours/, "Escribe el horario en que podemos retirar las cartas."], [/signature/, "La firma no se guardó bien. Bórrala y firma de nuevo."],
 ];
 
-// The other way to send the agreement (0037): the shop downloads the PDF, fills it in, signs it and uploads
+// The other way to send the agreement (0038): the shop downloads the PDF, fills it in, signs it and uploads
 // it (PDF or a photo), at sign-up or from Mi cuenta. The account stays in review until staff approve it.
 const SHOP_DOC_MAX = 10 * 1024 * 1024;
 const isShopSignup = (s = session) => s?.user?.user_metadata?.account_type === "shop";
@@ -7361,7 +7361,7 @@ async function renderShopRequest(uid, prof, box, open = false) {
       p_phone: v.phone, p_instagram: v.instagram, p_yappy_phone: v.yappy || null, p_pickup_hours: v.hours,
       p_terms_version: SHOP_AGREEMENT.VERSION, p_signature_png: pad.png(), p_signer_agent: navigator.userAgent.slice(0, 300),
     });
-    if (err && shopReqMissing(err)) { // 0036 not applied yet: the old request, without the signature
+    if (err && shopReqMissing(err)) { // 0037 not applied yet: the old request, without the signature
       ({ error: err } = await sb.from("shop_requests").insert({ user_id: uid, shop_name: v.shopName,
         contact: `@${igHandle(v.instagram)} · ${fmtPhone(phone)}`.slice(0, 120), location: cleanAddress(v.address).slice(0, 120) }));
     }
@@ -7735,7 +7735,7 @@ async function adminListings(body, q) {
 }
 
 // ------------------------------------------------------------- shops
-// Pending sign-ups with all their data and the signature (0036). Approving is MarketZlab's signature:
+// Pending sign-ups with all their data and the signature (0037). Approving is MarketZlab's signature:
 // review_shop_request() verifies the shop, fills its store page and gives it a seller account in one go.
 async function adminShops(body) {
   const [{ data: reqs, error }, { data: shops }, { data: signed }] = await Promise.all([
@@ -7781,7 +7781,7 @@ async function adminShops(body) {
       <div class="order-actions" style="margin-top:8px">${s.verified ? `<button class="btn danger" data-act="unverify">Quitar verificación</button>` : `<button class="btn primary" data-act="verify">Verificar</button>`}</div><div class="order-msg"></div></li>`;
     }).join("")}</ul>` : `<p class="muted small">Todavía no hay tiendas.</p>`}`;
 
-  // Uploaded agreements (0037) live in a private bucket: each link gets a 10-minute signed URL.
+  // Uploaded agreements (0038) live in a private bucket: each link gets a 10-minute signed URL.
   const docs = [...body.querySelectorAll("a[data-doc]")];
   if (docs.length) sb.storage.from("shop-agreements").createSignedUrls(docs.map((a) => a.dataset.doc), 600).then(({ data }) => {
     (data ?? []).forEach((u, i) => { if (u.signedUrl) docs[i].href = u.signedUrl; });
@@ -7796,7 +7796,7 @@ async function adminShops(body) {
       const { error } = await sb.rpc("review_shop_request", { p_id: li.dataset.id, p_approve: act === "approve", p_note: note || null });
       if (!error) { toast(act === "approve" ? "Tienda aprobada y acuerdo firmado" : "Solicitud rechazada"); return route(); }
       if (!shopReqMissing(error)) return fail(error);
-      // Before 0036: verify the profile and close the request with two writes, as in 0005.
+      // Before 0037: verify the profile and close the request with two writes, as in 0005.
     }
     if (act !== "reject") {
       const { error } = await sb.from("profiles").update(act === "unverify" ? { verified: false } : { is_shop: true, verified: true }).eq("id", user);
