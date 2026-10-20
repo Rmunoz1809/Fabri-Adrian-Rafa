@@ -557,11 +557,13 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 /* Public collection and "Me interesa" (0036) */
 .wl-add.int-btn.on { background: var(--brand-soft); border-color: var(--border-strong); }
 .wl-add.int-btn.on .i, .int-count.on .i, .int-list .n .i { color: var(--down); fill: currentColor; }
-.grid.coll-grid, .grid.int-grid { align-items: stretch; }
-.coll-grid > li > .pcard, .int-grid > li { height: 100%; }
-.int-grid > li { display: flex; flex-direction: column; }
-.int-grid > li > .pcard { flex: 1; }
+.grid.coll-grid { align-items: stretch; }
+.coll-grid > li { display: flex; flex-direction: column; }
+.coll-grid > li > .pcard { flex: 1; }
 .coll-card .pf-rows { margin-bottom: auto; }
+.coll-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 16px; }
+.coll-filters .seller-chips { margin: 0; }
+.seller-side > [hidden] { display: none; } /* shop events and reviews stay hidden until they have something */
 .int-count { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .pf-rows .int-count { margin: 0; }
 .int-count .i { flex-shrink: 0; width: 14px; height: 14px; }
@@ -1332,6 +1334,8 @@ const DEMO_SELLERS = {
   ana: { id: "demo-ana", displayName: "Ana R.", isShop: false, verified: true, rating: null, salesCount: 0 },
   diego: { id: "demo-diego", displayName: "Diego M.", isShop: false, verified: false, rating: null, salesCount: 0 },
   kevin: { id: "demo-kevin", displayName: "Kevin Sports Cards", isShop: false, verified: true, rating: null, salesCount: 0 },
+  // The profile of the example portfolio (#/portafolio/ejemplo), seen as its owner sees it.
+  yo: { id: "demo-yo", displayName: "Tu perfil (ejemplo)", isShop: false, verified: false, rating: null, salesCount: 0 },
 };
 const SNAP = (market, variant = "holofoil") => ({ market, low: null, mid: null, high: null, variant, updatedAt: "2026/09/25" });
 const DEMO_REFS = { "sv3pt5-199": SNAP(347.46), "sv8-238": SNAP(286.77), "swsh7-215": SNAP(2299.94), "sv3pt5-151": SNAP(6.56), "sv2-254": SNAP(10.54) };
@@ -2205,7 +2209,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/consultas" || path === "/portafolio" || path.startsWith("/portafolio/") || path === "/acuerdo-tienda" || path.startsWith("/acuerdo-tienda/"));
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/consultas" || path === "/portafolio" || (path.startsWith("/portafolio/") && !isPfExamplePath(path)) || path === "/acuerdo-tienda" || path.startsWith("/acuerdo-tienda/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -2234,6 +2238,7 @@ async function route() {
     if (path.startsWith("/watchlist/carta/")) return await viewWatchCard(app, safeDecode(path.slice(17)), params);
     if (path === "/consultas") { app.innerHTML = `<div class="wrap"></div>`; return await viewInquiries(app.firstElementChild); }
     if (path === "/portafolio") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild); }
+    if (path === "/portafolio/ejemplo") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild, { example: true }); }
     if (path.startsWith("/portafolio/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolioItem(app.firstElementChild, safeDecode(path.slice(12))); }
     if (path === "/acuerdo-tienda" || path.startsWith("/acuerdo-tienda/")) return await viewShopAgreement(app, safeDecode(path.slice(16)) || null);
     // Account and staff pages render into a padded column.
@@ -3056,6 +3061,7 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     listings = CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => l.seller.id === id) : [];
     coll = CONFIG.SHOW_DEMO_LISTINGS ? DEMO_COLLECTION.filter((c) => c.user_id === id) : [];
     marked = demoMarks.read();
+    if (id === PF_EXAMPLE_OWNER) ({ items: coll, ints: counts } = examplePortfolio());
   } else if (sb && isUuid(id)) {
     const prof = await fetchSellerProfile(id);
     if (prof) {
@@ -3075,25 +3081,32 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     return;
   }
   const s = seller, shop = s.isShop;
+  // The example owner's profile (#/vendedor/demo-yo) is seen the way its owner sees it: counts, no buttons.
+  const ownerView = isMe || id === PF_EXAMPLE_OWNER;
   // "Me interesa" on every card of someone else's profile (signed out, it asks to sign in first). On the
   // example sellers it works too, kept in this browser.
-  const canMark = !isMe && (demo ? CONFIG.SHOW_DEMO_LISTINGS : !!sb && interestsOn);
+  const canMark = !ownerView && (demo ? CONFIG.SHOW_DEMO_LISTINGS : !!sb && interestsOn);
   const cardExtra = (key) => (canMark ? interestBtn(key, marked.has(key)) : counts ? interestCount(counts.byKey.get(key)?.people ?? 0) : "");
-  const onlyCollection = !listings.length && coll.length > 0 && !isMe;
+  // One collection: the cards on sale and the ones shown from the portfolio, newest first. Category chips
+  // and "En venta" narrow it down.
+  const entries = [
+    ...listings.map((l) => ({ category: l.card.category, sale: true, at: Date.parse(l.createdAt) || 0, html: (i) => tile(l, i, { after: cardExtra(intKey("l", l.id)) }) })),
+    ...coll.map((c) => ({ category: c.category, sale: false, at: Date.parse(c.created_at) || 0, html: (i) => collectionTile(c, i, cardExtra(intKey("p", c.id)), ownerView) })),
+  ].sort((a, b) => b.at - a.at);
   setTitle(s.displayName);
-  let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null;
-  const inCat = (c) => listings.filter((l) => !c || l.card.category === c);
-  const chip = (slug, name) => `<button type="button" class="chip ${cat === slug ? "on" : ""}" data-cat="${slug ?? ""}"${cat === slug ? ' aria-pressed="true"' : ' aria-pressed="false"'}>${name}<span class="chip-n">${inCat(slug).length}</span></button>`;
+  let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null, onlySale = params.get("venta") === "1";
+  const count = (c, sale) => entries.filter((e) => (!c || e.category === c) && (!sale || e.sale)).length;
+  const who = ownerView ? "Tu" : "Su", name = esc(s.displayName);
   const meta = [sellerScore(s),
     since ? `En ${esc(CONFIG.APP_NAME)} desde ${new Date(since).toLocaleDateString("es-PA", { month: "long", year: "numeric" })}` : ""].filter(Boolean).join(" · ");
   app.innerHTML = `<div class="wrap seller-page">
-    <nav class="crumbs" aria-label="Ruta" style="margin-top:20px"><a href="#/">Inicio</a>${ic("chevronRight")}<a href="#/?vendedor=${isVerifiedShop(s) ? "tiendas" : "particulares"}">${isVerifiedShop(s) ? "Tiendas verificadas" : "Particulares"}</a>${ic("chevronRight")}<span aria-current="page">${esc(s.displayName)}</span></nav>
+    <nav class="crumbs" aria-label="Ruta" style="margin-top:20px"><a href="#/">Inicio</a>${ic("chevronRight")}<a href="#/?vendedor=${isVerifiedShop(s) ? "tiendas" : "particulares"}">${isVerifiedShop(s) ? "Tiendas verificadas" : "Particulares"}</a>${ic("chevronRight")}<span aria-current="page">${name}</span></nav>
     <div class="seller-layout"><aside class="seller-side">
     <section class="panel flush seller-hero">
-      ${shop && s.shopPhotoUrl ? `<img class="shop-photo" src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${esc(s.displayName)}">` : ""}
+      ${shop && s.shopPhotoUrl ? `<img class="shop-photo" src="${esc(s.shopPhotoUrl)}" alt="Foto del local de ${name}">` : ""}
       <div class="sp-body">
         <div class="seller">${sellerAvatar(s, 64)}
-          <div style="min-width:0"><p class="kicker">${shop ? "Tienda" : onlyCollection ? "Coleccionista" : "Vendedor particular"}</p><h1 class="sh-name">${esc(s.displayName)}</h1>
+          <div style="min-width:0"><p class="kicker">${shop ? "Tienda" : listings.length ? "Vendedor particular" : "Coleccionista"}</p><h1 class="sh-name">${name}</h1>
           <p class="xs muted" style="margin-top:2px">${meta}</p>
           <div class="tbadges" style="margin-top:8px">${sellerBadge(s)}</div></div></div>
         ${shop && s.shopDescription ? `<p class="small" style="white-space:pre-line">${esc(s.shopDescription)}</p>` : ""}
@@ -3103,45 +3116,47 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
       </div></section>
     <section class="panel col" id="shopEvents" hidden></section>
     <section class="panel" id="sellerReviews" hidden></section></aside>
-    <section class="seller-cards" aria-labelledby="forSaleTitle">
-    <div class="rhead"><h2 id="forSaleTitle">Cartas en venta</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
-    ${onlyCollection ? "" : `<nav class="chips seller-chips" aria-label="Categorías">${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}</nav>`}
+    <section class="seller-cards" aria-labelledby="collTitle">
+    ${id === PF_EXAMPLE_OWNER ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> así se ve tu perfil cuando muestras tus cartas. Los demás ven “Me interesa” en cada una; tú ves cuántas personas la quieren. <a class="link" href="#/portafolio/ejemplo">Ver mi portafolio de ejemplo</a></p>` : ""}
+    <div class="rhead"><h2 id="collTitle">${who} colección</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
+    <p class="small muted coll-sub">${ownerView ? "Todas tus cartas: las que vendes y las de tu portafolio que muestras. Debajo de cada una ves cuántas personas la quieren (nunca quiénes)."
+      : `Todas las cartas de ${name}, estén o no en venta. Marca “Me interesa” en las que quieras: verá cuántas personas la quieren, sin saber quiénes.`}</p>
+    ${entries.length ? `<div class="coll-filters"><nav class="chips seller-chips" aria-label="Categorías"></nav>
+      <div class="ranges coll-seg" role="group" aria-label="Qué cartas ver"><button type="button" data-sale="0"></button><button type="button" data-sale="1"></button></div></div>` : ""}
     <div id="sellerList"></div>
-    <div id="sellerColl"></div>
     </section></div>
   </div>`;
+  const chip = (slug, label) => `<button type="button" class="chip ${cat === slug ? "on" : ""}" data-cat="${slug ?? ""}" aria-pressed="${cat === slug}">${label}<span class="chip-n">${count(slug, onlySale)}</span></button>`;
   const renderList = () => {
-    const list = inCat(cat);
-    $("#sellerCount").textContent = `${list.length} ${list.length === 1 ? "carta" : "cartas"}`;
-    $("#sellerList").innerHTML = list.length ? `<ul class="grid live${canMark || counts ? " int-grid" : ""}">${list.map((l, i) => tile(l, i, { after: cardExtra(intKey("l", l.id)) })).join("")}</ul>`
-      : onlyCollection ? `<p class="small muted">${esc(s.displayName)} no tiene cartas en venta ahora, pero puedes ver su colección y marcar las que te interesan.</p>`
-      : !listings.length
-      ? `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "Todavía no tienes cartas en venta." : `${esc(s.displayName)} no tiene cartas en venta ahora.`}</p>${isMe ? `<a class="btn primary" style="margin-top:16px" href="#/vender">Publicar una carta</a>` : `<p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p>`}</div>`
-      : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${isMe ? "No tienes" : `${esc(s.displayName)} no tiene`} cartas de ${esc(categoryName(cat))} en venta.</p><button type="button" class="btn outline" style="margin-top:16px" data-cat="">Ver todas sus cartas</button></div>`;
+    const list = entries.filter((e) => (!cat || e.category === cat) && (!onlySale || e.sale));
+    $("#sellerCount").textContent = `${fmtN(list.length)} ${list.length === 1 ? "carta" : "cartas"}`;
+    const chips = app.querySelector(".seller-chips");
+    if (chips) chips.innerHTML = `${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}`;
+    app.querySelectorAll(".coll-seg button").forEach((b) => {
+      const sale = b.dataset.sale === "1", on = sale === onlySale;
+      b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
+      b.textContent = `${sale ? "En venta" : "Todas"} · ${fmtN(count(cat, sale))}`;
+    });
+    $("#sellerList").innerHTML = list.length ? `<ul class="grid live coll-grid">${list.map((e, i) => e.html(i)).join("")}</ul>`
+      : entries.length ? `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${ownerView ? "No tienes" : `${name} no tiene`} cartas${cat ? ` de ${esc(categoryName(cat))}` : ""}${onlySale ? " en venta" : ""}.</p><button type="button" class="btn outline" style="margin-top:16px" data-reset>Ver toda ${ownerView ? "tu" : "su"} colección</button></div>`
+      : ownerView ? `<div class="empty-state"><span class="ico">${ic("eye")}</span><p style="font-weight:600">Todavía no muestras ninguna carta.</p>
+        <p class="small muted" style="margin:4px 0 16px;max-width:440px">Elige en Mi portafolio qué cartas se ven aquí, o publica una en venta. Cualquiera podrá marcar “Me interesa”, estén o no en venta.</p>
+        <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/portafolio">Ir a Mi portafolio</a><a class="btn outline" href="#/vender">Publicar una carta</a></div></div>`
+      : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${name} todavía no muestra cartas.</p><p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p></div>`;
+    history.replaceState(null, "", `#/vendedor/${encodeURIComponent(id)}${cat || onlySale ? `?${new URLSearchParams({ ...(cat ? { cat } : {}), ...(onlySale ? { venta: "1" } : {}) })}` : ""}`);
   };
   renderList();
-  // The collection: cards the person has, on sale or not. Your own profile shows how many want each one.
-  const collBox = $("#sellerColl");
-  if (coll.length) {
-    collBox.innerHTML = `<div class="rhead coll-head"><h2>${isMe ? "Tu colección" : "Su colección"}</h2><p class="small muted num">${fmtN(coll.length)} ${coll.length === 1 ? "carta" : "cartas"}</p></div>
-      <p class="small muted coll-sub">${isMe ? "Las cartas de tu portafolio que muestras en tu perfil. Debajo de cada una ves cuántas personas la quieren (nunca quiénes)." : `Cartas que ${esc(s.displayName)} tiene, estén o no en venta. Si alguna te interesa, márcala: verá cuántas personas la quieren, sin saber quiénes.`}</p>
-      <ul class="grid live coll-grid">${coll.map((c, i) => collectionTile(c, i, cardExtra(intKey("p", c.id)), isMe)).join("")}</ul>`;
-  } else if (isMe && interestsOn && sb) {
-    collBox.innerHTML = `<div class="rhead coll-head"><h2>Tu colección</h2></div>
-      <div class="empty-state"><span class="ico">${ic("eye")}</span><p style="font-weight:600">Todavía no muestras cartas de tu portafolio.</p>
-      <p class="small muted" style="margin:4px 0 16px;max-width:420px">Elige en Mi portafolio cuáles se ven aquí. Cualquiera podrá marcar “Me interesa”, estén o no en venta.</p><a class="btn primary" href="#/portafolio">Ir a Mi portafolio</a></div>`;
-  }
   if (!demo && sb) renderSellerReviews(id, isMe);
   if (!demo && sb && isVerifiedShop(s)) renderShopEventsPublic(id, $("#shopEvents"));
   app.querySelector(".seller-cards").addEventListener("click", (e) => {
     const ib = e.target.closest("button[data-int]");
     if (ib) return toggleInterestBtn(ib, marked, s.displayName, `/vendedor/${id}`);
-    const b = e.target.closest("button[data-cat]");
+    const b = e.target.closest("button[data-cat], button[data-sale], button[data-reset]");
     if (!b) return;
-    cat = b.dataset.cat || null;
-    app.querySelectorAll(".seller-chips .chip").forEach((c) => { const on = (c.dataset.cat || null) === cat; c.classList.toggle("on", on); c.setAttribute("aria-pressed", String(on)); });
+    if (b.dataset.reset != null) { cat = null; onlySale = false; }
+    else if (b.dataset.sale != null) onlySale = b.dataset.sale === "1";
+    else cat = b.dataset.cat || null;
     renderList();
-    history.replaceState(null, "", `#/vendedor/${encodeURIComponent(id)}${cat ? `?cat=${cat}` : ""}`);
   });
 }
 async function viewDetail(app, id) {
@@ -6434,7 +6449,37 @@ async function savePortfolioItem(row, file) {
   pfItems.set(item.id, item);
   return { item, local: true };
 }
+// Example portfolio (#/portafolio/ejemplo): the owner's view with the cards shown on the profile and people
+// interested, the same cards as supabase/seed_coleccion_ejemplo.sql. No account or migration needed; its
+// profile is #/vendedor/demo-yo. Built once per visit so values found on one page carry to the next.
+const PF_EXAMPLE_OWNER = "demo-yo";
+let pfExample = null;
+function examplePortfolio() {
+  if (pfExample) return pfExample;
+  const ago = (d) => new Date(Date.now() - d * DAY_MS).toISOString();
+  const items = [
+    ["ej-1", "pokemon", "Umbreon VMAX", "Evolving Skies", "2021", "215/203", "Alternate Art", "swsh7-215", null, null, img("swsh7", "215"), 232450, null, 60, 8],
+    ["ej-2", "pokemon", "Charizard ex", "151", "2023", "199/165", "Special Illustration Rare", "sv3pt5-199", null, null, img("sv3pt5", "199"), 31336, null, 42, 6],
+    ["ej-3", "pokemon", "Pikachu ex", "Surging Sparks", "2024", "238/191", "Special Illustration Rare", "sv8-238", null, null, img("sv8", "238"), 26868, null, 30, 5],
+    ["ej-4", "pokemon", "Charizard ex", "151", "2023", "199/165", "Special Illustration Rare", "sv3pt5-199", "PSA", 10, img("sv3pt5", "199"), 78000, 80000, 14, 4],
+    ["ej-5", "nba", "Wilt Chamberlain", "Fleer", "1961", "#8", "Rookie Card", null, null, null, `${CARD_SCANS}nba-wilt-chamberlain-1961-fleer.jpg`, 240000, 220000, 25, 3],
+    ["ej-6", "pokemon", "Iono", "Paldea Evolved", "2023", "254/193", "Special Illustration Rare", "sv2-254", null, null, img("sv2", "254"), 1024, null, 19, 2],
+    ["ej-7", "nfl", "Jim Brown", "Topps", "1960", "#23", "Base", null, null, null, `${CARD_SCANS}nfl-jim-brown-1960-topps.jpg`, 12000, 11500, 9, 1],
+  ].map(([id, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade, image_url, value_cents, entry, days, people]) => ({
+    id, user_id: PF_EXAMPLE_OWNER, category, subject, set_name, year, number, variant, catalog_id, grading_company, grade,
+    condition: grading_company ? null : catalog_id ? "NM" : "LP", image_url, photo_path: null, quantity: 1, paid_cents: null,
+    value_cents, value_at: new Date(Date.now() - (entry ? 0 : DAY_MS)).toISOString(), note: null, added_value_cents: entry, value_log: [],
+    is_public: true, created_at: ago(days), example: true, people,
+  }));
+  const cards = items.map((it, i) => ({ key: intKey("p", it.id), people: it.people, lastAt: new Date(Date.now() - (i * 17 + 3) * 3600000).toISOString() }));
+  return (pfExample = { items, ints: { people: 8, cards, byKey: new Map(cards.map((c) => [c.key, c])) } });
+}
+const isPfExamplePath = (path) => path === "/portafolio/ejemplo" || path.startsWith("/portafolio/ej-");
+/** The owner's own profile, or the example one. */
+const pfProfileHref = (example) => `#/vendedor/${encodeURIComponent(example ? PF_EXAMPLE_OWNER : session.user.id)}`;
+
 async function updatePortfolioItem(it, patch) {
+  if (it.example) return void Object.assign(it, patch); // the example portfolio is never saved
   if (it.local) {
     pfLocal.write(pfLocal.read().map((x) => (x.id === it.id ? { ...x, ...patch } : x)));
   } else {
@@ -6444,6 +6489,7 @@ async function updatePortfolioItem(it, patch) {
   Object.assign(it, patch);
 }
 async function removePortfolioItem(it) {
+  if (it.example) return;
   if (it.local) pfLocal.write(pfLocal.read().filter((x) => x.id !== it.id));
   else {
     const { error } = await sb.from("portfolio_items").delete().eq("id", it.id);
@@ -6712,7 +6758,7 @@ const pfArt = (it, photos) => {
 /** Mi portafolio ▸ "Interesados en tus cartas": how many people want which cards (collection and on sale),
  *  and which cards show on the profile. */
 async function pfPublicPanel(app, items, ints) {
-  const me = session.user.id, link = `${location.origin}${location.pathname}#/vendedor/${encodeURIComponent(me)}`;
+  const example = items.some((it) => it.example), link = `${location.origin}${location.pathname}${pfProfileHref(example)}`;
   const paintPublic = () => {
     const n = items.filter((it) => it.is_public).length;
     $("#pfPubLine").innerHTML = n
@@ -6725,10 +6771,10 @@ async function pfPublicPanel(app, items, ints) {
   };
   paintPublic();
   app.querySelectorAll("[data-pub]").forEach((b) => b.addEventListener("click", async () => {
-    const on = b.dataset.pub === "1", change = items.filter((it) => !it.local && !!it.is_public !== on);
+    const on = b.dataset.pub === "1", change = items.filter((it) => (example || !it.local) && !!it.is_public !== on);
     if (!change.length) return toast(on ? "Ya se ven todas en tu perfil." : "Ninguna se ve en tu perfil.");
     b.disabled = true;
-    const { error } = await sb.from("portfolio_items").update({ is_public: on }).in("id", change.map((it) => it.id));
+    const { error } = example ? {} : await sb.from("portfolio_items").update({ is_public: on }).in("id", change.map((it) => it.id));
     b.disabled = false;
     if (error) { console.error(error); return toast("No pudimos cambiarlo. Intenta de nuevo.", { type: "error" }); }
     change.forEach((it) => { it.is_public = on; });
@@ -6779,32 +6825,32 @@ function interestPreviewPanel() {
   }));
   return `<section class="panel pf-public" aria-labelledby="pfIntTitle">
     <div class="phead"><h2 class="ptitle" id="pfIntTitle">${ic("heart")}Interesados en tus cartas<span class="b neutral">Ejemplo</span></h2>
-      <div class="share-row"><a class="btn outline sm" href="#/vendedor/${encodeURIComponent(DEMO_SELLERS.diego.id)}">${ic("eye")}Ver un perfil de ejemplo</a></div></div>
+      <div class="share-row"><a class="btn sm" href="#/portafolio/ejemplo">${ic("eye")}Ver el ejemplo completo</a></div></div>
     <p class="notice soft small" style="margin:12px 0 0">Así se verá cuando muestres tus cartas en tu perfil: cualquiera podrá marcar “Me interesa” en ellas, estén o no en venta, y aquí verás cuántas personas quieren cada una. <b>Estos números son de ejemplo.</b></p>
     ${interestSummaryHtml(Math.max(...rows.map((r) => r.people)) + 3, rows)}
   </section>`;
 }
 
-async function viewPortfolio(app) {
-  setTitle("Mi portafolio");
-  if (sb && !session) return go("/entrar?next=/portafolio");
+async function viewPortfolio(app, { example = false } = {}) {
+  setTitle(example ? "Mi portafolio (ejemplo)" : "Mi portafolio");
+  if (sb && !session && !example) return go("/entrar?next=/portafolio");
   app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tu portafolio…</p>`;
   const holder = app.firstElementChild;
   let res;
-  try { res = await loadPortfolio(); } catch (e) { console.error(e); if (holder.isConnected) app.innerHTML = `<p class="notice bad">No pudimos cargar tu portafolio. Recarga la página.</p>`; return; }
+  try { res = example ? { items: examplePortfolio().items, local: false } : await loadPortfolio(); } catch (e) { console.error(e); if (holder.isConnected) app.innerHTML = `<p class="notice bad">No pudimos cargar tu portafolio. Recarga la página.</p>`; return; }
   if (!holder.isConnected) return;
   const { items, local } = res;
   // Interest counts also tell whether 0036 is there: without it there is no public collection.
-  const [photos, ints] = await Promise.all([pfPhotoUrls(items), local ? null : myCardInterests()]);
+  const [photos, ints] = await Promise.all([pfPhotoUrls(items), example ? examplePortfolio().ints : local ? null : myCardInterests()]);
   if (!holder.isConnected) return;
-  const canShow = !!ints && pfPublicCol;
+  const canShow = example || (!!ints && pfPublicCol);
   const qty = items.reduce((n, it) => n + (it.quantity ?? 1), 0);
   const paidItems = items.filter((it) => it.paid_cents != null);
   const tile = (icon, label, value, note, id = "") => `<div class="dtile"><p class="k">${ic(icon)}${label}</p><p class="v"${id ? ` id="${id}"` : ""}>${value}</p><p class="s"${id ? ` id="${id}S"` : ""}>${note}</p></div>`;
   const pubChip = (it) => (it.is_public ? `<span class="chip-img good" title="Se ve en tu perfil">${ic("eye")}<span class="sr-only">Se ve en tu perfil</span></span>` : "");
   const pubPanel = canShow ? `<section class="panel pf-public" aria-labelledby="pfIntTitle">
       <div class="phead"><h2 class="ptitle" id="pfIntTitle">${ic("heart")}Interesados en tus cartas</h2>
-        <div class="share-row"><a class="btn outline sm" href="#/vendedor/${encodeURIComponent(session.user.id)}">${ic("eye")}Ver mi perfil</a><button type="button" class="btn outline sm" id="pfShare">${ic("share")}Compartir</button></div></div>
+        <div class="share-row"><a class="btn outline sm" href="${pfProfileHref(example)}">${ic("eye")}Ver mi perfil</a><button type="button" class="btn outline sm" id="pfShare">${ic("share")}Compartir</button></div></div>
       <div id="pfInt"></div>
       <div class="pf-pubrow"><p class="small muted" id="pfPubLine" style="margin:0"></p>
         ${items.length ? `<div class="share-row"><button type="button" class="btn sm" data-pub="1">Mostrar todas en mi perfil</button><button type="button" class="btn ghost sm" data-pub="0">Ocultar todas</button></div>` : ""}</div>
@@ -6813,6 +6859,7 @@ async function viewPortfolio(app) {
     <div class="pf-head"><div><p class="kicker">${canShow ? "Privado · tú eliges qué cartas se ven en tu perfil" : "Solo tú lo ves · no se publica"}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi portafolio</h1>
       <p class="muted" style="margin:6px 0 0;max-width:620px">Tus cartas, lo que valen hoy y en cuánto se están vendiendo. Agrégalas escaneándolas en “¿Cuánto vale tu carta?” y publícalas cuando quieras.</p></div>
       <a class="btn primary" href="#/escanear">${ic("camera")}Agregar con una foto</a></div>
+    ${example ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> así se ve tu portafolio cuando muestras tus cartas en tu perfil y la gente marca “Me interesa”. Las cartas y los interesados son de ejemplo; los valores son los del mercado de hoy. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : ""}
     ${local && items.length ? `<p class="notice soft" style="margin:0">Por ahora tu portafolio se guarda en este navegador. Pronto se guardará en tu cuenta y lo verás en todos tus dispositivos.</p>` : ""}
     ${items.length ? "" : pubPanel}
     ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu portafolio">
@@ -6887,19 +6934,20 @@ async function viewPortfolio(app) {
 }
 
 async function viewPortfolioItem(app, id) {
-  if (sb && !session) return go(`/entrar?next=${encodeURIComponent(`/portafolio/${id}`)}`);
+  const example = isPfExamplePath(`/portafolio/${id}`);
+  if (sb && !session && !example) return go(`/entrar?next=${encodeURIComponent(`/portafolio/${id}`)}`);
   app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando…</p>`;
   const holder = app.firstElementChild;
-  if (!pfItems.has(id)) await loadPortfolio().catch((e) => console.error(e));
+  if (!example && !pfItems.has(id)) await loadPortfolio().catch((e) => console.error(e));
   if (!holder.isConnected) return;
-  const it = pfItems.get(id);
+  const it = example ? examplePortfolio().items.find((x) => x.id === id) : pfItems.get(id);
   if (!it) { setTitle("Carta no encontrada"); app.innerHTML = `<div class="empty-state" style="margin-top:32px"><p style="font-weight:600">Esta carta ya no está en tu portafolio.</p><a class="btn primary" style="margin-top:12px" href="#/portafolio">Ir a Mi portafolio</a></div>`; return; }
   setTitle(it.subject);
-  const [photos, ints] = await Promise.all([pfPhotoUrls([it]), it.local ? null : myCardInterests()]);
+  const [photos, ints] = await Promise.all([pfPhotoUrls([it]), example ? examplePortfolio().ints : it.local ? null : myCardInterests()]);
   if (!holder.isConnected) return;
-  const photo = photos.get(it.photo_path), canShow = !!ints && pfPublicCol;
+  const photo = photos.get(it.photo_path), canShow = example || (!!ints && pfPublicCol);
   const meta = [it.set_name, it.year, it.number, it.variant].filter(Boolean).map(esc).join(" · ");
-  app.innerHTML = `<nav class="crumbs" aria-label="Ruta" style="margin-top:16px"><a href="#/portafolio">Mi portafolio</a>${ic("chevronRight")}<span aria-current="page">${esc(it.subject)}</span></nav>
+  app.innerHTML = `<nav class="crumbs" aria-label="Ruta" style="margin-top:16px"><a href="#/portafolio${example ? "/ejemplo" : ""}">Mi portafolio${example ? " (ejemplo)" : ""}</a>${ic("chevronRight")}<span aria-current="page">${esc(it.subject)}</span></nav>
     <div class="scan-result">
       <div class="col" style="gap:12px">
         <div class="panel scan-card">${it.image_url || photo ? `<img src="${esc(it.image_url || photo)}" alt="${esc(it.subject)}" class="card">` : `<div class="card" style="display:grid;place-items:center;width:100%;max-width:280px;aspect-ratio:63/88;background:var(--muted)">${ic("camera")}</div>`}</div>
@@ -6918,11 +6966,11 @@ async function viewPortfolioItem(app, id) {
         ${canShow ? `<section class="panel pf-pubone"><h2 class="ptitle">${ic("eye")}En tu perfil</h2>
           <label class="check" style="margin-top:10px"><input type="checkbox" id="pfPublicT"${it.is_public ? " checked" : ""}><span><b>Mostrar esta carta en mi perfil.</b> Cualquiera la ve en tu colección y puede marcar “Me interesa”, aunque no esté en venta. No se ve lo que pagaste, tu nota ni tu foto.</span></label>
           ${interestCount(ints.byKey.get(intKey("p", it.id))?.people ?? 0)}
-          <a class="link small" href="#/vendedor/${encodeURIComponent(session.user.id)}" style="display:inline-block;margin-top:8px">Ver mi perfil</a></section>` : ""}
+          <a class="link small" href="${pfProfileHref(example)}" style="display:inline-block;margin-top:8px">Ver mi perfil</a></section>` : ""}
         <section class="panel" id="pfPerf"><h2 class="ptitle">${ic("trend")}Rendimiento</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Viendo cuánto ha subido o bajado desde que la agregaste…</p></section>
         <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
         <section class="panel" id="pfSale"><h2 class="ptitle">${ic("store")}En venta en ${esc(CONFIG.APP_NAME)}</h2><p class="loading" style="padding:12px 0"><span class="spinner"></span></p></section>
-        <div class="share-row"><button type="button" class="btn primary" id="pfSell">${ic("tag")}Vender esta carta</button><button type="button" class="btn outline" id="pfRemove">${ic("trash")}Quitar del portafolio</button></div>
+        ${example ? `<p class="notice warn small" style="margin:0">Carta de ejemplo: los cambios no se guardan. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : `<div class="share-row"><button type="button" class="btn primary" id="pfSell">${ic("tag")}Vender esta carta</button><button type="button" class="btn outline" id="pfRemove">${ic("trash")}Quitar del portafolio</button></div>`}
         <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
       </div></div>`;
   loadPriceChart(pfListing(it), (h) => { pfRecord(it, h); showPfPerf(it, h); });
@@ -6956,7 +7004,7 @@ async function viewPortfolioItem(app, id) {
       toast("Listo, quedó guardado.");
     } catch (err) { console.error(err); toast("No pudimos guardar. Intenta de nuevo.", { type: "error" }); }
   });
-  $("#pfSell").addEventListener("click", async (e) => {
+  $("#pfSell")?.addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
     // The scanned photo goes straight into the sale form; the form identifies the card again.
@@ -6969,7 +7017,7 @@ async function viewPortfolioItem(app, id) {
     if (!pendingSellFiles) toast("Sube fotos reales de tu carta para publicarla.");
     go("/vender");
   });
-  $("#pfRemove").addEventListener("click", async () => {
+  $("#pfRemove")?.addEventListener("click", async () => {
     if (!(await confirmDialog({ title: "¿Quitar esta carta de tu portafolio?", body: "Se borra de tu lista. No afecta tus anuncios.", confirm: "Quitar", danger: true }))) return;
     try { await removePortfolioItem(it); toast("La quitamos de tu portafolio."); go("/portafolio"); } catch (err) { console.error(err); toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
   });
@@ -7033,7 +7081,7 @@ const interestCount = (n) => `<p class="int-count${n ? " on" : ""}">${ic("heart"
 /** A card of someone's public collection (not a link: it has no page of its own). */
 const collectionTile = (c, i, after = "", own = false) => `<li style="--i:${Math.min(i, 16)}"><div class="pcard pf-card coll-card">
     <div class="media card-ratio"><div class="inner">${pfArt(c, new Map())}</div>
-      <div class="corner-l"><span class="${c.grading_company ? "graded" : "cond"}">${esc(pfLabel(c))}</span></div>${c.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : (c.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${c.quantity}</span></div>` : ""}</div>
+      <div class="corner-l"><span class="${c.grading_company ? "graded" : "cond"}">${esc(pfLabel(c))}</span></div>${c.isDemo || c.example ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : (c.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${c.quantity}</span></div>` : ""}</div>
     <p class="title">${esc(c.subject)}</p>
     <p class="set">${esc([c.set_name, c.number].filter(Boolean).join(" · ") || categoryName(c.category))}</p>
     <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b>${c.value_cents != null ? fmtEstimate(c.value_cents / 100) : "—"}</b></p>
