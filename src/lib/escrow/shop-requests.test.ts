@@ -194,3 +194,17 @@ describe("submit_shop_document", () => {
     expect(cmds.map((c) => c.cmd)).toEqual(["INSERT", "SELECT"]);
   });
 });
+
+// A shop that signs up with the PDF gives its phone and store address (migration 0042).
+describe("shop sign-up contact", () => {
+  it("saves the phone and the store address as its seller account, and a shop without them still signs up", async () => {
+    const WITH = "00000000-0000-4000-a000-000000000051", WITHOUT = "00000000-0000-4000-a000-000000000052";
+    await db.q(`insert into auth.users (id, email, raw_user_meta_data) values ($1, 'pdf@x.test', $3), ($2, 'digital@x.test', $4)`, [WITH, WITHOUT,
+      { display_name: "Tienda PDF", account_type: "shop", shop_agreement: "pdf", seller_phone: "6555-7777", pickup_address: "Vía España, edificio Plaza, local 9, Bella Vista, Panamá, Panamá" },
+      { display_name: "Tienda Digital", account_type: "shop", shop_agreement: "digital" }]);
+    expect(await db.q("select phone, pickup_address from public.seller_accounts where user_id = $1", [WITH]))
+      .toEqual([{ phone: "+50765557777", pickup_address: "Vía España, edificio Plaza, local 9, Bella Vista, Panamá, Panamá" }]);
+    expect(await db.q("select 1 from public.seller_accounts where user_id = $1", [WITHOUT])).toEqual([]);
+    expect(await db.q("select 1 from public.profiles where id = $1", [WITHOUT])).toHaveLength(1);
+  });
+});

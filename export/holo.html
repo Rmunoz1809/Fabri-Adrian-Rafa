@@ -3845,10 +3845,18 @@ function viewAuth(app, next, kind = null) {
         shopSignup = true;
         agreeMode = fd.get("agreeMode") === "pdf" ? "pdf" : "digital";
         shopPhoto = fd.get("shopPhoto");
-        if (agreeMode === "pdf") shopDoc = fd.get("shopDoc");
-        const bad = shopPhotoProblem(shopPhoto) || (agreeMode === "pdf" ? shopDocProblem(shopDoc) : null);
-        if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
-        sellerMeta = { account_type: "shop", shop_name: shopName, shop_agreement: agreeMode };
+        let contact = {};
+        if (agreeMode === "pdf") {
+          shopDoc = fd.get("shopDoc");
+          const box = $("#shopBox [data-mode=pdf]"), parts = addressParts(box), phone = paPhone(box.querySelector("[name=sellerPhone]").value);
+          const bad = shopPhotoProblem(shopPhoto) || sellerProblem(phone, parts) || shopDocProblem(shopDoc);
+          if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
+          contact = { seller_phone: phone, pickup_address: composeAddress(parts), pickup_parts: parts };
+        } else {
+          const bad = shopPhotoProblem(shopPhoto);
+          if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
+        }
+        sellerMeta = { account_type: "shop", shop_name: shopName, shop_agreement: agreeMode, ...contact };
       }
       if (signup && acct === "seller") {
         const parts = addressParts(e.target), phone = paPhone(fd.get("sellerPhone")), address = composeAddress(parts);
@@ -3889,6 +3897,8 @@ function viewAuth(app, next, kind = null) {
           console.error(err);
           toast("No pudimos subir la foto de la tienda", { type: "error", description: "Súbela desde Mi cuenta ▸ Perfil." });
         }
+        // The sign-up trigger saves the phone and address (0042); before 0042 the page saves them here.
+        if (sellerMeta.seller_phone) sb.rpc("save_seller_account", { p_phone: sellerMeta.seller_phone, p_pickup_address: sellerMeta.pickup_address }).then(({ error: e }) => e && console.warn("shop contact", e));
         if (!shopDoc) {
           toast("Cuenta de tienda creada", { description: "Ahora llena los datos de tu tienda y firma el acuerdo." });
           return go("/cuenta?tienda=1");
@@ -3936,7 +3946,7 @@ const PA_PROVINCES = ["Panamá", "Panamá Oeste", "Colón", "Chiriquí", "Coclé
   "Comarca Guna Yala", "Comarca Emberá-Wounaan", "Comarca Ngäbe-Buglé", "Comarca Naso Tjër Di"];
 const ADDR_FIELDS = { province: "addrProvince", district: "addrDistrict", area: "addrArea", street: "addrStreet", house: "addrHouse", unit: "addrUnit", ref: "addrRef" };
 /** The address parts typed in a form made with sellerFields(). */
-const addressParts = (form) => Object.fromEntries(Object.entries(ADDR_FIELDS).map(([k, name]) => [k, cleanAddress(form.elements[name]?.value)]));
+const addressParts = (root) => Object.fromEntries(Object.entries(ADDR_FIELDS).map(([k, name]) => [k, cleanAddress(root.querySelector(`[name="${name}"]:not(:disabled)`)?.value)]));
 /** "Calle 74, PH Las Palmas, apto 3B, San Francisco, Panamá, Panamá. Referencia: frente al parque" */
 const composeAddress = (a) => cleanAddress([a.street, a.house, a.unit, a.area, a.district, a.province].filter(Boolean).join(", ") + (a.ref ? `. Referencia: ${a.ref}` : ""));
 const addressProblem = (a) => !a.province ? "Elige la provincia de tu dirección." : !a.district ? "Escribe el distrito."
@@ -3946,14 +3956,14 @@ const sellerProblem = (phone, parts) => !phone ? SELLER_MSG.phone : addressProbl
 // Until 0031 runs, the table and its functions are missing: the page falls back to the account metadata.
 const sellerTableMissing = (e) => ["PGRST205", "PGRST202", "42P01", "42883"].includes(e?.code);
 /** Phone and pickup address inputs (sign-up, "Vender" and Mi cuenta). With `email`, the account's e-mail too, read-only. */
-function sellerFields({ phone = "", address = "", parts = null, email = null, disabled = false } = {}) {
+function sellerFields({ phone = "", address = "", parts = null, email = null, disabled = false, shop = false } = {}) {
   const off = disabled ? " disabled" : "";
   const v = (k) => esc(parts?.[k] ?? "");
   const opts = (list) => [...new Set(list)].map((x) => `<option value="${esc(x)}">`).join("");
   const input = (k, label, ph, extra = "") => `<label class="f"><span>${label}</span><input class="input" name="${ADDR_FIELDS[k]}" maxlength="${k === "unit" ? 20 : k === "ref" ? 80 : 60}" placeholder="${ph}" value="${v(k)}"${extra}${off}></label>`;
   return `${email != null ? `<label class="f">Correo<input class="input" type="email" value="${esc(email)}" readonly aria-readonly="true"><span class="hint xs">El de tu cuenta: no tienes que escribirlo otra vez.</span></label>` : ""}
-    <label class="f">Teléfono (WhatsApp)<input class="input" name="sellerPhone" type="tel" required inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="6123-4567" value="${esc(phone ? fmtPhone(phone) : "")}"${off}><span class="hint xs">Por aquí coordinamos contigo cada venta.</span></label>
-    <fieldset class="addr"><legend>Dirección exacta de residencia</legend>
+    <label class="f">Teléfono (WhatsApp)<input class="input" name="sellerPhone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="6123-4567" value="${esc(phone ? fmtPhone(phone) : "")}"${off}><span class="hint xs">Por aquí coordinamos contigo cada venta.</span></label>
+    <fieldset class="addr"><legend>${shop ? "Dirección del local" : "Dirección exacta de residencia"}</legend>
       ${address && !parts ? `<p class="xs muted" style="margin:0">Dirección guardada: ${esc(address)}. Escríbela por partes para actualizarla.</p>` : ""}
       <div class="grid2"><label class="f">Provincia<select class="select" name="addrProvince" autocomplete="address-level1"${off}><option value="">Elige</option>${PA_PROVINCES.map((x) => `<option${parts?.province === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
         ${input("district", "Distrito", "Ej.: Panamá", ` list="addrDistricts" autocomplete="address-level2"`)}</div>
@@ -3964,11 +3974,11 @@ function sellerFields({ phone = "", address = "", parts = null, email = null, di
       ${input("ref", `Punto de referencia <span class="muted">(opcional)</span>`, "Ej.: Frente al parque")}
       <datalist id="addrDistricts">${opts(LOCATIONS.map((l) => l.district))}</datalist><datalist id="addrAreas">${opts(LOCATIONS.flatMap((l) => l.neighborhoods))}</datalist>
     </fieldset>
-    <p class="notice soft pickup-note">${ic("pin")}<span><b>Aquí retiramos tus cartas.</b> Cuando vendas una, el equipo de ${esc(CONFIG.APP_NAME)} pasa a buscarla a esta dirección. Solo la ve nuestro equipo: nunca sale en tus anuncios.</span></p>`;
+    <p class="notice soft pickup-note">${ic("pin")}<span><b>Aquí retiramos ${shop ? "las cartas que vendas" : "tus cartas"}.</b> Cuando vendas una, el equipo de ${esc(CONFIG.APP_NAME)} pasa a buscarla a esta dirección. Solo la ve nuestro equipo${shop ? "" : ": nunca sale en tus anuncios"}.</span></p>`;
 }
 /** Marks the account as a seller in its metadata (with a copy of the data). Resolves to an error, or null. */
 function rememberSeller(acc) {
-  return sb.auth.updateUser({ data: { account_type: "seller", seller_phone: acc.phone, pickup_address: acc.address, ...(acc.parts ? { pickup_parts: acc.parts } : {}) } }).then(({ data, error }) => {
+  return sb.auth.updateUser({ data: { account_type: isShopSignup() ? "shop" : "seller", seller_phone: acc.phone, pickup_address: acc.address, ...(acc.parts ? { pickup_parts: acc.parts } : {}) } }).then(({ data, error }) => {
     if (error) { console.warn("seller metadata", error); return error; }
     if (data?.user && session) session.user = data.user;
     renderNav();
@@ -7377,7 +7387,8 @@ function shopSignupFields(disabled = false, { photo = true, photoRequired = true
         <label class="on"><input type="radio" name="agreeMode" value="digital" checked${off}>Llenarlo aquí</label>
         <label><input type="radio" name="agreeMode" value="pdf"${off}>Subir el PDF firmado</label></div>
       <p class="xs muted" style="margin:0" data-mode="digital">Al crear la cuenta llenas los datos de tu tienda y firmas con el dedo, aquí mismo, sin imprimir nada. Después puedes descargar el contrato firmado en PDF. <a class="link" href="${esc(SHOP_AGREEMENT.PDF)}" target="_blank" rel="noopener">Leer el acuerdo</a></p>
-      <div class="col" style="gap:10px" data-mode="pdf" hidden>${shopPdfFields(off)}</div>` : shopPdfFields(off)}`;
+      <div class="col" style="gap:10px" data-mode="pdf" hidden>${shopPdfFields(off)}
+        <p style="margin:6px 0 0;font-weight:600">Contacto de la tienda</p>${sellerFields({ disabled, shop: true })}</div>` : shopPdfFields(off)}`;
 }
 /** Sign-up: "Llenarlo aquí" / "Subir el PDF firmado" shows the matching part. */
 function bindAgreeMode(root) {
@@ -7484,12 +7495,15 @@ async function renderShopRequest(uid, prof, box, open = false) {
     return;
   }
   if (open === "subir") {
+    const acc = await loadSellerAccount().catch(() => null);
+    if (!box.isConnected) return;
     const name = session.user.user_metadata?.shop_name || (prof.is_shop || shopSignup ? prof.display_name : "");
     shell(`${rejected}${shopSignup && !last ? `<p class="notice warn" style="margin:0">Falta el acuerdo firmado: tu tienda queda en revisión cuando lo recibamos.</p>` : ""}
       <p class="small" style="margin:0">¿Prefieres no imprimir? <button type="button" class="link" data-switch>Llénalo y fírmalo aquí</button></p>
       <form class="col shop-upload" style="gap:14px" novalidate>
         <label class="f">Nombre de la tienda<input class="input" name="shopName" maxlength="80" value="${esc(name ?? "")}"></label>
         <div class="col shop-signup">${shopSignupFields(false, { photoRequired: !prof.avatar_path })}</div>
+        ${acc ? "" : `<div class="col shop-signup shop-contact"><p style="margin:0;font-weight:600">Contacto de la tienda</p>${sellerFields({ shop: true })}</div>`}
         <div class="shop-msg" aria-live="polite"></div>
         <div class="share-row" style="margin-top:0"><button class="btn primary">Enviar el acuerdo</button>${shopSignup && !last ? "" : `<button type="button" class="btn outline" data-cancel>Cancelar</button>`}</div>
       </form>`);
@@ -7500,10 +7514,17 @@ async function renderShopRequest(uid, prof, box, open = false) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const shopName = form.shopName.value.trim(), file = form.shopDoc.files[0], photo = form.shopPhoto.files[0];
-      const bad = shopName.length < 2 ? "Escribe el nombre de la tienda." : shopPhotoProblem(photo, !prof.avatar_path) || shopDocProblem(file);
+      const contactBox = form.querySelector(".shop-contact");
+      const contact = contactBox ? { phone: paPhone(contactBox.querySelector("[name=sellerPhone]").value), parts: addressParts(contactBox) } : null;
+      const bad = shopName.length < 2 ? "Escribe el nombre de la tienda." : shopPhotoProblem(photo, !prof.avatar_path)
+        || (contact ? sellerProblem(contact.phone, contact.parts) : null) || shopDocProblem(file);
       if (bad) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(bad)}</p>`; return; }
       btn.disabled = true; btn.textContent = "Enviando…"; msg.innerHTML = "";
       try {
+        if (contact) {
+          const err = await saveSellerAccount({ phone: contact.phone, address: composeAddress(contact.parts), parts: contact.parts });
+          if (err) throw new Error(err);
+        }
         if (photo) await sendShopPhoto(uid, photo);
         await sendShopDocument(uid, shopName, file);
         pendingStore("readwrite", (st) => st.delete("shopDoc")).catch(() => undefined);
