@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acuerdo para tiendas · MarketZlab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Printable store agreement: sign-up form (page 1), terms with the order flow, and signatures.
+     Letter size. PDF: docs/material/tiendas-acuerdo.pdf (print to PDF from Chromium, no headers/footers).
+     Colors from the MarketZlab logo: navy #0b1222, white #f4f6fb and the "lab" gray (#525e78 on white). */
+  @page { size: letter; margin: 0.6in 0.7in; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e3e8f2; font-family: Inter, system-ui, sans-serif; color: #0b1222; font-size: 11.5px; line-height: 1.5; }
+  .sheet { width: 8.5in; margin: 24px auto; background: #fff; padding: 0.6in 0.7in; }
+  .page { break-after: page; }
+  .page:last-child { break-after: auto; }
+  .keep { break-inside: avoid; }
+  .logo { display: block; height: 24px; width: calc(24px * 706 / 120); }
+  .lab { color: #525e78; }
+  .muted { color: #525e78; }
+  h1 { margin: 16px 0 4px; font-size: 24px; font-weight: 800; line-height: 1.1; letter-spacing: -0.03em; }
+  h2 { margin: 20px 0 6px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; break-after: avoid; }
+  p { margin: 0 0 7px; }
+  ul, ol { margin: 0 0 7px; padding-left: 18px; }
+  li { margin: 0 0 3px; }
+  .lead { margin: 0 0 18px; font-size: 13px; color: #525e78; }
+
+  /* Form */
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; margin-top: 8px; }
+  .field { display: flex; flex-direction: column; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #525e78; }
+  .field .line { height: 30px; border-bottom: 1.5px solid #0b1222; }
+  .field .line.tall { height: 60px; background: repeating-linear-gradient(#fff 0 29px, #0b1222 29px 30.5px); border-bottom: 0; }
+  .field .hint { margin-top: 3px; font-size: 10px; color: #525e78; }
+  .box { margin-top: 20px; padding: 12px 14px; border: 1.5px solid #0b1222; border-radius: 12px; }
+  .box p:last-child { margin: 0; }
+  .office { margin-top: 18px; padding: 10px 14px; border: 1px dashed #a4aec4; border-radius: 12px; font-size: 10.5px; color: #525e78; }
+  .office .row { display: flex; gap: 18px; margin-top: 6px; }
+  .office .row span { flex: 1; border-bottom: 1px solid #a4aec4; height: 20px; }
+
+  /* Flow */
+  .flow { list-style: none; padding: 0; margin: 10px 0 8px; display: grid; gap: 7px; counter-reset: step; }
+  .flow li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; margin: 0; break-inside: avoid; }
+  .flow li::before { counter-increment: step; content: counter(step); width: 24px; height: 24px; border-radius: 50%; background: #0b1222; color: #f4f6fb;
+    font-size: 11.5px; font-weight: 700; display: grid; place-items: center; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .flow b { display: block; }
+  .who { display: inline-block; margin-left: 6px; padding: 0 7px; border-radius: 999px; background: #eef1f7; color: #525e78; font-size: 9.5px; font-weight: 600;
+    vertical-align: 1px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .money { margin: 10px 0; padding: 10px 14px; border-radius: 12px; background: #0b1222; color: #f4f6fb; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .money p { margin: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 8px; }
+  td { padding: 4px 0; border-bottom: 1px solid #e3e8f2; }
+  td:last-child { text-align: right; font-weight: 600; }
+  tr.total td { border-bottom: 0; font-weight: 700; }
+
+  /* Signatures */
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 24px; break-inside: avoid; }
+  .sign h3 { margin: 0 0 4px; font-size: 12px; }
+  .sign .field { margin-top: 12px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin-top: 18px; break-inside: avoid; }
+  .check i { flex-shrink: 0; width: 14px; height: 14px; border: 1.5px solid #0b1222; border-radius: 3px; margin-top: 1px; }
+  .foot { margin-top: 18px; font-size: 9.5px; color: #525e78; }
+
+  @media print { body { background: #fff; } .sheet { width: auto; margin: 0; padding: 0; } }
+</style>
+</head>
+<body>
+<!-- Logo for white paper: img/brand/logo-light-transparente.svg, inlined (copied from tarjeta-tiendas.html) so the page prints on its own -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="mz-logo" viewBox="40 40 706 120"><g transform="translate(40,40) scale(1.875)"><clipPath id="mlight"><rect width="64" height="64" rx="20"/></clipPath><g clip-path="url(#mlight)"><rect width="64" height="64" fill="#0b1222"/><path d="M-8 64 L22 -4 L34 -4 L4 64 Z" fill="#16203a"/></g><path d="M18 20 H46 L18 44 H46" fill="none" stroke="#f4f6fb" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="46" cy="20" r="4.2" fill="#f4f6fb"/></g><path d="M193.890625 137.83203125V62.16796875H221.8203125L231.46875 91.62109375Q232.23046875 94.2109375 233.220703125 98.375Q234.2109375 102.5390625 235.2265625 107.36328125Q236.2421875 112.1875 237.15625 116.70703125Q238.01953125 112.1875 239.009765625 107.388671875Q240.0 102.58984375 240.990234375 98.400390625Q241.98046875 94.2109375 242.7421875 91.62109375L252.23828125 62.16796875H280.21875V137.83203125H262.19140625V105.23046875Q262.19140625 102.3359375 262.318359375 97.638671875Q262.4453125 92.94140625 262.59765625 87.45703125Q262.75 81.97265625 262.8515625 76.89453125Q261.58203125 82.27734375 260.185546875 87.7109375Q258.7890625 93.14453125 257.51953125 97.740234375Q256.25 102.3359375 255.3359375 105.23046875L244.5703125 137.83203125H229.58984375L218.671875 105.23046875Q217.80859375 102.4375 216.5390625 98.01953125Q215.26953125 93.6015625 213.873046875 88.345703125Q212.4765625 83.08984375 211.20703125 77.7578125Q211.30859375 82.734375 211.4609375 88.015625Q211.61328125 93.296875 211.740234375 97.841796875Q211.8671875 102.38671875 211.8671875 105.23046875V137.83203125Z" fill="#0b1222"/><path d="M304.20375 138.84765625Q296.02796875 138.84765625 290.772109375 134.68359375Q285.51625 130.51953125 285.51625 122.08984375Q285.51625 115.79296875 288.41078125 112.0859375Q291.3053125 108.37890625 296.104140625 106.6015625Q300.90296875 104.82421875 306.64125 104.31640625Q313.8521875 103.70703125 316.975234375 102.818359375Q320.09828125 101.9296875 320.09828125 99.2890625V99.0859375Q320.09828125 96.140625 318.041640625 94.541015625Q315.985 92.94140625 312.37953125 92.94140625Q308.6725 92.94140625 306.28578125 94.515625Q303.8990625 96.08984375 303.188125 98.78125L287.14125 96.69921875Q288.81703125 89.4375 295.342421875 84.892578125Q301.8678125 80.34765625 312.531875 80.34765625Q319.59046875 80.34765625 325.303359375 82.53125Q331.01625 84.71484375 334.393203125 88.955078125Q337.77015625 93.1953125 337.77015625 99.2890625V137.83203125H321.11390625V129.859375H320.656875Q315.93421875 138.84765625 304.20375 138.84765625ZM309.5865625 127.1171875Q314.0553125 127.1171875 317.15296875 124.4765625Q320.250625 121.8359375 320.250625 117.62109375V112.1875Q318.7271875 113.0 315.83265625 113.55859375Q312.938125 114.1171875 310.44984375 114.5234375Q302.2740625 115.7421875 302.2740625 121.27734375Q302.2740625 124.12109375 304.330703125 125.619140625Q306.38734375 127.1171875 309.5865625 127.1171875Z" fill="#0b1222"/><path d="M345.860625 137.83203125V81.05859375H363.07546875V91.41796875H363.68484375Q365.20828125 85.83203125 368.737578125 83.08984375Q372.266875 80.34765625 376.93875 80.34765625Q379.52859375 80.34765625 381.96609375 80.95703125V96.39453125Q380.6965625 95.9375 378.639921875 95.708984375Q376.58328125 95.48046875 374.95828125 95.48046875Q370.0325 95.48046875 366.807890625 98.62890625Q363.58328125 101.77734375 363.58328125 106.85546875V137.83203125Z" fill="#0b1222"/><path d="M385.89250000000004 137.83203125V62.16796875H403.61515625000004V101.57421875H404.42765625000004L420.67765625000004 81.05859375H440.83781250000004L420.57609375000004 105.83984375L441.65031250000004 137.83203125H421.18546875000004L407.37296875000004 116.1484375L403.61515625000004 120.6171875V137.83203125Z" fill="#0b1222"/><path d="M470.35796875000005 138.8984375Q457.00250000000005 138.8984375 449.35992187500005 131.103515625Q441.71734375000005 123.30859375 441.71734375000005 109.6484375Q441.71734375000005 100.9140625 445.14507812500005 94.3125Q448.57281250000005 87.7109375 454.86968750000005 84.029296875Q461.16656250000005 80.34765625 469.69781250000005 80.34765625Q477.67046875000005 80.34765625 483.84039062500005 83.673828125Q490.01031250000005 87.0 493.53960937500005 93.474609375Q497.06890625000005 99.94921875 497.06890625000005 109.29296875V113.76171875H459.13531250000005Q459.38921875000005 119.90625 462.51226562500005 122.978515625Q465.63531250000005 126.05078125 470.66265625000005 126.05078125Q474.21734375000005 126.05078125 476.80718750000005 124.552734375Q479.39703125000005 123.0546875 480.46343750000005 120.2109375L496.25640625000005 122.80078125Q494.12359375000005 130.1640625 487.39507812500005 134.53125Q480.66656250000005 138.8984375 470.35796875000005 138.8984375ZM459.23687500000005 103.453125H480.26031250000005Q479.75250000000005 98.62890625 477.11187500000005 95.912109375Q474.47125000000005 93.1953125 469.85015625000005 93.1953125Q465.17828125000005 93.1953125 462.46148437500005 95.962890625Q459.74468750000005 98.73046875 459.23687500000005 103.453125Z" fill="#0b1222"/><path d="M533.3429687500001 81.05859375V94.2109375H523.1359375000001V120.46484375Q523.1359375000001 124.8828125 527.6554687500001 124.8828125Q528.5695312500001 124.8828125 530.2199218750001 124.654296875Q531.8703125000001 124.42578125 532.5812500000001 124.2734375L534.8664062500001 137.171875Q531.8703125000001 138.03515625 529.0773437500001 138.33984375Q526.2843750000001 138.64453125 523.7960937500001 138.64453125Q514.7570312500001 138.64453125 510.08515625000007 134.404296875Q505.41328125000007 130.1640625 505.41328125000007 122.0390625V94.2109375H497.89765625000007V81.05859375H505.41328125000007V67.55078125H523.1359375000001V81.05859375Z" fill="#0b1222"/><path d="M538.4881250000001 137.83203125V127.57421875L567.8904687500001 87.05078125Q569.8201562500001 84.41015625 572.0037500000001 81.794921875Q574.1873437500001 79.1796875 576.5232812500001 76.58984375Q573.0193750000001 76.7421875 569.4900781250001 76.767578125Q565.9607812500001 76.79296875 562.4060937500001 76.79296875H538.4373437500001V62.16796875H598.0037500000001V72.4765625L569.1600000000001 112.23828125Q567.1287500000001 115.03125 564.7674218750001 117.849609375Q562.4060937500001 120.66796875 559.9178125000001 123.4609375Q563.7771875000001 123.2578125 567.6365625000001 123.232421875Q571.4959375000001 123.20703125 575.3553125000001 123.20703125H598.0545312500001V137.83203125Z" fill="#0b1222"/><path d="M623.4614062500001 62.16796875V137.83203125H605.7387500000001V62.16796875Z" fill="#525e78"/><path d="M647.4464062500001 138.84765625Q639.2706250000001 138.84765625 634.0147656250001 134.68359375Q628.7589062500001 130.51953125 628.7589062500001 122.08984375Q628.7589062500001 115.79296875 631.6534375000001 112.0859375Q634.5479687500001 108.37890625 639.3467968750001 106.6015625Q644.1456250000001 104.82421875 649.8839062500001 104.31640625Q657.0948437500001 103.70703125 660.2178906250001 102.818359375Q663.3409375000001 101.9296875 663.3409375000001 99.2890625V99.0859375Q663.3409375000001 96.140625 661.2842968750001 94.541015625Q659.2276562500001 92.94140625 655.6221875000001 92.94140625Q651.9151562500001 92.94140625 649.5284375000001 94.515625Q647.1417187500001 96.08984375 646.4307812500001 98.78125L630.3839062500001 96.69921875Q632.0596875000001 89.4375 638.5850781250001 84.892578125Q645.1104687500001 80.34765625 655.7745312500001 80.34765625Q662.8331250000001 80.34765625 668.5460156250001 82.53125Q674.2589062500001 84.71484375 677.6358593750001 88.955078125Q681.0128125000001 93.1953125 681.0128125000001 99.2890625V137.83203125H664.3565625000001V129.859375H663.8995312500001Q659.1768750000001 138.84765625 647.4464062500001 138.84765625ZM652.8292187500001 127.1171875Q657.2979687500001 127.1171875 660.3956250000001 124.4765625Q663.4932812500001 121.8359375 663.4932812500001 117.62109375V112.1875Q661.9698437500001 113.0 659.0753125000001 113.55859375Q656.1807812500001 114.1171875 653.6925000000001 114.5234375Q645.5167187500001 115.7421875 645.5167187500001 121.27734375Q645.5167187500001 124.12109375 647.5733593750001 125.619140625Q649.6300000000001 127.1171875 652.8292187500001 127.1171875Z" fill="#525e78"/><path d="M723.1775000000001 138.64453125Q716.6775000000001 138.64453125 712.7927343750001 135.572265625Q708.9079687500001 132.5 707.2321875000001 128.640625H706.6228125000001V137.83203125H689.1032812500001V62.16796875H706.8259375000001V90.80859375H707.2321875000001Q708.2985937500001 88.26953125 710.3298437500001 85.857421875Q712.3610937500001 83.4453125 715.5603125000001 81.896484375Q718.7595312500001 80.34765625 723.2790625000001 80.34765625Q729.2712500000001 80.34765625 734.4255468750001 83.49609375Q739.5798437500001 86.64453125 742.7536718750001 93.09375Q745.9275000000001 99.54296875 745.9275000000001 109.49609375Q745.9275000000001 119.14453125 742.8552343750001 125.619140625Q739.7829687500001 132.09375 734.6286718750001 135.369140625Q729.4743750000001 138.64453125 723.1775000000001 138.64453125ZM717.1345312500001 124.83203125Q722.2634375000001 124.83203125 724.9802343750001 120.6171875Q727.6970312500001 116.40234375 727.6970312500001 109.49609375Q727.6970312500001 102.58984375 724.9802343750001 98.400390625Q722.2634375000001 94.2109375 717.1345312500001 94.2109375Q712.0564062500001 94.2109375 709.2380468750001 98.32421875Q706.4196875000001 102.4375 706.4196875000001 109.49609375Q706.4196875000001 116.453125 709.2380468750001 120.642578125Q712.0564062500001 124.83203125 717.1345312500001 124.83203125Z" fill="#525e78"/></symbol></svg>
+<main class="sheet">
+
+<!-- ============================================================ page 1: form -->
+<section class="page">
+  <svg class="logo" role="img" aria-label="MarketZlab"><use href="#mz-logo"/></svg>
+  <h1>Solicitud de tienda</h1>
+  <p class="lead">Llene sus datos, lea los Términos para tiendas (páginas siguientes) y firme al final. Con esto retiramos sus cartas vendidas y le pagamos.</p>
+
+  <div class="fields">
+    <div class="field full"><label>Nombre de la tienda</label><div class="line"></div></div>
+    <div class="field"><label>Nombre del responsable</label><div class="line"></div></div>
+    <div class="field"><label>Cédula del responsable</label><div class="line"></div></div>
+    <div class="field full"><label>Dirección del local</label><div class="line tall"></div>
+      <span class="hint">Calle, edificio o local, barrio, distrito y provincia. Aquí retiramos las cartas.</span></div>
+    <div class="field"><label>Número de teléfono / WhatsApp</label><div class="line"></div>
+      <span class="hint">Para coordinar cada retiro.</span></div>
+    <div class="field"><label>Instagram de la tienda</label><div class="line"></div>
+      <span class="hint">@usuario</span></div>
+    <div class="field"><label>Número de Yappy para recibir pagos</label><div class="line"></div>
+      <span class="hint">Si es el mismo del teléfono, escriba "el mismo".</span></div>
+    <div class="field"><label>Correo de su cuenta en MarketZlab</label><div class="line"></div></div>
+    <div class="field full"><label>Horario en que podemos retirar cartas</label><div class="line"></div>
+      <span class="hint">Por ejemplo: lunes a sábado, 10:00 a. m. a 7:00 p. m.</span></div>
+  </div>
+
+  <div class="box">
+    <p><b>Sus datos son privados.</b> El teléfono, la cédula y el número de Yappy los ve solo el equipo de MarketZlab y se usan para coordinar retiros, pagarle y contactarle. En su página pública mostramos el nombre de la tienda, la foto, la descripción y la dirección del local, nunca su teléfono ni su Instagram.</p>
+  </div>
+
+  <div class="office">
+    <b>Uso interno de MarketZlab</b>
+    <div class="row">Recibido por: <span></span> Fecha: <span></span></div>
+    <div class="row">Local visitado: Sí / No &nbsp; Cuenta aprobada como tienda: Sí / No &nbsp; Notas: <span></span></div>
+  </div>
+</section>
+
+<!-- ============================================================ terms -->
+<section class="page">
+  <svg class="logo" role="img" aria-label="MarketZlab"><use href="#mz-logo"/></svg>
+  <h1>Términos y condiciones para tiendas</h1>
+  <p class="lead">Versión 1 · octubre de 2026. Este acuerdo es entre MarketZlab y la tienda que firma al final ("la Tienda"). Complementa los Términos y condiciones generales de MarketZlab, que la Tienda acepta al crear su cuenta.</p>
+
+  <h2>1. Qué hace MarketZlab</h2>
+  <p>MarketZlab es una página para comprar y vender cartas coleccionables (Pokémon, NBA y NFL) en Panamá. La Tienda publica sus cartas en MarketZlab. Cuando alguien compra una, MarketZlab cobra al comprador, retira la carta en la Tienda, le paga a la Tienda y le lleva la carta al comprador.</p>
+
+  <h2>2. Cómo funciona una venta, paso a paso</h2>
+  <ol class="flow">
+    <li><div><b>El comprador compra la carta en MarketZlab.<span class="who">Comprador</span></b>
+      Elige la carta publicada por la Tienda y la compra.</div></li>
+    <li><div><b>El comprador paga con Yappy.<span class="who">Comprador</span></b>
+      Paga el precio de la carta más el envío. El dinero llega a la cuenta de MarketZlab.</div></li>
+    <li><div><b>Quitamos la carta como disponible.<span class="who">MarketZlab</span></b>
+      La carta deja de estar a la venta en MarketZlab para que nadie más la compre. Le avisamos a la Tienda por WhatsApp.</div></li>
+    <li><div><b>Retenemos el dinero del comprador.<span class="who">MarketZlab</span></b>
+      MarketZlab guarda el pago del comprador hasta retirar la carta. <b style="display:inline">Es el dinero del comprador, no el de la Tienda: a la Tienda nunca le retenemos dinero.</b></div></li>
+    <li><div><b>Vamos a la Tienda y buscamos la carta personalmente.<span class="who">MarketZlab</span></b>
+      Una persona del equipo de MarketZlab va al local, en el horario de la Tienda, revisa que la carta sea la del anuncio y esté en el estado publicado, y le toma fotos del frente y del reverso.</div></li>
+    <li><div><b>Le pagamos a la Tienda en ese momento.<span class="who">MarketZlab</span></b>
+      Al recibir la carta, MarketZlab le paga a la Tienda por Yappy el precio de venta menos la comisión (punto 3). La Tienda no espera a que la carta le llegue al comprador.</div></li>
+    <li><div><b>Guardamos la carta hasta el día de distribución.<span class="who">MarketZlab</span></b>
+      Desde que la retiramos, la carta queda bajo el cuidado y la responsabilidad de MarketZlab.</div></li>
+    <li><div><b>Distribuimos las cartas un solo día a la semana.<span class="who">MarketZlab</span></b>
+      MarketZlab reparte todas las cartas vendidas en un día fijo de la semana, que informa al comprador. El orden y la ruta dependen del destino y de la cantidad de cartas.</div></li>
+    <li><div><b>Al comprador le llega la carta.<span class="who">Comprador</span></b>
+      Con eso termina la venta.</div></li>
+  </ol>
+
+  <div class="money">
+    <p><b>En resumen:</b> el comprador le paga a MarketZlab, MarketZlab guarda ese dinero, retira la carta en la Tienda y le paga a la Tienda en el mismo momento del retiro.</p>
+  </div>
+
+  <div class="keep">
+  <h2>3. Comisión</h2>
+  <p>Publicar es gratis. Solo cuando una carta se vende, MarketZlab cobra a la Tienda una comisión del <b>5% del precio de venta</b>, más el <b>7% de ITBMS sobre esa comisión</b>, sin mínimo ni máximo. La comisión se descuenta del pago del paso 6. El comprador paga el precio publicado y el envío; la Tienda no paga el envío.</p>
+  <table>
+    <tr><td>Ejemplo: carta vendida en</td><td>$100.00</td></tr>
+    <tr><td>Comisión de MarketZlab (5%)</td><td>− $5.00</td></tr>
+    <tr><td>ITBMS sobre la comisión (7%)</td><td>− $0.35</td></tr>
+    <tr class="total"><td>La Tienda recibe al entregar la carta</td><td>$94.65</td></tr>
+  </table>
+  </div>
+
+  <h2>4. Lo que se compromete a hacer la Tienda</h2>
+  <ul>
+    <li><b>Tener la carta.</b> Solo publica cartas que tiene en su local. Si vende una carta por fuera de MarketZlab, la marca como vendida en MarketZlab ese mismo día.</li>
+    <li><b>Confirmar rápido.</b> Cuando MarketZlab le avisa de una venta, la Tienda confirma por WhatsApp, dentro de las 2 horas siguientes en su horario de atención, que tiene la carta, y acuerda la hora de retiro.</li>
+    <li><b>Tener la carta lista.</b> La carta debe estar lista para retirar dentro de las 48 horas siguientes a la venta, en el estado y con la descripción del anuncio (y en su funda o slab, si así se publicó).</li>
+    <li><b>Publicar con la verdad.</b> Las fotos, la condición, la nota y el certificado del anuncio corresponden a la carta real. Las cartas falsas, réplicas, alteradas o el producto sellado que se abrió o se reselló están prohibidos.</li>
+    <li><b>No cerrar ventas por fuera.</b> La Tienda no contacta al comprador para venderle por fuera de MarketZlab una carta que encontró en MarketZlab.</li>
+  </ul>
+
+  <h2>5. El retiro de la carta</h2>
+  <ul>
+    <li>La persona de MarketZlab se identifica al llegar. La Tienda solo entrega cartas a quien se identifica como parte del equipo de MarketZlab y menciona la carta y el código de la venta.</li>
+    <li>Si la carta no es la del anuncio, está en peor estado que el publicado o no está lista, MarketZlab no la retira y no paga. La venta se cancela, MarketZlab le devuelve el dinero al comprador y cuenta como un incumplimiento (punto 8).</li>
+    <li>El pago se hace por Yappy al número que la Tienda anotó en la solicitud. Si cambia ese número, la Tienda avisa por escrito antes del siguiente retiro.</li>
+  </ul>
+
+  <h2>6. Después del retiro: custodia y distribución</h2>
+  <p>Desde que MarketZlab retira la carta y le paga a la Tienda, la carta es responsabilidad de MarketZlab. Si la carta se pierde, se daña o se la roban mientras la tiene MarketZlab, o si el comprador no la recibe, lo resuelve MarketZlab con el comprador; la Tienda no devuelve el pago por eso.</p>
+
+  <h2>7. Autenticidad</h2>
+  <p>La Tienda garantiza que cada carta que vende es auténtica y es la del anuncio. La revisión de MarketZlab al retirar es una revisión visual y no reemplaza esa garantía. Si se demuestra que una carta vendida por la Tienda es falsa, alterada o no es la del anuncio, la Tienda devuelve a MarketZlab lo que recibió por esa venta, y MarketZlab puede retirar sus anuncios, quitarle el sello de tienda verificada y cerrar la cuenta.</p>
+
+  <h2>8. Incumplimientos</h2>
+  <p>Si la Tienda no confirma, no tiene la carta o no la tiene lista a tiempo, se cancela la venta y se reembolsa al comprador. Cada caso cuenta como un incumplimiento durante 180 días:</p>
+  <ul>
+    <li>1.º: advertencia y anuncios pausados por 3 días.</li>
+    <li>2.º: cuenta suspendida por 14 días.</li>
+    <li>3.º: cuenta cerrada.</li>
+  </ul>
+  <p>Una tienda verificada además paga una penalidad de $5.00 por cada incumplimiento, que se descuenta de su siguiente pago.</p>
+
+  <h2>9. Sello de tienda verificada</h2>
+  <p>MarketZlab da el sello de tienda verificada después de revisar que la tienda existe (visita o fotos del local) y puede quitarlo si la Tienda deja de cumplir este acuerdo, cierra el local o cambia de dueño sin avisar.</p>
+
+  <h2>10. Datos personales</h2>
+  <p>MarketZlab trata los datos de la solicitud según la Ley 81 de 2019 de protección de datos personales, solo para coordinar retiros, pagar a la Tienda y contactarla. No los vende ni los comparte con terceros, salvo cuando la ley lo exija. El responsable de la Tienda puede pedir ver, corregir o borrar sus datos escribiendo a MarketZlab.</p>
+
+  <h2>11. Duración y cambios</h2>
+  <ul>
+    <li>Este acuerdo empieza el día de la firma y no tiene fecha de fin. Cualquiera de las dos partes puede terminarlo avisando por escrito (WhatsApp o correo). Las ventas que ya estaban hechas se completan con estas reglas.</li>
+    <li>El día de distribución, los plazos y la comisión pueden cambiar. MarketZlab avisa a la Tienda por escrito al menos 15 días antes; la comisión que aplica a una venta es la vigente el día de la venta.</li>
+    <li>Este acuerdo se rige por las leyes de la República de Panamá.</li>
+  </ul>
+
+  <!-- ============================================================ signatures -->
+  <div class="check"><i></i><p>La Tienda leyó y acepta estos Términos y condiciones para tiendas, y declara que los datos de la Solicitud de tienda son correctos.</p></div>
+
+  <div class="sign">
+    <div>
+      <h3>Por la Tienda</h3>
+      <div class="field"><label>Nombre del responsable</label><div class="line"></div></div>
+      <div class="field"><label>Cédula</label><div class="line"></div></div>
+      <div class="field"><label>Firma</label><div class="line" style="height:40px"></div></div>
+      <div class="field"><label>Fecha</label><div class="line"></div></div>
+    </div>
+    <div>
+      <h3>Por MarketZlab</h3>
+      <div class="field"><label>Nombre</label><div class="line"></div></div>
+      <div class="field"><label>Cargo</label><div class="line"></div></div>
+      <div class="field"><label>Firma</label><div class="line" style="height:40px"></div></div>
+      <div class="field"><label>Fecha</label><div class="line"></div></div>
+    </div>
+  </div>
+
+  <p class="foot">Se firman dos copias: una para la Tienda y otra para MarketZlab.</p>
+</section>
+
+</main>
+</body>
+</html>
