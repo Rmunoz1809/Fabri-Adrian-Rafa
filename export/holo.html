@@ -858,7 +858,11 @@ label.check input { margin-top: 3px; flex-shrink: 0; }
 .seg.three { grid-template-columns: repeat(3, 1fr); }
 .shop-signup { gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--field); }
 .shop-signup ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.5; }
-.shop-signup input[type=file] { font-size: 13px; }
+.shop-signup input[type=file] { font-size: 13px; max-width: 100%; }
+.shop-photo-pick { display: flex; gap: 14px; align-items: center; }
+.shop-photo-prev { flex-shrink: 0; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: var(--muted); border: 1px dashed var(--border-strong); color: var(--fg-2); }
+.shop-photo-prev img { width: 100%; height: 100%; object-fit: cover; }
+.shop-photo-prev .i { width: 24px; height: 24px; }
 .seg label.on, .tabs button.on { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm); }
 .tabs button.on { background: var(--brand); color: var(--brand-ink); }
 .seg label:has(input:focus-visible), .tabs button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
@@ -3783,7 +3787,8 @@ function viewAuth(app, next, kind = null) {
       $("#kindHint").textContent = kindHint();
       $("#authBtn").textContent = label();
     }));
-    $("[name=shopDoc]")?.addEventListener("change", () => { $("#authMsg").innerHTML = ""; });
+    app.querySelectorAll("[name=shopDoc], [name=shopPhoto]").forEach((el) => el.addEventListener("change", () => { $("#authMsg").innerHTML = ""; }));
+    if ($("#shopBox")) bindShopPhotoPreview($("#shopBox"));
     captcha = mountCaptcha($("#captchaBox"));
     const myCaptcha = captcha;
     $("#authForm").addEventListener("submit", async (e) => {
@@ -3794,9 +3799,10 @@ function viewAuth(app, next, kind = null) {
       // trigger of migration 0031 saves them as the seller account (before 0031 they wait there).
       let sellerMeta = null, shopDoc = null;
       const shopName = String(fd.get("displayName") ?? "").trim();
+      let shopPhoto = null;
       if (signup && acct === "shop") {
-        shopDoc = fd.get("shopDoc");
-        const bad = shopDocProblem(shopDoc);
+        shopDoc = fd.get("shopDoc"); shopPhoto = fd.get("shopPhoto");
+        const bad = shopPhotoProblem(shopPhoto) || shopDocProblem(shopDoc);
         if (bad) { msg.innerHTML = `<p class="notice bad">${esc(bad)}</p>`; return; }
         sellerMeta = { account_type: "shop", shop_name: shopName };
       }
@@ -3829,11 +3835,15 @@ function viewAuth(app, next, kind = null) {
       if (signup) track("registro");
       if (signup && !res.data.session) {
         // No session until the e-mail is confirmed: the agreement waits in this browser (finishPendingShopDoc).
-        if (shopDoc) await stashShopDoc(email, shopName, shopDoc);
+        if (shopDoc) await stashShopDoc(email, shopName, shopDoc, shopPhoto);
         msg.innerHTML = `<p class="notice good">Te enviamos un correo para confirmar tu cuenta.${shopDoc ? " Cuando la confirmes, entra con tu correo y contraseña en este mismo navegador: ahí enviamos tu acuerdo y tu tienda queda en revisión." : sellerMeta ? " Cuando la confirmes, entra y publica tu primera carta." : ""}</p>`;
         return;
       }
       if (shopDoc) {
+        try { await sendShopPhoto(res.data.session.user.id, shopPhoto); } catch (err) {
+          console.error(err);
+          toast("No pudimos subir la foto de la tienda", { type: "error", description: "Súbela desde Mi cuenta ▸ Perfil." });
+        }
         try {
           await sendShopDocument(res.data.session.user.id, shopName, shopDoc);
           toast("Cuenta de tienda creada", { description: "Recibimos tu acuerdo. Tu tienda está en revisión." });
@@ -7217,12 +7227,37 @@ const isShopSignup = (s = session) => s?.user?.user_metadata?.account_type === "
 const shopDocProblem = (f) => !f || !f.size ? "Sube el acuerdo para tiendas firmado (PDF o foto)."
   : !/^(application\/pdf|image\/(jpeg|png|webp))$/.test(f.type) ? "El acuerdo tiene que ser un PDF o una foto (JPG, PNG o WebP)."
   : f.size > SHOP_DOC_MAX ? "El archivo pesa más de 10 MB. Escanéalo de nuevo o súbelo como foto." : null;
-/** The download link, the 3 steps and the file input (sign-up and Mi cuenta). */
-function shopSignupFields(disabled = false) {
-  return `<p style="margin:0;font-weight:600">Acuerdo para tiendas</p>
+// The shop's photo (logo or storefront) becomes its profile photo: it shows on its page, next to the cards it sells.
+const shopPhotoProblem = (f, required = true) => !f || !f.size ? (required ? "Sube una foto de tu tienda: el logo o la fachada." : null)
+  : !/^image\/(jpeg|png|webp)$/.test(f.type) ? "La foto de la tienda tiene que ser JPG, PNG o WebP." : f.size > 20 * 1024 * 1024 ? "La foto pesa demasiado (máximo 20 MB)." : null;
+async function sendShopPhoto(uid, file) {
+  const f = await compressImage(file), ext = { "image/png": "png", "image/webp": "webp" }[f.type] ?? "jpg";
+  const path = `${uid}/avatar-${Date.now()}.${ext}`;
+  const up = await sb.storage.from("profile-photos").upload(path, f, { contentType: f.type || "image/jpeg", cacheControl: "31536000", upsert: false });
+  if (up.error) throw up.error;
+  const { error } = await sb.from("profiles").update({ avatar_path: path }).eq("id", uid);
+  if (error) { sb.storage.from("profile-photos").remove([path]); throw error; }
+}
+/** Shows the chosen shop photo in its circle. */
+function bindShopPhotoPreview(root) {
+  const input = root.querySelector("[name=shopPhoto]"), prev = root.querySelector(".shop-photo-prev");
+  input?.addEventListener("change", () => {
+    const f = input.files[0];
+    prev.innerHTML = f && f.type.startsWith("image/") ? `<img src="${URL.createObjectURL(f)}" alt="">` : ic("store");
+  });
+}
+/** The shop photo, the download link, the 3 steps and the agreement input (sign-up and Mi cuenta). */
+function shopSignupFields(disabled = false, { photo = true, photoRequired = true } = {}) {
+  const off = disabled ? " disabled" : "";
+  return `${photo ? `<p style="margin:0;font-weight:600">Foto de la tienda${photoRequired ? "" : ` <span class="muted" style="font-weight:400">(opcional)</span>`}</p>
+    <label class="shop-photo-pick"><span class="shop-photo-prev" aria-hidden="true">${ic("store")}</span>
+      <span class="col" style="gap:6px;min-width:0"><span class="small">Sube el logo o una foto de la fachada.</span>
+        <span class="xs muted">Es la foto de perfil de tu tienda: sale en tu página, junto a las cartas que vendes.</span>
+        <input type="file" name="shopPhoto" accept="image/jpeg,image/png,image/webp"${off}></span></label>` : ""}
+    <p style="margin:0;font-weight:600">Acuerdo para tiendas</p>
     <ol><li><a class="link" href="${esc(SHOP_AGREEMENT.PDF)}" target="_blank" rel="noopener">Descarga el acuerdo (PDF)</a>.</li>
       <li>Llénalo con los datos de tu tienda y fírmalo.</li><li>Súbelo aquí en PDF.</li></ol>
-    <label class="f">Acuerdo firmado<input type="file" name="shopDoc" accept="application/pdf,image/jpeg,image/png,image/webp"${disabled ? " disabled" : ""}></label>
+    <label class="f">Acuerdo firmado<input type="file" name="shopDoc" accept="application/pdf,image/jpeg,image/png,image/webp"${off}></label>
     <p class="xs muted" style="margin:0">Máximo 10 MB. Si lo firmaste en papel, escanea todas las páginas en un solo PDF con el celular (Notas en iPhone o Google Drive en Android). Tu cuenta queda en revisión hasta que lo aprobamos.</p>`;
 }
 async function sendShopDocument(uid, shopName, file) {
@@ -7248,8 +7283,8 @@ function pendingStore(mode, op) {
     };
   });
 }
-const stashShopDoc = (email, shopName, file) =>
-  pendingStore("readwrite", (st) => st.put({ email, shopName, file }, "shopDoc")).catch((e) => console.warn("shop agreement not kept", e));
+const stashShopDoc = (email, shopName, file, photo = null) =>
+  pendingStore("readwrite", (st) => st.put({ email, shopName, file, photo }, "shopDoc")).catch((e) => console.warn("shop agreement not kept", e));
 let shopDocBusy = false;
 async function finishPendingShopDoc() {
   if (!sb || !session || shopDocBusy || typeof indexedDB === "undefined") return;
@@ -7258,6 +7293,13 @@ async function finishPendingShopDoc() {
   if (!p?.file || p.email !== (session.user.email ?? "").toLowerCase()) return;
   shopDocBusy = true;
   const drop = () => pendingStore("readwrite", (st) => st.delete("shopDoc")).catch(() => undefined);
+  if (p.photo) {
+    try {
+      await sendShopPhoto(session.user.id, p.photo);
+      p.photo = null;
+      await pendingStore("readwrite", (st) => st.put(p, "shopDoc")).catch(() => undefined); // the photo is done even if the agreement fails
+    } catch (e) { console.warn("pending shop photo", e); }
+  }
   try {
     await sendShopDocument(session.user.id, p.shopName, p.file);
     await drop();
@@ -7319,19 +7361,21 @@ async function renderShopRequest(uid, prof, box, open = false) {
     shell(`${rejected}${shopSignup && !last ? `<p class="notice warn" style="margin:0">Falta el acuerdo firmado: tu tienda queda en revisión cuando lo recibamos.</p>` : ""}
       <form class="col shop-upload" style="gap:14px" novalidate>
         <label class="f">Nombre de la tienda<input class="input" name="shopName" maxlength="80" value="${esc(name ?? "")}"></label>
-        <div class="col shop-signup">${shopSignupFields()}</div>
+        <div class="col shop-signup">${shopSignupFields(false, { photoRequired: !prof.avatar_path })}</div>
         <div class="shop-msg" aria-live="polite"></div>
         <div class="share-row" style="margin-top:0"><button class="btn primary">Enviar el acuerdo</button>${shopSignup && !last ? "" : `<button type="button" class="btn outline" data-cancel>Cancelar</button>`}</div>
       </form>`);
     const form = box.querySelector("form"), msg = box.querySelector(".shop-msg"), btn = form.querySelector(".btn.primary");
     form.querySelector("[data-cancel]")?.addEventListener("click", () => renderShopRequest(uid, prof, box));
+    bindShopPhotoPreview(form);
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const shopName = form.shopName.value.trim(), file = form.shopDoc.files[0];
-      const bad = shopName.length < 2 ? "Escribe el nombre de la tienda." : shopDocProblem(file);
+      const shopName = form.shopName.value.trim(), file = form.shopDoc.files[0], photo = form.shopPhoto.files[0];
+      const bad = shopName.length < 2 ? "Escribe el nombre de la tienda." : shopPhotoProblem(photo, !prof.avatar_path) || shopDocProblem(file);
       if (bad) { msg.innerHTML = `<p class="notice bad" style="margin:0">${esc(bad)}</p>`; return; }
       btn.disabled = true; btn.textContent = "Enviando…"; msg.innerHTML = "";
       try {
+        if (photo) await sendShopPhoto(uid, photo);
         await sendShopDocument(uid, shopName, file);
         pendingStore("readwrite", (st) => st.delete("shopDoc")).catch(() => undefined);
         toast("Recibimos tu acuerdo", { description: "Tu tienda está en revisión. Te avisamos cuando la aprobemos." });
