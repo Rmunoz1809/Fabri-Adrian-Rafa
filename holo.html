@@ -603,6 +603,52 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .legal-page mark.todo { background: var(--warn-bg); color: inherit; padding: 0 4px; border-radius: 4px; }
 .legal-toc ol { columns: 2; column-gap: 24px; font-size: 14px; padding-left: 18px; margin-top: 16px; }
 @media (max-width: 640px) { .legal-toc ol { columns: 1; } }
+/* Shop agreement (0036): the terms box in the sign-up form, the signature pad and the signed copy (a white sheet that prints alone). */
+.shop-terms { max-height: 340px; overflow: auto; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--field); font-size: 13.5px; line-height: 1.55; }
+.shop-terms h3, .doc-terms h3 { font-size: 14.5px; margin: 16px 0 6px; }
+.shop-terms p, .doc-terms p { margin: 0 0 8px; }
+.shop-terms ul, .shop-terms ol, .doc-terms ul, .doc-terms ol { margin: 0 0 8px; padding-left: 20px; }
+.shop-terms li, .doc-terms li { margin-bottom: 4px; }
+.terms-version { color: var(--fg-2); }
+.terms-who { display: inline-block; padding: 0 7px; border-radius: 999px; background: var(--muted); color: var(--fg-2); font-size: 11px; font-weight: 600; }
+.terms-sum { padding: 10px 12px; border-radius: var(--radius-md); background: var(--muted); }
+.terms-fee { width: 100%; border-collapse: collapse; margin: 4px 0 8px; font-size: 13px; }
+.terms-fee th, .terms-fee td { padding: 5px 0; border-bottom: 1px solid var(--border); text-align: right; }
+.terms-fee th:first-child, .terms-fee td:first-child { text-align: left; }
+.sig-pad { display: block; width: 100%; max-width: 600px; aspect-ratio: 3 / 1; touch-action: none; background: #fff; border: 2px dashed var(--border-strong); border-radius: var(--radius-md); cursor: crosshair; }
+.sig-pad.signed { border-style: solid; }
+.shop-form .grid2 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.sig-thumb { display: block; width: 100%; max-width: 260px; margin-top: 8px; background: #fff; border-radius: var(--radius-sm); }
+.doc-bar { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin: 24px auto 8px; max-width: 820px; }
+.doc-sheet { max-width: 820px; margin: 0 auto 48px; padding: 40px 44px; background: #fff; color: #0b1222; border-radius: var(--radius-xl); font-size: 14px; line-height: 1.55; }
+.doc-sheet h1, .doc-sheet h2, .doc-sheet h3, .doc-sheet b, .doc-sheet a { color: #0b1222; }
+.doc-sheet h1 { font-size: 28px; margin: 14px 0 4px; letter-spacing: -.02em; }
+.doc-sheet h2 { font-size: 17px; margin: 28px 0 10px; padding-top: 14px; border-top: 1px solid #e3e8f2; }
+.doc-sheet .terms-version, .doc-sheet .doc-k, .doc-sheet .doc-muted, .doc-data dt { color: #525e78; }
+.doc-sheet .terms-who, .doc-sheet .terms-sum { background: #eef1f7; color: #0b1222; }
+.doc-sheet .terms-fee th, .doc-sheet .terms-fee td { border-color: #e3e8f2; }
+.doc-brand { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.03em; } .doc-brand span { color: #525e78; }
+.doc-state { margin: 0; font-weight: 600; }
+.doc-warn { margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; background: #fff4d6; }
+.doc-data { display: grid; grid-template-columns: 210px 1fr; gap: 6px 16px; margin: 0; }
+.doc-data dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.doc-small { font-size: 12.5px; } .doc-small dd { font-weight: 500; }
+.doc-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+.doc-signs { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.doc-signs p { margin: 0 0 6px; }
+.doc-k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.doc-signs img { display: block; width: 100%; max-width: 300px; border-bottom: 1.5px solid #0b1222; margin-bottom: 8px; }
+.doc-stamp { display: inline-block; padding: 2px 8px; border: 2px solid #0b1222; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 640px) { .doc-sheet { padding: 24px 18px; } .doc-data, .doc-signs { grid-template-columns: 1fr; } .doc-data dd { margin-bottom: 6px; } }
+@media print {
+  body:has(.doc-sheet) { background: #fff !important; }
+  body:has(.doc-sheet) > :not(#app), #app:has(.doc-sheet) .doc-bar { display: none !important; }
+  #app:has(.doc-sheet) .wrap { padding: 0 !important; max-width: none !important; }
+  .doc-sheet { max-width: none; margin: 0; padding: 0; border-radius: 0; font-size: 11.5px; }
+  .doc-sheet h2, .doc-sheet h3 { break-after: avoid; }
+  .doc-signs, .doc-data, .terms-fee, .terms-flow li { break-inside: avoid; }
+  .doc-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 section[id^="legal-"] { scroll-margin-top: calc(var(--header-h) + 16px); } /* the sticky header must not cover the jumped-to title */
 label.accept { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
 label.accept input { margin-top: 3px; flex-shrink: 0; width: 16px; height: 16px; }
@@ -2154,7 +2200,7 @@ async function route() {
   const app = $("#app");
   // Anyone can browse (so shared links open the card). Only the account and staff pages
   // need a session; /vender and the contact buttons ask for it themselves.
-  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/consultas" || path === "/portafolio" || path.startsWith("/portafolio/"));
+  const needsLogin = !!sb && !session && (path === "/cuenta" || path === "/admin" || path === "/consultas" || path === "/portafolio" || path.startsWith("/portafolio/") || path === "/acuerdo-tienda" || path.startsWith("/acuerdo-tienda/"));
   const gated = needsLogin || (!!sb && !session && path === "/entrar");
   document.body.classList.toggle("gate", gated);
   app.classList.remove("view-in");
@@ -2184,6 +2230,7 @@ async function route() {
     if (path === "/consultas") { app.innerHTML = `<div class="wrap"></div>`; return await viewInquiries(app.firstElementChild); }
     if (path === "/portafolio") { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolio(app.firstElementChild); }
     if (path.startsWith("/portafolio/")) { app.innerHTML = `<div class="wrap"></div>`; return await viewPortfolioItem(app.firstElementChild, safeDecode(path.slice(12))); }
+    if (path === "/acuerdo-tienda" || path.startsWith("/acuerdo-tienda/")) return await viewShopAgreement(app, safeDecode(path.slice(16)) || null);
     // Account and staff pages render into a padded column.
     if (path === "/cuenta" || path === "/admin") {
       app.innerHTML = `<div class="wrap"></div>`;
@@ -6974,41 +7021,281 @@ async function toggleInterestBtn(b, marked, ownerName, next) {
 }
 
 // ============================================================= account
-// Shop verification request (reviewed by staff in #/admin?tab=tiendas).
-// The form stays hidden until the user says they have a shop.
-async function renderShopRequest(uid, open = false) {
-  const box = $("#shopReqBody");
-  if (!box) return;
-  const { data: reqs, error } = await sb.from("shop_requests").select("status, shop_name, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1);
-  if (error) { box.innerHTML = `<p class="xs muted">Muy pronto podrás pedir la verificación desde aquí.</p>`; return; }
-  const last = reqs?.[0];
-  if (last?.status === "pending") {
-    box.innerHTML = `<p class="notice soft" style="margin:0">Recibimos tu solicitud para <b style="color:var(--ink)">${esc(last.shop_name)}</b>. La revisamos en 1 a 2 días y te avisamos.</p>`;
-    return;
-  }
-  const rejected = last?.status === "rejected" ? `<p class="notice warn" style="margin:0 0 12px">No pudimos verificar tu solicitud anterior. Revisa los datos y vuelve a enviarla.</p>` : "";
-  if (!open) {
-    box.innerHTML = `${rejected}<button type="button" class="btn block" id="srOpen">Sí, tengo una tienda</button>`;
-    $("#srOpen").addEventListener("click", () => { renderShopRequest(uid, true); });
-    return;
-  }
-  box.innerHTML = `${rejected}
-    <div class="col" style="gap:10px">
-      <label class="f">Nombre de la tienda<input class="input" id="srName" maxlength="80" required></label>
-      <label class="f">Instagram o WhatsApp de la tienda<input class="input" id="srContact" maxlength="120" placeholder="@mitienda o 6XXX-XXXX"></label>
-      <p class="xs muted" style="margin:-4px 0 0">Solo lo usamos para verificar la tienda. <a class="link" href="#/privacidad">Privacidad</a></p>
-      <label class="f">¿Dónde queda?<input class="input" id="srLoc" maxlength="120" placeholder="Centro comercial, local, ciudad"></label>
-      <div id="srMsg"></div>
-      <button type="button" class="btn block" id="srSend">Pedir verificación de tienda</button></div>`;
-  $("#srName").focus();
-  $("#srSend").addEventListener("click", async (e) => {
-    const name = $("#srName").value.trim(), msg = $("#srMsg");
-    if (name.length < 2) { msg.innerHTML = `<p class="notice bad" style="margin:0">Escribe el nombre de la tienda.</p>`; return; }
-    e.target.disabled = true;
-    const { error } = await sb.from("shop_requests").insert({ user_id: uid, shop_name: name, contact: $("#srContact").value.trim() || null, location: $("#srLoc").value.trim() || null });
-    if (error) { e.target.disabled = false; console.error(error); msg.innerHTML = `<p class="notice bad" style="margin:0">No pudimos enviar la solicitud. Intenta de nuevo.</p>`; return; }
-    renderShopRequest(uid);
+// ============================================================= shop agreement (migration 0036)
+// A shop signs up from Mi cuenta: the same data as the paper form (docs/material/tiendas-acuerdo.pdf),
+// the Términos y condiciones para tiendas and a signature drawn on screen. Staff approve it in
+// #/admin?tab=tiendas, which is MarketZlab's signature, and both can download the signed copy
+// (#/acuerdo-tienda/<id>, "Descargar PDF" prints it). Until 0036 runs, the form sends the old short
+// request (0005) without the signature and staff approve it the old way.
+const SHOP_AGREEMENT = {
+  VERSION: "tiendas-2026-10-20", // new version of the terms below (and of the PDF) = new value here
+  LABEL: "Versión 1 · octubre de 2026",
+  PDF: "https://rmunoz1809.github.io/Fabri-Adrian-Rafa/docs/material/tiendas-acuerdo.pdf",
+  MONTHS: 6, // 5% the first 6 months from the signing date, then 8% (decisions, 2026-10-20)
+};
+const shopReqMissing = (e) => ["PGRST202", "42883", "PGRST204", "42703"].includes(e?.code);
+const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
+const longDate = (d) => new Date(d).toLocaleDateString("es-PA", { timeZone: "America/Panama", day: "numeric", month: "long", year: "numeric" });
+const longDateTime = (d) => new Date(d).toLocaleString("es-PA", { timeZone: "America/Panama", day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
+/** '@mitienda', 'instagram.com/MiTienda/' -> 'mitienda' (same rule as ig_handle() in 0036). */
+const igHandle = (s) => { const h = String(s ?? "").trim().toLowerCase().replace(/^(https?:\/\/)?(www\.)?(instagram\.com\/)?@?/, "").replace(/[/?#].*$/, ""); return /^[a-z0-9._]{1,30}$/.test(h) ? h : null; };
+
+/** The store terms: the same text as the PDF. Used in the sign-up form and in the signed copy. */
+function shopTermsHtml() {
+  const app = esc(CONFIG.APP_NAME);
+  const steps = [
+    ["El comprador compra la carta en " + app + ".", "Comprador", "Elige la carta publicada por la Tienda y la compra."],
+    ["El comprador paga con Yappy.", "Comprador", `Paga el precio de la carta más el envío. El dinero llega a la cuenta de ${app}.`],
+    ["Quitamos la carta como disponible.", app, `La carta deja de estar a la venta en ${app} para que nadie más la compre. Le avisamos a la Tienda por WhatsApp.`],
+    ["Retenemos el dinero del comprador.", app, `${app} guarda el pago del comprador hasta retirar la carta. <b>Es el dinero del comprador, no el de la Tienda: a la Tienda nunca le retenemos dinero.</b>`],
+    ["Vamos a la Tienda y buscamos la carta personalmente.", app, `Una persona del equipo de ${app} va al local, en el horario de la Tienda, revisa que la carta sea la del anuncio y esté en el estado publicado, y le toma fotos del frente y del reverso.`],
+    ["Le pagamos a la Tienda en ese momento.", app, `Al recibir la carta, ${app} le paga a la Tienda por Yappy el precio de venta menos la comisión (punto 3). La Tienda no espera a que la carta le llegue al comprador.`],
+    ["Guardamos la carta hasta el día de distribución.", app, `Desde que la retiramos, la carta queda bajo el cuidado y la responsabilidad de ${app}.`],
+    ["Distribuimos las cartas un solo día a la semana.", app, `${app} reparte todas las cartas vendidas en un día fijo de la semana, que informa al comprador. El orden y la ruta dependen del destino y de la cantidad de cartas.`],
+    ["Al comprador le llega la carta.", "Comprador", "Con eso termina la venta."],
+  ];
+  return `<p class="terms-version">${esc(SHOP_AGREEMENT.LABEL)}. Este acuerdo es entre ${app} y la tienda que lo firma (“la Tienda”). Complementa los <a class="link" href="#/terminos">Términos y condiciones</a> generales de ${app}, que la Tienda acepta al crear su cuenta.</p>
+    <h3>1. Qué hace ${app}</h3>
+    <p>${app} es una página para comprar y vender cartas coleccionables (Pokémon, NBA y NFL) en Panamá. La Tienda publica sus cartas en ${app}. Cuando alguien compra una, ${app} cobra al comprador, retira la carta en la Tienda, le paga a la Tienda y le lleva la carta al comprador.</p>
+    <h3>2. Cómo funciona una venta, paso a paso</h3>
+    <ol class="terms-flow">${steps.map(([t, who, d]) => `<li><b>${t}</b> <span class="terms-who">${who}</span><br>${d}</li>`).join("")}</ol>
+    <p class="terms-sum"><b>En resumen:</b> el comprador le paga a ${app}, ${app} guarda ese dinero, retira la carta en la Tienda y le paga a la Tienda en el mismo momento del retiro.</p>
+    <h3>3. Comisión</h3>
+    <p>Publicar es gratis. Solo cuando una carta se vende, ${app} cobra a la Tienda una comisión sobre el precio de venta, más el <b>7% de ITBMS sobre esa comisión</b>, sin mínimo ni máximo:</p>
+    <ul><li><b>5% durante los primeros ${SHOP_AGREEMENT.MONTHS} meses</b>, contados desde la fecha de firma de este acuerdo.</li><li><b>8% a partir del mes ${SHOP_AGREEMENT.MONTHS + 1}</b>.</li></ul>
+    <p>La comisión que aplica a cada venta es la del día en que el comprador paga. Se descuenta del pago del paso 6. El comprador paga el precio publicado y el envío; la Tienda no paga el envío.</p>
+    <table class="terms-fee"><thead><tr><th>Ejemplo: carta vendida en $100.00</th><th>Primeros ${SHOP_AGREEMENT.MONTHS} meses</th><th>Desde el mes ${SHOP_AGREEMENT.MONTHS + 1}</th></tr></thead>
+      <tbody><tr><td>Comisión de ${app}</td><td>5% · − $5.00</td><td>8% · − $8.00</td></tr><tr><td>ITBMS sobre la comisión (7%)</td><td>− $0.35</td><td>− $0.56</td></tr>
+      <tr><td><b>La Tienda recibe al entregar la carta</b></td><td><b>$94.65</b></td><td><b>$91.44</b></td></tr></tbody></table>
+    <h3>4. Lo que se compromete a hacer la Tienda</h3>
+    <ul><li><b>Tener la carta.</b> Solo publica cartas que tiene en su local. Si vende una carta por fuera de ${app}, la marca como vendida en ${app} ese mismo día.</li>
+      <li><b>Confirmar rápido.</b> Cuando ${app} le avisa de una venta, la Tienda confirma por WhatsApp, dentro de las 2 horas siguientes en su horario de atención, que tiene la carta, y acuerda la hora de retiro.</li>
+      <li><b>Tener la carta lista.</b> La carta debe estar lista para retirar dentro de las 48 horas siguientes a la venta, en el estado y con la descripción del anuncio (y en su funda o slab, si así se publicó).</li>
+      <li><b>Publicar con la verdad.</b> Las fotos, la condición, la nota y el certificado del anuncio corresponden a la carta real. Las cartas falsas, réplicas, alteradas o el producto sellado que se abrió o se reselló están prohibidos.</li>
+      <li><b>No cerrar ventas por fuera.</b> La Tienda no contacta al comprador para venderle por fuera de ${app} una carta que encontró en ${app}.</li></ul>
+    <h3>5. El retiro de la carta</h3>
+    <ul><li>La persona de ${app} se identifica al llegar. La Tienda solo entrega cartas a quien se identifica como parte del equipo de ${app} y menciona la carta y el código de la venta.</li>
+      <li>Si la carta no es la del anuncio, está en peor estado que el publicado o no está lista, ${app} no la retira y no paga. La venta se cancela, ${app} le devuelve el dinero al comprador y cuenta como un incumplimiento (punto 8).</li>
+      <li>El pago se hace por Yappy al número que la Tienda anotó en la solicitud. Si cambia ese número, la Tienda avisa por escrito antes del siguiente retiro.</li></ul>
+    <h3>6. Después del retiro: custodia y distribución</h3>
+    <p>Desde que ${app} retira la carta y le paga a la Tienda, la carta es responsabilidad de ${app}. Si la carta se pierde, se daña o se la roban mientras la tiene ${app}, o si el comprador no la recibe, lo resuelve ${app} con el comprador; la Tienda no devuelve el pago por eso.</p>
+    <h3>7. Autenticidad</h3>
+    <p>La Tienda garantiza que cada carta que vende es auténtica y es la del anuncio. La revisión de ${app} al retirar es una revisión visual y no reemplaza esa garantía. Si se demuestra que una carta vendida por la Tienda es falsa, alterada o no es la del anuncio, la Tienda devuelve a ${app} lo que recibió por esa venta, y ${app} puede retirar sus anuncios, quitarle el sello de tienda verificada y cerrar la cuenta.</p>
+    <h3>8. Incumplimientos</h3>
+    <p>Si la Tienda no confirma, no tiene la carta o no la tiene lista a tiempo, se cancela la venta y se reembolsa al comprador. Cada caso cuenta como un incumplimiento durante 180 días:</p>
+    <ul><li>1.º: advertencia y anuncios pausados por 3 días.</li><li>2.º: cuenta suspendida por 14 días.</li><li>3.º: cuenta cerrada.</li></ul>
+    <p>Una tienda verificada además paga una penalidad de $5.00 por cada incumplimiento, que se descuenta de su siguiente pago.</p>
+    <h3>9. Sello de tienda verificada</h3>
+    <p>${app} da el sello de tienda verificada después de revisar que la tienda existe (visita o fotos del local) y puede quitarlo si la Tienda deja de cumplir este acuerdo, cierra el local o cambia de dueño sin avisar.</p>
+    <h3>10. Datos personales</h3>
+    <p>${app} trata los datos de la solicitud según la Ley 81 de 2019 de protección de datos personales, solo para coordinar retiros, pagar a la Tienda y contactarla. No los vende ni los comparte con terceros, salvo cuando la ley lo exija. El responsable de la Tienda puede pedir ver, corregir o borrar sus datos escribiendo a ${app}.</p>
+    <h3>11. Duración y cambios</h3>
+    <ul><li>Este acuerdo empieza el día de la firma y no tiene fecha de fin. Cualquiera de las dos partes puede terminarlo avisando por escrito (WhatsApp o correo). Las ventas que ya estaban hechas se completan con estas reglas.</li>
+      <li>El día de distribución y los plazos pueden cambiar; ${app} avisa a la Tienda por escrito al menos 15 días antes. El paso de la comisión del 5% al 8% (punto 3) ya está acordado aquí; cualquier otro cambio de comisión también se avisa con 15 días.</li>
+      <li>Este acuerdo se rige por las leyes de la República de Panamá.</li></ul>
+    <h3>12. Firma electrónica</h3>
+    <p>La Tienda puede firmar este acuerdo en papel o electrónicamente en ${app} (Mi cuenta ▸ ¿Tienes una tienda?). Las dos formas valen igual: las partes aceptan la firma electrónica como válida (Ley 51 de 2008). En la firma electrónica, ${app} guarda la firma con la fecha y la hora, la versión del acuerdo y una huella digital del documento, firma al aprobar la solicitud, y las dos partes pueden descargar la copia firmada.</p>`;
+}
+
+/** A box to sign with a finger or the mouse. The PNG is always 900×300 on white, whatever the screen. */
+function signaturePad(canvas) {
+  const W = 900, H = 300, ctx = canvas.getContext("2d");
+  canvas.width = W; canvas.height = H;
+  let last = null, ink = 0;
+  const at = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+  const clear = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H); ink = 0; canvas.classList.remove("signed"); };
+  canvas.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    last = at(e);
+    ctx.fillStyle = "#0b1222"; ctx.beginPath(); ctx.arc(last[0], last[1], 2.4, 0, Math.PI * 2); ctx.fill();
   });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!last) return;
+    const p = at(e);
+    ctx.strokeStyle = "#0b1222"; ctx.lineWidth = 4.5; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+    ink += Math.hypot(p[0] - last[0], p[1] - last[1]);
+    last = p;
+    canvas.classList.add("signed");
+  });
+  const end = () => { last = null; };
+  canvas.addEventListener("pointerup", end);
+  canvas.addEventListener("pointercancel", end);
+  clear();
+  return { clear, empty: () => ink < 80, png: () => canvas.toDataURL("image/png") };
+}
+
+const SHOP_REQ_ERR = [
+  [/already pending/, "Ya tienes una solicitud en revisión."], [/shop name/, "Escribe el nombre de la tienda."],
+  [/owner name/, "Escribe el nombre completo del responsable."], [/cedula/, "Escribe la cédula con guiones, por ejemplo 8-123-4567."],
+  [/address/, "Escribe la dirección completa del local."], [/phone/, "Escribe un teléfono de Panamá, por ejemplo 6123-4567."],
+  [/instagram/, "Escribe el Instagram de la tienda, por ejemplo @mitienda."], [/yappy/, "El Yappy tiene que ser un celular de Panamá (empieza con 6)."],
+  [/hours/, "Escribe el horario en que podemos retirar las cartas."], [/signature/, "La firma no se guardó bien. Bórrala y firma de nuevo."],
+];
+
+// Mi cuenta: the shop sign-up (or, for a shop, its agreement). #/cuenta?tienda=1 opens the form.
+async function renderShopRequest(uid, prof, box, open = false) {
+  if (!box || !sb) return;
+  const shell = (inner) => { box.innerHTML = `<section class="panel col" id="shopReq"><h2>${prof.is_shop ? "Acuerdo para tiendas" : "¿Tienes una tienda?"}</h2>${inner}</section>`; };
+  shell(`<p class="xs muted" style="margin:0"><span class="spinner"></span></p>`);
+  const { data: reqs, error } = await sb.from("shop_requests").select("*").eq("user_id", uid).order("created_at", { ascending: false }).limit(10);
+  if (!box.isConnected) return;
+  if (error) { console.error(error); shell(`<p class="xs muted" style="margin:0">Muy pronto podrás pedir la verificación desde aquí.</p>`); return; }
+  const last = reqs[0], signed = reqs.find((r) => r.status === "approved" && r.signature_png);
+  const pdf = `<a class="link" href="${esc(SHOP_AGREEMENT.PDF)}" target="_blank" rel="noopener">descargar el acuerdo en PDF</a>`;
+
+  if (last?.status === "pending") {
+    shell(`<p class="notice soft" style="margin:0">Recibimos la solicitud de <b style="color:var(--ink)">${esc(last.shop_name)}</b> el ${longDate(last.created_at)}. La revisamos en 1 a 2 días y te avisamos.</p>
+      ${last.signature_png ? `<a class="btn outline block" href="#/acuerdo-tienda/${last.id}">Ver lo que firmaste</a>` : ""}`);
+    return;
+  }
+  if (signed) {
+    const until = addMonths(signed.signed_at, SHOP_AGREEMENT.MONTHS);
+    shell(`<p class="notice good" style="margin:0">${ic("check")} Firmaste el acuerdo el ${longDate(signed.signed_at)} y ${esc(CONFIG.APP_NAME)} lo aprobó el ${longDate(signed.reviewed_at)}.</p>
+      <p class="small muted" style="margin:0">Tu comisión: <b style="color:var(--ink)">5% + ITBMS</b> hasta el ${longDate(until)}; desde el día siguiente, <b style="color:var(--ink)">8% + ITBMS</b>.</p>
+      <a class="btn outline block" href="#/acuerdo-tienda/${signed.id}">Ver y descargar la copia firmada</a>`);
+    return;
+  }
+  const rejected = last?.status === "rejected"
+    ? `<p class="notice warn" style="margin:0">No pudimos aprobar tu solicitud anterior${last.review_note ? `: ${esc(last.review_note.replace(/([^.!?])$/, "$1."))}` : "."} Revisa los datos y vuelve a enviarla.</p>` : "";
+  if (!open) {
+    shell(`${rejected}<p class="small muted" style="margin:0">${prof.is_shop
+      ? "Firma el acuerdo para tiendas: explica cómo funciona cada venta, la comisión y cuándo te pagamos."
+      : "Las tiendas verificadas llevan el sello “Tienda verificada”, tienen su página con la foto del local y cobran apenas retiramos la carta vendida. Llena la solicitud y firma el acuerdo para tiendas aquí mismo."}
+      Si quieres leerlo antes, puedes ${pdf}.</p>
+      <button type="button" class="btn block" id="srOpen">Llenar y firmar la solicitud</button>`);
+    $("#srOpen").addEventListener("click", () => renderShopRequest(uid, prof, box, true));
+    return;
+  }
+
+  const acc = await loadSellerAccount().catch(() => null);
+  if (!box.isConnected) return;
+  const val = (s) => esc(s ?? "");
+  shell(`${rejected}
+    <p class="small muted" style="margin:0">Son los mismos datos del acuerdo en papel (puedes ${pdf}). La cédula, el teléfono y el Yappy solo los ve el equipo de ${esc(CONFIG.APP_NAME)}.</p>
+    <form class="col shop-form" style="gap:14px" novalidate>
+      <label class="f">Nombre de la tienda<input class="input" name="shopName" maxlength="80" value="${prof.is_shop ? val(prof.display_name) : ""}"></label>
+      <div class="grid2"><label class="f">Nombre del responsable<input class="input" name="ownerName" maxlength="80" autocomplete="name"></label>
+        <label class="f">Cédula del responsable<input class="input" name="ownerDoc" maxlength="20" placeholder="8-123-4567" autocapitalize="characters"></label></div>
+      <label class="f">Dirección del local<textarea class="textarea" name="address" rows="2" maxlength="240" placeholder="Calle, edificio o local, barrio y distrito">${val(prof.shop_address)}</textarea><span class="xs muted" style="font-weight:400">Aquí retiramos las cartas que vendas.</span></label>
+      <label class="f">Provincia<select class="select" name="province"><option value="">Elige</option>${PROVINCES.map((v) => `<option ${prof.shop_province === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
+      <div class="grid2"><label class="f">Teléfono / WhatsApp<input class="input" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="6123-4567" value="${acc?.phone ? val(fmtPhone(acc.phone)) : ""}"></label>
+        <label class="f">Instagram de la tienda<input class="input" name="instagram" maxlength="120" placeholder="@mitienda" autocapitalize="off" spellcheck="false"></label></div>
+      <div class="grid2"><label class="f">Yappy para recibir pagos<input class="input" name="yappy" type="tel" inputmode="tel" placeholder="El mismo teléfono"><span class="xs muted" style="font-weight:400">Déjalo vacío si es el mismo número.</span></label>
+        <label class="f">Horario para retirar cartas<input class="input" name="hours" maxlength="200" placeholder="Lun a sáb, 10 a. m. a 7 p. m." value="${val(prof.shop_hours)}"></label></div>
+      <div class="col" style="gap:8px"><h3 style="margin:6px 0 0;font-size:16px">Términos y condiciones para tiendas</h3>
+        <div class="shop-terms" tabindex="0" aria-label="Términos y condiciones para tiendas">${shopTermsHtml()}</div></div>
+      <label class="check"><input type="checkbox" name="accept"><span>Leí y acepto los Términos y condiciones para tiendas, y los datos de esta solicitud son correctos.</span></label>
+      <div class="col" style="gap:6px"><span style="font-size:14px;font-weight:500">Firma del responsable</span>
+        <canvas class="sig-pad" role="img" aria-label="Recuadro para firmar con el dedo o el mouse"></canvas>
+        <div class="phead"><span class="xs muted">Firma con el dedo o el mouse dentro del recuadro.</span><button type="button" class="btn ghost sm" data-clear>Borrar firma</button></div></div>
+      <p class="xs muted" style="margin:0">Al tocar “Firmar y enviar” firmas el acuerdo electrónicamente (Ley 51 de 2008): guardamos tu firma con la fecha y la hora, la versión del acuerdo y una huella digital del documento. ${esc(CONFIG.APP_NAME)} firma cuando aprueba tu tienda, y los dos podemos descargar la copia firmada.</p>
+      <div class="shop-msg" aria-live="polite"></div>
+      <div class="share-row" style="margin-top:0"><button class="btn primary">Firmar y enviar</button><button type="button" class="btn outline" data-cancel>Cancelar</button></div>
+    </form>`);
+  const form = box.querySelector("form"), msg = box.querySelector(".shop-msg"), btn = form.querySelector(".btn.primary");
+  const pad = signaturePad(form.querySelector(".sig-pad"));
+  form.querySelector("[data-clear]").addEventListener("click", () => pad.clear());
+  form.querySelector(".sig-pad").addEventListener("pointerdown", () => { msg.innerHTML = ""; });
+  form.querySelector("[data-cancel]").addEventListener("click", () => {
+    if (parseHash().params.get("tienda")) history.replaceState(null, "", "#/cuenta");
+    renderShopRequest(uid, prof, box);
+  });
+  box.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth", block: "start" });
+  form.shopName.focus({ preventScroll: true });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const say = (t) => { msg.innerHTML = t ? `<p class="notice bad" style="margin:0">${esc(t)}</p>` : ""; if (t) msg.scrollIntoView({ block: "nearest" }); };
+    const v = Object.fromEntries(["shopName", "ownerName", "ownerDoc", "address", "province", "phone", "instagram", "yappy", "hours"].map((k) => [k, form[k].value.trim()]));
+    const phone = paPhone(v.phone), yappy = v.yappy ? paPhone(v.yappy) : phone, doc = v.ownerDoc.replace(/\s/g, "");
+    const problem = v.shopName.length < 2 ? SHOP_REQ_ERR[1][1] : v.ownerName.length < 4 ? SHOP_REQ_ERR[2][1]
+      : !/^[A-Za-z0-9-]{5,20}$/.test(doc) || !/\d/.test(doc) ? SHOP_REQ_ERR[3][1] : cleanAddress(v.address).length < 10 ? SHOP_REQ_ERR[4][1]
+      : !phone ? SHOP_REQ_ERR[5][1] : !igHandle(v.instagram) ? SHOP_REQ_ERR[6][1] : !yappy || !yappy.startsWith("+5076") ? SHOP_REQ_ERR[7][1]
+      : v.hours.length < 3 ? SHOP_REQ_ERR[8][1] : !form.accept.checked ? "Marca que leíste y aceptas los términos."
+      : pad.empty() ? "Firma en el recuadro." : null;
+    if (problem) return say(problem);
+    say(null);
+    btn.disabled = true; btn.textContent = "Enviando…";
+    let { error: err } = await sb.rpc("submit_shop_request", {
+      p_shop_name: v.shopName, p_owner_name: v.ownerName, p_owner_id_doc: doc, p_address: v.address, p_province: v.province || null,
+      p_phone: v.phone, p_instagram: v.instagram, p_yappy_phone: v.yappy || null, p_pickup_hours: v.hours,
+      p_terms_version: SHOP_AGREEMENT.VERSION, p_signature_png: pad.png(), p_signer_agent: navigator.userAgent.slice(0, 300),
+    });
+    if (err && shopReqMissing(err)) { // 0036 not applied yet: the old request, without the signature
+      ({ error: err } = await sb.from("shop_requests").insert({ user_id: uid, shop_name: v.shopName,
+        contact: `@${igHandle(v.instagram)} · ${fmtPhone(phone)}`.slice(0, 120), location: cleanAddress(v.address).slice(0, 120) }));
+    }
+    if (err) {
+      console.error(err);
+      btn.disabled = false; btn.textContent = "Firmar y enviar";
+      return say(SHOP_REQ_ERR.find(([re]) => re.test(err.message ?? ""))?.[1] ?? "No pudimos enviar la solicitud. Revisa tu conexión e intenta de nuevo.");
+    }
+    toast("Recibimos tu solicitud firmada", { description: "La revisamos en 1 a 2 días y te avisamos." });
+    if (parseHash().params.get("tienda")) history.replaceState(null, "", "#/cuenta");
+    renderShopRequest(uid, prof, box);
+  });
+}
+
+// #/acuerdo-tienda/<id>: the signed agreement, for the shop and for staff. "Descargar PDF" prints only
+// the sheet (see .doc-sheet in the print styles), so the browser's "Guardar como PDF" makes the file.
+async function viewShopAgreement(app, id) {
+  setTitle("Acuerdo para tiendas");
+  const back = isStaff ? "#/admin?tab=tiendas" : "#/cuenta";
+  const notFound = () => { app.innerHTML = `<div class="wrap"><div class="empty-state" style="margin-top:48px"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos este acuerdo.</p><p class="small muted" style="margin:4px 0 16px">Solo lo ven la tienda que lo firmó y el equipo de ${esc(CONFIG.APP_NAME)}.</p><a class="btn" href="${back}">Volver</a></div></div>`; };
+  if (!sb || (id && !/^[0-9a-f-]{36}$/i.test(id))) return notFound();
+  let q = sb.from("shop_requests").select("*");
+  q = id ? q.eq("id", id) : q.eq("user_id", session.user.id).not("signature_png", "is", null).order("created_at", { ascending: false }).limit(1);
+  const { data, error } = await q;
+  const r = data?.[0];
+  if (error || !r?.signature_png) { if (error && !shopReqMissing(error)) console.error(error); return notFound(); }
+  const { data: intact } = await sb.rpc("shop_request_intact", { p_id: r.id });
+  setTitle(`Acuerdo para tiendas · ${r.shop_name}`);
+  const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
+  const approved = r.status === "approved", until = approved ? addMonths(r.signed_at, SHOP_AGREEMENT.MONTHS) : null;
+  const state = approved ? `Firmado por las dos partes` : r.status === "rejected" ? `Solicitud no aprobada` : `Firmado por la Tienda · pendiente de la firma de ${esc(CONFIG.APP_NAME)}`;
+  app.innerHTML = `<div class="wrap">
+    <div class="doc-bar"><a class="btn outline sm" href="${back}">Volver</a><button type="button" class="btn primary sm" id="docPrint">Descargar PDF</button></div>
+    <p class="xs muted doc-bar" style="margin-top:0">En la ventana de impresión, elige “Guardar como PDF”.</p>
+    <article class="doc-sheet">
+      <p class="doc-brand">MarketZ<span>lab</span></p>
+      <h1>Acuerdo para tiendas</h1>
+      <p class="doc-state">${state}</p>
+      ${r.terms_version !== SHOP_AGREEMENT.VERSION ? `<p class="doc-warn">Se firmó la versión ${esc(r.terms_version)} de los términos; el texto de abajo es la versión ${esc(SHOP_AGREEMENT.VERSION)}.</p>` : ""}
+      <h2>Solicitud de tienda</h2>
+      <dl class="doc-data">
+        ${row("Nombre de la tienda", esc(r.shop_name))}
+        ${row("Responsable", esc(r.owner_name))}
+        ${row("Cédula del responsable", esc(r.owner_id_doc))}
+        ${row("Dirección del local", esc([r.address, r.province].filter(Boolean).join(", ")))}
+        ${row("Teléfono / WhatsApp", esc(fmtPhone(r.phone)))}
+        ${row("Instagram", r.instagram ? "@" + esc(r.instagram) : "")}
+        ${row("Yappy para pagos", esc(fmtPhone(r.yappy_phone)))}
+        ${row("Horario de retiro", esc(r.pickup_hours))}
+        ${row("Comisión", approved ? `5% + ITBMS hasta el ${longDate(until)}; 8% + ITBMS desde el día siguiente` : `5% + ITBMS los primeros ${SHOP_AGREEMENT.MONTHS} meses desde la firma; después, 8% + ITBMS`)}
+      </dl>
+      <h2>Términos y condiciones para tiendas</h2>
+      <div class="doc-terms">${shopTermsHtml()}</div>
+      <h2>Firmas</h2>
+      <div class="doc-signs">
+        <div><p class="doc-k">Por la Tienda</p><img src="${esc(r.signature_png)}" alt="Firma de ${esc(r.owner_name)}">
+          <p><b>${esc(r.owner_name)}</b><br>Cédula ${esc(r.owner_id_doc)}<br>Firmó electrónicamente el ${longDateTime(r.signed_at)} (hora de Panamá)</p></div>
+        <div><p class="doc-k">Por ${esc(CONFIG.APP_NAME)}</p>${approved
+          ? `<p class="doc-stamp">Aprobado y firmado electrónicamente</p><p><b>${esc(r.reviewer_name ?? "Equipo de " + CONFIG.APP_NAME)}</b><br>el ${longDateTime(r.reviewed_at)} (hora de Panamá)</p>`
+          : r.status === "rejected" ? `<p>No aprobada el ${longDate(r.reviewed_at)}.</p>` : `<p class="doc-muted">Pendiente: ${esc(CONFIG.APP_NAME)} firma cuando aprueba la tienda.</p>`}</div>
+      </div>
+      <h2>Constancia de la firma electrónica</h2>
+      <dl class="doc-data doc-small">
+        ${row("Número de solicitud", `<span class="doc-mono">${esc(r.id)}</span>`)}
+        ${row("Versión del acuerdo", esc(r.terms_version))}
+        ${row("Fecha y hora de la firma", `${longDateTime(r.signed_at)} (registrada por el servidor)`)}
+        ${row("Navegador", esc(r.signer_agent))}
+        ${row("Huella digital (SHA-256)", `<span class="doc-mono">${esc(r.sign_hash)}</span>`)}
+        ${row("Integridad", intact === true ? "Los datos y la firma no cambiaron desde que se firmó." : intact === false ? "<b>Atención: los datos guardados no coinciden con la huella digital.</b>" : "No se pudo comprobar.")}
+      </dl>
+    </article></div>`;
+  $("#docPrint").addEventListener("click", () => window.print());
 }
 // Mi cuenta ▸ Cuenta de vendedor: the phone and pickup address, or the way to become a seller
 // (#/cuenta?vendedor=1 opens the form; the account menu links there).
@@ -7069,6 +7356,7 @@ async function viewAccount(app) {
     <div id="accSeller" class="col" style="margin-top:24px"></div>
     <div id="accInquiries" class="col" style="margin-top:16px"></div>
     <div id="accIdentity" class="col" style="margin-top:16px"></div>
+    <div id="accShop" class="col" style="margin-top:16px"></div>
     <div id="accRef" class="col" style="margin-top:16px"></div>
     <div id="accEvents" class="col" style="margin-top:16px"></div>
     <form id="accForm" class="col acc-form" style="margin-top:24px" novalidate>
@@ -7080,7 +7368,6 @@ async function viewAccount(app) {
           <div><p style="margin:0;font-weight:600">Foto de perfil</p><p class="xs muted" style="margin:2px 0 0">Tu cara o el logo de tu tienda. Toca la foto para cambiarla.</p></div></div>
         <label class="f">Nombre para mostrar<input class="input" name="displayName" required minlength="2" maxlength="40" value="${esc(prof.display_name)}"></label>
       </section>
-      ${prof.is_shop ? "" : `<section class="panel col" id="shopReq"><h2>¿Tienes una tienda?</h2><p class="small muted" style="margin:0">Las tiendas verificadas llevan el sello “Tienda verificada” y muestran la foto del local en cada anuncio.</p><div id="shopReqBody"><p class="xs muted"><span class="spinner"></span></p></div></section>`}
       ${prof.is_shop ? `<section class="panel col">
         <div class="phead"><h2>Tu tienda</h2>${sellerBadge({ isShop: true, verified: prof.verified })}</div>
         <label class="f">Describe tu tienda<textarea class="textarea" name="shopDescription" rows="4" maxlength="280" placeholder="Qué vendes, dónde queda el local, horario…">${esc(prof.shop_description ?? "")}</textarea><span class="xs muted" id="descCount"></span></label>
@@ -7115,7 +7402,7 @@ async function viewAccount(app) {
     const img = document.createElement("img"); img.className = cls; img.alt = ""; img.src = URL.createObjectURL(f);
     holder.replaceWith(img);
   });
-  if (!prof.is_shop) renderShopRequest(uid, parseHash().params.get("tienda") === "1");
+  renderShopRequest(uid, prof, $("#accShop"), parseHash().params.get("tienda") === "1");
   preview($("#avatarIn"), "avatar", "av");
   if (prof.is_shop) preview($("#shopIn"), "shopPhoto", "shp");
 
@@ -7180,6 +7467,10 @@ async function viewAdmin(app, params) {
     <nav class="admin-tabs" aria-label="Secciones">${tabs.map(([k, t]) => `<a href="#/admin?tab=${k}" class="${k === tab ? "on" : ""}">${t}</a>`).join("")}</nav>
     <div id="adminBody"><p class="muted small"><span class="spinner"></span> Cargando…</p></div></div>`;
   const body = $("#adminBody");
+  sb.from("shop_requests").select("id", { count: "exact", head: true }).eq("status", "pending").then(({ count }) => {
+    const a = app.querySelector('.admin-tabs a[href="#/admin?tab=tiendas"]');
+    if (a && count) a.textContent = `Tiendas (${count})`;
+  });
   try {
     if (tab === "consultas") await adminInquiries(body, params.get("estado") || "abiertas");
     else if (tab === "vendedores") await adminSellers(body, params.get("q") ?? "");
@@ -7306,31 +7597,63 @@ async function adminListings(body, q) {
 }
 
 // ------------------------------------------------------------- shops
+// Pending sign-ups with all their data and the signature (0036). Approving is MarketZlab's signature:
+// review_shop_request() verifies the shop, fills its store page and gives it a seller account in one go.
 async function adminShops(body) {
-  const [{ data: reqs, error }, { data: shops }] = await Promise.all([
-    sb.from("shop_requests").select("id, user_id, shop_name, contact, location, status, created_at").eq("status", "pending").order("created_at"),
+  const [{ data: reqs, error }, { data: shops }, { data: signed }] = await Promise.all([
+    sb.from("shop_requests").select("*").eq("status", "pending").order("created_at"),
     sb.from("public_profiles").select("id, display_name, verified").eq("is_shop", true).order("display_name"),
+    sb.from("shop_requests").select("id, user_id, signed_at").eq("status", "approved").not("signed_at", "is", null).order("signed_at", { ascending: false }),
   ]);
   if (error) throw error;
   const names = await profilesById(reqs.map((r) => r.user_id));
+  const agreement = new Map();
+  (signed ?? []).forEach((s) => { if (!agreement.has(s.user_id)) agreement.set(s.user_id, s); });
+  const row = (k, v) => v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : "";
+  const ext = (href, text) => `<a class="link" target="_blank" rel="noopener" href="${esc(href)}">${text}</a>`;
   body.innerHTML = `
     <h2 class="display admin-h" style="margin-top:0">Solicitudes pendientes (${reqs.length})</h2>
-    ${reqs.length ? `<ul class="admin-list">${reqs.map((r) => `<li class="panel" data-id="${r.id}" data-user="${r.user_id}">
+    ${reqs.length ? `<ul class="admin-list">${reqs.map((r) => {
+      const where = [r.address, r.province].filter(Boolean).join(", ");
+      return `<li class="panel" data-id="${r.id}" data-user="${r.user_id}">
       <div class="phead"><span style="font-weight:600">${esc(r.shop_name)}</span><span class="xs muted">${fmtDate(r.created_at)}</span></div>
-      <dl class="rows"><div><dt>Cuenta</dt><dd>${esc(names.get(r.user_id)?.display_name ?? "—")}</dd></div>
-        <div><dt>Contacto</dt><dd>${esc(r.contact || "—")}</dd></div><div><dt>Ubicación</dt><dd>${esc(r.location || "—")}</dd></div></dl>
-      <p class="xs muted" style="margin:8px 0">Antes de aprobar: revisa su Instagram, que el local exista y que venda cartas originales.</p>
-      <div class="order-actions"><button class="btn primary" data-act="approve">Aprobar y verificar</button><button class="btn danger" data-act="reject">Rechazar</button></div>
-      <div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">No hay solicitudes pendientes.</p>`}
+      <dl class="rows">
+        ${row("Cuenta", `<a class="link" href="#/vendedor/${encodeURIComponent(r.user_id)}">${esc(names.get(r.user_id)?.display_name ?? "perfil")}</a>`)}
+        ${row("Responsable", r.owner_name ? `${esc(r.owner_name)} · cédula ${esc(r.owner_id_doc)}` : "")}
+        ${row("Dirección", where ? ext(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${where}, Panamá`)}`, esc(where)) : esc(r.location ?? ""))}
+        ${row("WhatsApp", r.phone ? ext(`https://wa.me/${waNumber(r.phone)}`, esc(fmtPhone(r.phone))) : "")}
+        ${row("Instagram", r.instagram ? ext(`https://www.instagram.com/${encodeURIComponent(r.instagram)}/`, "@" + esc(r.instagram)) : esc(r.contact ?? ""))}
+        ${row("Yappy", r.yappy_phone ? esc(fmtPhone(r.yappy_phone)) : "")}
+        ${row("Horario", esc(r.pickup_hours ?? ""))}
+        ${row("Acuerdo", r.signed_at ? `Firmado ${fmtDate(r.signed_at)} · <a class="link" href="#/acuerdo-tienda/${r.id}">Ver acuerdo</a>` : `<span class="muted">Sin firma (solicitud anterior al acuerdo)</span>`)}
+      </dl>
+      ${r.signature_png ? `<img class="sig-thumb" src="${esc(r.signature_png)}" alt="Firma de ${esc(r.owner_name)}">` : ""}
+      <p class="xs muted" style="margin:8px 0">Antes de aprobar: busca el local en Google Maps (o visítalo), revisa su Instagram y que venda cartas originales.</p>
+      <input class="input shop-note" maxlength="300" placeholder="Nota (si la rechazas, la verá la tienda)">
+      <div class="order-actions"><button class="btn primary" data-act="approve">Aprobar y firmar</button><button class="btn danger" data-act="reject">Rechazar</button></div>
+      <div class="order-msg"></div></li>`;
+    }).join("")}</ul>` : `<p class="muted small">No hay solicitudes pendientes.</p>`}
     <h2 class="display admin-h">Tiendas (${shops?.length ?? 0})</h2>
-    ${shops?.length ? `<ul class="admin-list">${shops.map((s) => `<li class="panel" data-user="${s.id}"><div class="phead"><span style="font-weight:600">${esc(s.display_name)}</span>${s.verified ? shopBadge() : `<span class="b neutral">Sin verificar</span>`}</div>
-      <div class="order-actions" style="margin-top:8px">${s.verified ? `<button class="btn danger" data-act="unverify">Quitar verificación</button>` : `<button class="btn primary" data-act="verify">Verificar</button>`}</div><div class="order-msg"></div></li>`).join("")}</ul>` : `<p class="muted small">Todavía no hay tiendas.</p>`}`;
+    ${shops?.length ? `<ul class="admin-list">${shops.map((s) => {
+      const a = agreement.get(s.id);
+      return `<li class="panel" data-user="${s.id}"><div class="phead"><span style="font-weight:600">${esc(s.display_name)}</span>${s.verified ? shopBadge() : `<span class="b neutral">Sin verificar</span>`}</div>
+      <p class="xs muted" style="margin:6px 0 0">${a ? `<a class="link" href="#/acuerdo-tienda/${a.id}">Acuerdo firmado el ${longDate(a.signed_at)}</a>` : "Sin acuerdo firmado en la página"}</p>
+      <div class="order-actions" style="margin-top:8px">${s.verified ? `<button class="btn danger" data-act="unverify">Quitar verificación</button>` : `<button class="btn primary" data-act="verify">Verificar</button>`}</div><div class="order-msg"></div></li>`;
+    }).join("")}</ul>` : `<p class="muted small">Todavía no hay tiendas.</p>`}`;
 
   body.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", async () => {
     const li = b.closest("li"), msg = li.querySelector(".order-msg"), act = b.dataset.act, user = li.dataset.user;
+    const note = li.querySelector(".shop-note")?.value.trim() ?? "";
+    if (act === "reject" && !note && !(await confirmDialog({ title: "¿Rechazar sin explicar el motivo?", body: "La tienda verá un mensaje general para que revise sus datos.", confirm: "Rechazar", danger: true }))) return;
     li.querySelectorAll("button").forEach((x) => (x.disabled = true));
     const fail = (e) => { li.querySelectorAll("button").forEach((x) => (x.disabled = false)); adminFail(e, msg); };
-    if (act === "approve" || act === "verify" || act === "unverify") {
+    if (act === "approve" || act === "reject") {
+      const { error } = await sb.rpc("review_shop_request", { p_id: li.dataset.id, p_approve: act === "approve", p_note: note || null });
+      if (!error) { toast(act === "approve" ? "Tienda aprobada y acuerdo firmado" : "Solicitud rechazada"); return route(); }
+      if (!shopReqMissing(error)) return fail(error);
+      // Before 0036: verify the profile and close the request with two writes, as in 0005.
+    }
+    if (act !== "reject") {
       const { error } = await sb.from("profiles").update(act === "unverify" ? { verified: false } : { is_shop: true, verified: true }).eq("id", user);
       if (error) return fail(error);
     }
@@ -7637,7 +7960,7 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Eventos:</b> los eventos de tiendas que marcas con “Me interesa”, para recordártelos. La tienda solo ve cuántas personas están interesadas, no quiénes.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Tiendas:</b> el nombre, el contacto (Instagram o WhatsApp) y la ubicación de la tienda que nos das para verificarla.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Eventos:</b> los eventos de tiendas que marcas con “Me interesa”, para recordártelos. La tienda solo ve cuántas personas están interesadas, no quiénes.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Invitaciones:</b> si te registras con el link de otra persona, guardamos quién te invitó para darles a los dos el beneficio.</li><li><b>Tiendas:</b> para verificar la tienda y firmar el acuerdo para tiendas, el nombre de la tienda, el nombre y la cédula del responsable, la dirección del local, el teléfono, el Instagram, el número de Yappy para pagarle, el horario de retiro y la firma (con la fecha, la hora y el navegador con que se firmó). Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}; los guardamos mientras la tienda venda con nosotros, como constancia del acuerdo.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Responder tus consultas y coordinar las compras.</li><li>Coordinar contigo y retirar en tu dirección las cartas que vendes.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo, tu teléfono y tu dirección nunca se muestran.</b></p>`],
