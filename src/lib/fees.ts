@@ -3,7 +3,7 @@
 // Mirrors quoteProtected() in holo.html and protected_quote() in migration 0017. USD cents.
 
 export interface FeeConfig {
-  /** Seller's commission: percentage of the card price, in basis points (500 = 5%). */
+  /** Seller's commission: percentage of the card price, in basis points (700 = 7%). */
   rateBps: number;
   /** Buyer's commission on top of the price, in basis points. 0 = the buyer pays only the price. */
   buyerRateBps: number;
@@ -18,7 +18,7 @@ export interface FeeConfig {
 }
 
 export const DEFAULT_FEES: FeeConfig = {
-  rateBps: 500,
+  rateBps: 700,
   buyerRateBps: 0,
   fixedCents: 0,
   minCents: 0,

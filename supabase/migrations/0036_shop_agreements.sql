@@ -9,7 +9,6 @@
 -- the electronic signature (Ley 51 de 2008). Staff approve in Panel ▸ Tiendas: that is MarketZlab's
 -- signature (reviewer and date), and in one step the account becomes a verified shop, its store page
 -- gets the address and hours, and it gets a seller account (0031) with pickup at the store.
--- The signing date of the approved agreement is when the 6 months at 5% start (decisions, 2026-10-20).
 --
 -- Unlike the identity photos (0025), the agreement is a contract: it is kept while the shop sells with
 -- us. The cédula, phone and Yappy number are private: only the shop and staff read the request (0005).

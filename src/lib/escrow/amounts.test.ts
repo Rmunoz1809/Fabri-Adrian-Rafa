@@ -12,11 +12,11 @@ beforeAll(async () => {
 afterAll(() => db.close());
 
 describe("quoteOrder (TypeScript)", () => {
-  it("$100 card: buyer pays $104 with shipping, seller gets $94.65", () => {
+  it("$100 card: buyer pays $104 with shipping, seller gets $92.51", () => {
     const q = quoteOrder(10_000);
     expect(q).toMatchObject({
       priceCents: 10_000, shippingCents: 400, orderTotalCents: 10_400,
-      sellerFeeCents: 500, sellerItbmsCents: 35, sellerPayoutCents: 9_465, platformRevenueCents: 500,
+      sellerFeeCents: 700, sellerItbmsCents: 49, sellerPayoutCents: 9_251, platformRevenueCents: 700,
     });
   });
 
@@ -30,8 +30,8 @@ describe("quoteOrder (TypeScript)", () => {
       for (const v of Object.values(q)) expect(Number.isInteger(v)).toBe(true);
       expect(q.sellerPayoutCents + q.sellerFeeCents + q.sellerItbmsCents).toBe(price);
     }
-    expect(quoteOrder(10).sellerFeeCents).toBe(1); // 0.5 → 1
-    expect(quoteOrder(9).sellerFeeCents).toBe(0); // 0.45 → 0
+    expect(quoteOrder(50).sellerFeeCents).toBe(4); // 3.5 → 4
+    expect(quoteOrder(7).sellerFeeCents).toBe(0); // 0.49 → 0
   });
 
   it("rejects non-integer or non-positive prices", () => {
@@ -60,7 +60,7 @@ describe("order_quote (database) matches quoteOrder", () => {
 describe("amounts come from the database", () => {
   it("the order takes the listing's price and the configured shipping; the attempt the order's total", async () => {
     const o = await requestOrder(db, LISTING.umbreon);
-    expect(o).toMatchObject({ price_cents: 8000, shipping_cents: 400, seller_fee_cents: 400, seller_itbms_cents: 28 });
+    expect(o).toMatchObject({ price_cents: 8000, shipping_cents: 400, seller_fee_cents: 560, seller_itbms_cents: 39 });
     await sellerConfirm(db, o);
     const a = await newAttempt(db, o);
     expect(a.total_cents).toBe(8400);
@@ -78,7 +78,7 @@ describe("amounts come from the database", () => {
     expect(o).toMatchObject({ price_cents: 6000, shipping_cents: 500, seller_fee_cents: 480, seller_itbms_cents: 34 });
     await expect(db.as(user(STAFF), "select public.staff_set_setting('commission_bps', 20000)")).rejects.toThrow(/bps over/);
     await expect(db.as(user(STAFF), "select public.staff_set_setting('nope', 1)")).rejects.toThrow(/unknown key/);
-    await db.as(user(STAFF), "select public.staff_set_setting('commission_bps', 500)");
+    await db.as(user(STAFF), "select public.staff_set_setting('commission_bps', 700)");
     await db.as(user(STAFF), "select public.staff_set_setting('shipping_cents', 400)");
     await db.as(user(BUYER), "select public.buyer_cancel_order($1)", [o.id]);
   });

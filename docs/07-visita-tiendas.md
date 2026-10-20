@@ -9,7 +9,7 @@
 - La tarjeta con el QR impresa: `docs/material/tarjeta-tiendas.html` (abrir en el navegador → Imprimir; salen 2 tarjetas por hoja).
 - Dos copias impresas del acuerdo para tiendas: `docs/material/tiendas-acuerdo.pdf` (solicitud con dirección, teléfono, Instagram y Yappy, Términos para tiendas con el flujo de la venta y firmas). Una copia queda en la tienda y otra con nosotros.
 - O, mejor, que la tienda lo firme ahí mismo en la página: Mi cuenta ▸ ¿Tienes una tienda? ▸ Llenar y firmar la solicitud (firma con el dedo). La solicitud nos llega a Panel ▸ Tiendas, la aprobamos desde ahí y las dos partes pueden descargar la copia firmada.
-- Saber de memoria la comisión: **5% + ITBMS los primeros 6 meses desde que firma el acuerdo, después 8% + ITBMS. Solo cuando vende. Publicar es gratis.**
+- Saber de memoria la comisión: **7% + ITBMS, solo cuando vende. Publicar es gratis.**
 
 ---
 
@@ -28,7 +28,7 @@
 4. **Mi cuenta:** el panel con vistas, interesados y ofertas de cada carta.
 
 **4. Lo que cuesta (15 s)**
-> "Publicar es gratis. Solo cuando vende, MarketZlab se queda con el 5% más ITBMS durante sus primeros 6 meses: en una carta de $100 usted recibe $94.65. Después la comisión pasa a 8% más ITBMS: recibe $91.44. El comprador paga solo el precio."
+> "Publicar es gratis. Solo cuando vende, MarketZlab se queda con el 7% más ITBMS. En una carta de $100 usted recibe $92.51. El comprador paga solo el precio."
 
 **5. Cierre (10 s)**
 > "¿Le ayudamos a crear la cuenta y subir sus primeras 5 cartas ahora? Toma 5 minutos."
@@ -41,7 +41,7 @@ Si dice que no tiene tiempo: dejar la tarjeta con el QR y **anotar una fecha** p
 
 | Pregunta | Respuesta |
 |---|---|
-| **¿Cuánto me cobran?** | Nada por publicar. Solo si vende: 5% del precio de venta + 7% de ITBMS sobre esa comisión durante los primeros 6 meses desde que firma el acuerdo; después, 8% + ITBMS. |
+| **¿Cuánto me cobran?** | Nada por publicar. Solo si vende: 7% del precio de venta + 7% de ITBMS sobre esa comisión. |
 | **¿Cuándo me pagan?** | En el momento en que pasamos a buscar la carta a su tienda: le pagamos por Yappy el precio menos la comisión. No espera a que la carta le llegue al comprador. |
 | **¿Quién entrega la carta?** | MarketZlab. Pasamos a buscarla a su tienda (en las 48 horas siguientes a la venta), la guardamos y la repartimos al comprador el día de distribución, un día fijo a la semana. Desde que la retiramos, la carta es responsabilidad nuestra. |
 | **¿Y si el comprador dice que no le llegó o que es falsa?** | Tiene 3 días para reclamar con fotos. Revisamos cada caso. Si el reclamo no procede, le pagamos igual. |

@@ -2,43 +2,43 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_FEES, quoteProtected, toCents } from "./fees";
 
 describe("quoteProtected", () => {
-  it("charges the buyer nothing and takes 5% + ITBMS from the seller", () => {
+  it("charges the buyer nothing and takes 7% + ITBMS from the seller", () => {
     const q = quoteProtected(toCents(100));
     expect(q.feeCents).toBe(0);
     expect(q.itbmsCents).toBe(0);
     expect(q.buyerTotalCents).toBe(10_000);
-    expect(q.sellerFeeCents).toBe(500);
-    expect(q.sellerItbmsCents).toBe(35);
-    expect(q.sellerPayoutCents).toBe(9_465);
-    expect(q.platformRevenueCents).toBe(500);
+    expect(q.sellerFeeCents).toBe(700);
+    expect(q.sellerItbmsCents).toBe(49);
+    expect(q.sellerPayoutCents).toBe(9_251);
+    expect(q.platformRevenueCents).toBe(700);
   });
 
   it("matches the published fee table", () => {
     const fee = (usd: number) => quoteProtected(toCents(usd)).sellerFeeCents;
-    expect([10, 50, 150, 500, 1500].map(fee)).toEqual([50, 250, 750, 2500, 7500]);
+    expect([10, 50, 150, 500, 1500].map(fee)).toEqual([70, 350, 1050, 3500, 10500]);
   });
 
   it("has no minimum on cheap cards", () => {
     const q = quoteProtected(toCents(5));
-    expect(q.sellerFeeCents).toBe(25);
+    expect(q.sellerFeeCents).toBe(35);
     expect(q.sellerItbmsCents).toBe(2);
     expect(q.buyerTotalCents).toBe(500);
-    expect(q.sellerPayoutCents).toBe(473);
+    expect(q.sellerPayoutCents).toBe(463);
   });
 
   it("has no cap on expensive cards", () => {
     const q = quoteProtected(toCents(5000));
-    expect(q.sellerFeeCents).toBe(25_000);
-    expect(q.sellerItbmsCents).toBe(1_750);
+    expect(q.sellerFeeCents).toBe(35_000);
+    expect(q.sellerItbmsCents).toBe(2_450);
     expect(q.buyerTotalCents).toBe(500_000);
-    expect(q.sellerPayoutCents).toBe(500_000 - 25_000 - 1_750);
+    expect(q.sellerPayoutCents).toBe(500_000 - 35_000 - 2_450);
   });
 
   it("rounds half cents up", () => {
-    // 5% of $38.50 = 192.5¢ → 193; ITBMS 7% of 193 = 13.51 → 14
+    // 7% of $38.50 = 269.5¢ → 270; ITBMS 7% of 270 = 18.9 → 19
     const q = quoteProtected(3850);
-    expect(q.sellerFeeCents).toBe(193);
-    expect(q.sellerItbmsCents).toBe(14);
+    expect(q.sellerFeeCents).toBe(270);
+    expect(q.sellerItbmsCents).toBe(19);
   });
 
   it("the buyer always pays the price and the seller always gets something", () => {

@@ -42,11 +42,11 @@ describe("full flow with Holo delivery", () => {
     const done = await order(db, o.id);
     expect(done.status).toBe("completada");
 
-    // $120 − 5% ($6.00) − 7% ITBMS on it ($0.42) = $113.58; Holo keeps $6 + $0.42 + $4 shipping.
-    expect(await sellerBalance(db, SHOP)).toBe(11358);
+    // $120 − 7% ($8.40) − 7% ITBMS on it ($0.59) = $111.01; Holo keeps $8.40 + $0.59 + $4 shipping.
+    expect(await sellerBalance(db, SHOP)).toBe(11101);
     expect(await escrow(db, o)).toBe(0);
-    expect(await accountBalance(db, "holo_comision")).toBe(-600);
-    expect(await accountBalance(db, "holo_itbms")).toBe(-42);
+    expect(await accountBalance(db, "holo_comision")).toBe(-840);
+    expect(await accountBalance(db, "holo_itbms")).toBe(-59);
     expect(await accountBalance(db, "holo_envio")).toBe(-400);
     await expectLedgerBalanced(db);
 
@@ -61,11 +61,11 @@ describe("full flow with Holo delivery", () => {
     expect(n.n).toBe(1);
     const csv = await db.one<{ c: string }>("select public.staff_payouts_csv() as c", [], user(STAFF));
     expect(csv.c.split("\n")[0]).toBe("vendedor,tienda,yappy,titular,monto,semana,id");
-    expect(csv.c).toContain('"Cartas Panamá",si,61234567,"Cartas Panamá S.A.",113.58');
+    expect(csv.c).toContain('"Cartas Panamá",si,61234567,"Cartas Panamá S.A.",111.01');
     const p = await db.one<{ id: string }>("select id from public.payouts where seller_id = $1 and status = 'pendiente'", [SHOP]);
     await db.as(user(STAFF), "select public.staff_mark_payout_paid($1, 'YAPPY-889900')", [p.id]);
     expect(await sellerBalance(db, SHOP)).toBe(0);
-    expect(await accountBalance(db, "banco")).toBe(12400 - 11358);
+    expect(await accountBalance(db, "banco")).toBe(12400 - 11101);
     await expectLedgerBalanced(db);
 
     // Reconciliation: the day's charges match what the provider collected.
@@ -73,7 +73,7 @@ describe("full flow with Holo delivery", () => {
       "select * from public.staff_reconciliation(7) limit 1", [], user(STAFF));
     expect(day.payments).toBe(1);
     expect(Number(day.charged_cents)).toBe(12400);
-    expect(Number(day.payouts_paid_cents)).toBe(11358);
+    expect(Number(day.payouts_paid_cents)).toBe(11101);
   });
 });
 
@@ -148,7 +148,7 @@ describe("disputes", () => {
     const before = await sellerBalance(db, SHOP);
     await db.as(user(STAFF), "select public.staff_resolve_dispute($1, 'vendedor', null, 'Fotos de recogida muestran la esquina igual')", [o.id]);
     expect((await order(db, o.id)).status).toBe("completada");
-    expect(await sellerBalance(db, SHOP)).toBe(before + 45000 - 2250 - 158);
+    expect(await sellerBalance(db, SHOP)).toBe(before + 45000 - 3150 - 221);
     await expectLedgerBalanced(db);
   });
 
@@ -162,8 +162,8 @@ describe("disputes", () => {
     const before = await sellerBalance(db, ANA);
     await db.as(user(STAFF), "select public.staff_resolve_dispute($1, 'comprador_parcial', 2000, 'Descuento acordado')", [o.id]);
     expect((await order(db, o.id)).status).toBe("completada");
-    // Seller keeps $40: −5% ($2) −ITBMS ($0.14) = $37.86. Buyer gets $20 back.
-    expect(await sellerBalance(db, ANA)).toBe(before + 3786);
+    // Seller keeps $40: −7% ($2.80) −ITBMS ($0.20) = $37.00. Buyer gets $20 back.
+    expect(await sellerBalance(db, ANA)).toBe(before + 3700);
     const r = await db.one<{ amount_cents: number }>("select amount_cents from public.refund_requests where order_id = $1", [o.id]);
     expect(r.amount_cents).toBe(2000);
     expect(await escrow(db, o)).toBe(0);

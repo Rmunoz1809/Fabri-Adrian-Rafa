@@ -7031,10 +7031,8 @@ const SHOP_AGREEMENT = {
   VERSION: "tiendas-2026-10-20", // new version of the terms below (and of the PDF) = new value here
   LABEL: "Versión 1 · octubre de 2026",
   PDF: "https://rmunoz1809.github.io/Fabri-Adrian-Rafa/docs/material/tiendas-acuerdo.pdf",
-  MONTHS: 6, // 5% the first 6 months from the signing date, then 8% (decisions, 2026-10-20)
 };
 const shopReqMissing = (e) => ["PGRST202", "42883", "PGRST204", "42703"].includes(e?.code);
-const addMonths = (d, n) => { const x = new Date(d); x.setMonth(x.getMonth() + n); return x; };
 const longDate = (d) => new Date(d).toLocaleDateString("es-PA", { timeZone: "America/Panama", day: "numeric", month: "long", year: "numeric" });
 const longDateTime = (d) => new Date(d).toLocaleString("es-PA", { timeZone: "America/Panama", day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
 /** '@mitienda', 'instagram.com/MiTienda/' -> 'mitienda' (same rule as ig_handle() in 0036). */
@@ -7061,12 +7059,10 @@ function shopTermsHtml() {
     <ol class="terms-flow">${steps.map(([t, who, d]) => `<li><b>${t}</b> <span class="terms-who">${who}</span><br>${d}</li>`).join("")}</ol>
     <p class="terms-sum"><b>En resumen:</b> el comprador le paga a ${app}, ${app} guarda ese dinero, retira la carta en la Tienda y le paga a la Tienda en el mismo momento del retiro.</p>
     <h3>3. Comisión</h3>
-    <p>Publicar es gratis. Solo cuando una carta se vende, ${app} cobra a la Tienda una comisión sobre el precio de venta, más el <b>7% de ITBMS sobre esa comisión</b>, sin mínimo ni máximo:</p>
-    <ul><li><b>5% durante los primeros ${SHOP_AGREEMENT.MONTHS} meses</b>, contados desde la fecha de firma de este acuerdo.</li><li><b>8% a partir del mes ${SHOP_AGREEMENT.MONTHS + 1}</b>.</li></ul>
-    <p>La comisión que aplica a cada venta es la del día en que el comprador paga. Se descuenta del pago del paso 6. El comprador paga el precio publicado y el envío; la Tienda no paga el envío.</p>
-    <table class="terms-fee"><thead><tr><th>Ejemplo: carta vendida en $100.00</th><th>Primeros ${SHOP_AGREEMENT.MONTHS} meses</th><th>Desde el mes ${SHOP_AGREEMENT.MONTHS + 1}</th></tr></thead>
-      <tbody><tr><td>Comisión de ${app}</td><td>5% · − $5.00</td><td>8% · − $8.00</td></tr><tr><td>ITBMS sobre la comisión (7%)</td><td>− $0.35</td><td>− $0.56</td></tr>
-      <tr><td><b>La Tienda recibe al entregar la carta</b></td><td><b>$94.65</b></td><td><b>$91.44</b></td></tr></tbody></table>
+    <p>Publicar es gratis. Solo cuando una carta se vende, ${app} cobra a la Tienda una comisión del <b>7% del precio de venta</b>, más el <b>7% de ITBMS sobre esa comisión</b>, sin mínimo ni máximo. Se descuenta del pago del paso 6. El comprador paga el precio publicado y el envío; la Tienda no paga el envío.</p>
+    <table class="terms-fee"><thead><tr><th>Ejemplo: carta vendida en</th><th>$100.00</th></tr></thead>
+      <tbody><tr><td>Comisión de ${app} (7%)</td><td>− $7.00</td></tr><tr><td>ITBMS sobre la comisión (7%)</td><td>− $0.49</td></tr>
+      <tr><td><b>La Tienda recibe al entregar la carta</b></td><td><b>$92.51</b></td></tr></tbody></table>
     <h3>4. Lo que se compromete a hacer la Tienda</h3>
     <ul><li><b>Tener la carta.</b> Solo publica cartas que tiene en su local. Si vende una carta por fuera de ${app}, la marca como vendida en ${app} ese mismo día.</li>
       <li><b>Confirmar rápido.</b> Cuando ${app} le avisa de una venta, la Tienda confirma por WhatsApp, dentro de las 2 horas siguientes en su horario de atención, que tiene la carta, y acuerda la hora de retiro.</li>
@@ -7091,7 +7087,7 @@ function shopTermsHtml() {
     <p>${app} trata los datos de la solicitud según la Ley 81 de 2019 de protección de datos personales, solo para coordinar retiros, pagar a la Tienda y contactarla. No los vende ni los comparte con terceros, salvo cuando la ley lo exija. El responsable de la Tienda puede pedir ver, corregir o borrar sus datos escribiendo a ${app}.</p>
     <h3>11. Duración y cambios</h3>
     <ul><li>Este acuerdo empieza el día de la firma y no tiene fecha de fin. Cualquiera de las dos partes puede terminarlo avisando por escrito (WhatsApp o correo). Las ventas que ya estaban hechas se completan con estas reglas.</li>
-      <li>El día de distribución y los plazos pueden cambiar; ${app} avisa a la Tienda por escrito al menos 15 días antes. El paso de la comisión del 5% al 8% (punto 3) ya está acordado aquí; cualquier otro cambio de comisión también se avisa con 15 días.</li>
+      <li>El día de distribución, los plazos y la comisión pueden cambiar; ${app} avisa a la Tienda por escrito al menos 15 días antes. La comisión que aplica a una venta es la vigente el día en que el comprador paga.</li>
       <li>Este acuerdo se rige por las leyes de la República de Panamá.</li></ul>
     <h3>12. Firma electrónica</h3>
     <p>La Tienda puede firmar este acuerdo en papel o electrónicamente en ${app} (Mi cuenta ▸ ¿Tienes una tienda?). Las dos formas valen igual: las partes aceptan la firma electrónica como válida (Ley 51 de 2008). En la firma electrónica, ${app} guarda la firma con la fecha y la hora, la versión del acuerdo y una huella digital del documento, firma al aprobar la solicitud, y las dos partes pueden descargar la copia firmada.</p>`;
@@ -7151,9 +7147,8 @@ async function renderShopRequest(uid, prof, box, open = false) {
     return;
   }
   if (signed) {
-    const until = addMonths(signed.signed_at, SHOP_AGREEMENT.MONTHS);
     shell(`<p class="notice good" style="margin:0">${ic("check")} Firmaste el acuerdo el ${longDate(signed.signed_at)} y ${esc(CONFIG.APP_NAME)} lo aprobó el ${longDate(signed.reviewed_at)}.</p>
-      <p class="small muted" style="margin:0">Tu comisión: <b style="color:var(--ink)">5% + ITBMS</b> hasta el ${longDate(until)}; desde el día siguiente, <b style="color:var(--ink)">8% + ITBMS</b>.</p>
+      <p class="small muted" style="margin:0">Tu comisión: <b style="color:var(--ink)">7% + ITBMS</b> del precio de cada carta vendida.</p>
       <a class="btn outline block" href="#/acuerdo-tienda/${signed.id}">Ver y descargar la copia firmada</a>`);
     return;
   }
@@ -7253,7 +7248,7 @@ async function viewShopAgreement(app, id) {
   const { data: intact } = await sb.rpc("shop_request_intact", { p_id: r.id });
   setTitle(`Acuerdo para tiendas · ${r.shop_name}`);
   const row = (k, v) => v ? `<dt>${k}</dt><dd>${v}</dd>` : "";
-  const approved = r.status === "approved", until = approved ? addMonths(r.signed_at, SHOP_AGREEMENT.MONTHS) : null;
+  const approved = r.status === "approved";
   const state = approved ? `Firmado por las dos partes` : r.status === "rejected" ? `Solicitud no aprobada` : `Firmado por la Tienda · pendiente de la firma de ${esc(CONFIG.APP_NAME)}`;
   app.innerHTML = `<div class="wrap">
     <div class="doc-bar"><a class="btn outline sm" href="${back}">Volver</a><button type="button" class="btn primary sm" id="docPrint">Descargar PDF</button></div>
@@ -7273,7 +7268,7 @@ async function viewShopAgreement(app, id) {
         ${row("Instagram", r.instagram ? "@" + esc(r.instagram) : "")}
         ${row("Yappy para pagos", esc(fmtPhone(r.yappy_phone)))}
         ${row("Horario de retiro", esc(r.pickup_hours))}
-        ${row("Comisión", approved ? `5% + ITBMS hasta el ${longDate(until)}; 8% + ITBMS desde el día siguiente` : `5% + ITBMS los primeros ${SHOP_AGREEMENT.MONTHS} meses desde la firma; después, 8% + ITBMS`)}
+        ${row("Comisión", "7% del precio de cada carta vendida + 7% de ITBMS sobre la comisión")}
       </dl>
       <h2>Términos y condiciones para tiendas</h2>
       <div class="doc-terms">${shopTermsHtml()}</div>

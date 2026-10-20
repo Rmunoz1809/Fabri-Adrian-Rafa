@@ -106,7 +106,7 @@ describe("deadlines", () => {
     await runDeadlines(db);
     await db.as(user(STAFF), "select public.prepare_weekly_payouts()");
     const payout = await db.one<{ amount_cents: number }>("select amount_cents from public.payouts where seller_id = $1", [SHOP]);
-    expect(payout.amount_cents).toBe(45000 - 2250 - 158 - 500);
+    expect(payout.amount_cents).toBe(45000 - 3150 - 221 - 500);
     await expectLedgerBalanced(db);
   });
 
@@ -118,7 +118,7 @@ describe("deadlines", () => {
     await expire(db, o, "review_deadline");
     expect(await runDeadlines(db)).toMatchObject({ review_completed: 1 });
     expect((await order(db, o.id)).status).toBe("completada");
-    expect(await sellerBalance(db, ANA)).toBe(8000 - 400 - 28);
+    expect(await sellerBalance(db, ANA)).toBe(8000 - 560 - 39);
     expect(await notifications(ANA, "order_released")).toHaveLength(1);
   });
 });
