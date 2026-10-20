@@ -574,7 +574,7 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .seller-seg.pf-tabs { align-self: stretch; margin: 0; grid-template-columns: 1fr 1fr; }
 @media (min-width: 640px) { .seller-seg.pf-tabs { align-self: flex-start; grid-template-columns: repeat(2, auto); } }
 .pf-sales .tseller { display: none; } /* they are all mine */
-.seller-side > [hidden] { display: none; } /* shop events and reviews stay hidden until they have something */
+.seller-side > [hidden], .dside > [hidden] { display: none; } /* shop events and reviews stay hidden until they have something */
 .int-count { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .pf-rows .int-count { margin: 0; }
 .int-count .i { flex-shrink: 0; width: 14px; height: 14px; }
@@ -3256,7 +3256,9 @@ async function viewDetail(app, id) {
         ${forSale && !isOwner ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Consultas</h2>
           <p class="sub">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales consultas aquí y te atendemos por WhatsApp." : `¿Te interesa esta carta? Escríbenos y el equipo de ${esc(CONFIG.APP_NAME)} te ayuda con la compra por WhatsApp.`}</p>
           <button type="button" class="btn primary block" id="inquiryBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>${ic("chat")}Consultar por WhatsApp</button>
+          <div id="intBox"></div>
           <p class="xs muted" style="margin:10px 0 0">Tu consulta queda registrada con un código para darle seguimiento. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.</p></section>` : ""}
+        ${isOwner && forSale ? `<section class="panel" id="intPanel" hidden><h2 class="ptitle">${ic("heart")}Interesados</h2><div id="intOwner"></div></section>` : ""}
         ${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline block wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}
         <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
           <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
@@ -3291,6 +3293,19 @@ async function viewDetail(app, id) {
   $("#inquiryBtn")?.addEventListener("click", () => {
     if (session) track("click_whatsapp", l.id); // "interesados" in the seller's dashboard (0018)
     startInquiry({ source: "carta", listingId: l.id, subject: l.title, priceCents: price, url: listingUrl(l) });
+  });
+  // "Me interesa" on a card on sale (0036; example listings keep it in this browser). The owner sees how many.
+  const intBox = $("#intBox"), key = intKey("l", l.id);
+  if (intBox) (l.isDemo ? Promise.resolve(demoMarks.read()) : interestsReady().then((ok) => (ok ? myInterestKeys(l.sellerId) : null))).then((marked) => {
+    if (!marked || !intBox.isConnected) return;
+    intBox.innerHTML = `${interestBtn(key, marked.has(key))}<p class="xs muted" style="margin:8px 0 0">${l.isDemo ? "Anuncio de ejemplo: tu marca se guarda solo en este navegador." : "El vendedor ve cuántas personas la quieren, nunca quiénes."}</p>`;
+    intBox.querySelector("[data-int]").addEventListener("click", (e) => toggleInterestBtn(e.currentTarget, marked, l.seller.displayName, `/carta/${l.id}`));
+  });
+  if ($("#intOwner")) myCardInterests().then((ints) => {
+    const panel = $("#intPanel");
+    if (!ints || !panel?.isConnected) return;
+    $("#intOwner").innerHTML = interestCount(ints.byKey.get(key)?.people ?? 0);
+    panel.hidden = false;
   });
   $("#shareWa")?.addEventListener("click", () => track("compartir", l.id));
   $("#markSold")?.addEventListener("click", async (e) => {
@@ -6901,13 +6916,17 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
   const exampleNote = example ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> así se ve tu portafolio cuando muestras tus cartas en tu perfil y la gente marca “Me interesa”. Las cartas y los interesados son de ejemplo; los valores son los del mercado de hoy. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : "";
   if (salesTab) {
     setTitle(example ? "Mis cartas en venta (ejemplo)" : "Mis cartas en venta");
+    // Nothing on sale yet: a couple of example cards on sale with their people interested, so you see how it looks.
+    const salesExample = !example && !sales.length && CONFIG.SHOW_DEMO_LISTINGS;
+    const shown = salesExample ? examplePortfolio().sales : sales, shownInts = salesExample ? examplePortfolio().ints : ints;
     app.innerHTML = `<div class="col" style="gap:20px;margin-top:24px">
       <div class="pf-head"><div><p class="kicker">En venta en ${esc(CONFIG.APP_NAME)}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mis cartas en venta</h1>
         <p class="muted" style="margin:6px 0 0;max-width:620px">Las cartas que tienes publicadas. Arriba a la derecha de cada una ves cuántas personas la quieren. Tócala para cambiar el precio, marcarla vendida o retirarla.</p></div>
         <a class="btn primary" href="#/vender">${ic("plus")}Publicar una carta</a></div>
       ${tabs}
       ${exampleNote}
-      ${sales.length ? `<ul class="grid live coll-grid pf-sales">${sales.map((l, i) => tile(l, i, { onSale: true, badge: interestTag(ints?.byKey.get(intKey("l", l.id))?.people ?? 0) })).join("")}</ul>`
+      ${salesExample ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> todavía no tienes cartas en venta. Así se verán cuando publiques: cada una con cuántas personas la quieren arriba a la derecha. Estas cartas y números son de ejemplo. <a class="link" href="#/vender">Publicar una carta</a></p>` : ""}
+      ${shown.length ? `<ul class="grid live coll-grid pf-sales">${shown.map((l, i) => tile(l, i, { onSale: true, badge: interestTag(shownInts?.byKey.get(intKey("l", l.id))?.people ?? 0) })).join("")}</ul>`
         : `<div class="empty-state"><span class="ico">${ic("tag")}</span><p style="font-weight:600">No tienes cartas en venta.</p>
           <p class="small muted" style="margin:4px 0 16px;max-width:440px">Publica una carta, o abre una de tu portafolio y toca “Vender esta carta”: se abre el formulario con la foto que escaneaste.</p>
           <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/vender">${ic("plus")}Publicar una carta</a>${items.length ? `<a class="btn outline" href="${base}">Ver mi portafolio</a>` : ""}</div></div>`}
@@ -7127,6 +7146,13 @@ const demoMarks = {
     try { localStorage.setItem(INT_DEMO, JSON.stringify([...s])); } catch { /* storage unavailable: the mark lasts this visit */ }
   },
 };
+let interestsProbe = null;
+/** Whether 0036 is there, checked once per visit (signed out too: the table answers [] under RLS). */
+function interestsReady() {
+  if (!sb || !interestsOn) return Promise.resolve(false);
+  return (interestsProbe ??= sb.from("card_interests").select("id").limit(1)
+    .then(({ error }) => { if (intMissing(error)) interestsOn = false; return interestsOn; }, () => interestsOn));
+}
 async function setInterest(key, on) {
   if (isDemoKey(key)) return demoMarks.set(key, on);
   const [kind, id] = key.split(":"), col = kind === "p" ? "portfolio_item_id" : "listing_id";
