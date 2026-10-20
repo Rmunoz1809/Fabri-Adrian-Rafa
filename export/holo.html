@@ -560,13 +560,17 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .pf-stats dd small { display: block; margin-top: 1px; font-size: 12px; font-weight: 500; color: var(--fg-2); }
 /* Public collection and "Me interesa" (0036) */
 .wl-add.int-btn.on { background: var(--brand-soft); border-color: var(--border-strong); }
-.wl-add.int-btn.on .i, .int-count.on .i, .int-list .n .i { color: var(--down); fill: currentColor; }
+.wl-add.int-btn.on .i, .int-count.on .i, .int-tag .i { color: var(--down); fill: currentColor; }
 .grid.coll-grid { align-items: stretch; }
 .coll-grid > li { display: flex; flex-direction: column; }
 .coll-grid > li > .pcard { flex: 1; }
 .coll-card .pf-rows { margin-bottom: auto; }
 .coll-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-bottom: 16px; }
 .coll-filters .seller-chips { margin: 0; }
+.corner-tr { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.int-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 7px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #0b1222; background: #fff; box-shadow: var(--shadow-sm); }
+.int-tag .i { width: 12px; height: 12px; }
+.int-cards { margin-top: 14px; }
 .seller-side > [hidden] { display: none; } /* shop events and reviews stay hidden until they have something */
 .int-count { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
 .pf-rows .int-count { margin: 0; }
@@ -580,22 +584,6 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .int-big .v { margin: 0; font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .int-big .s { flex: 1 1 260px; margin: 0; font-size: 14px; color: var(--fg-2); }
 .int-big .s b { color: var(--fg); }
-.int-list { list-style: none; display: grid; gap: 6px; margin: 14px 0 0; padding: 0; }
-.int-list a { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); color: inherit; text-decoration: none; transition: border-color .2s var(--ease), background-color .2s var(--ease); }
-.int-list a:hover { border-color: var(--border-strong); background: var(--card-hover); }
-.int-list img, .int-list .ph { flex-shrink: 0; width: 34px; aspect-ratio: 63 / 88; border-radius: 4px; object-fit: cover; }
-.int-list .ph { display: grid; place-items: center; background: var(--muted); color: var(--fg-3); }
-.int-list .ph .i { width: 16px; height: 16px; }
-.int-list .nm { display: grid; flex: 1; min-width: 0; }
-.int-list .nm b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.int-list .nm small { font-size: 12px; color: var(--fg-3); }
-.int-list .n { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
-.int-list .n .i { width: 15px; height: 15px; }
-.int-more summary { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--fg-2); cursor: pointer; list-style: none; }
-.int-more summary::-webkit-details-marker { display: none; }
-.int-more summary .i { width: 15px; height: 15px; transition: transform .2s var(--ease); }
-.int-more[open] summary .i { transform: rotate(180deg); }
-.int-more .int-list { margin-top: 8px; }
 .pf-public .phead .share-row, .pf-pubrow .share-row { margin-top: 0; }
 .pf-public .share-row .btn { flex: 0 0 auto; }
 .pf-pubrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
@@ -2357,11 +2345,11 @@ function marketDelta(l) {
   return `<p class="delta ${tone}" title="Comparado con el valor estimado de ${esc(fmtEstimate(est.mid))}">${diff < 0 ? TRI.down : TRI.up}<span>${diff < 0 ? "−" : "+"}${fmtEstimate(Math.abs(diff))} (${fmtPct(pct)}%)</span><span class="vs">vs. estimado</span></p>`;
 }
 function tile(l, i = 0, opts = {}) {
-  const { before = "", after = "", onSale = false } = Array.isArray(opts) ? {} : opts; // list.map(tile) passes the array third
+  const { before = "", after = "", onSale = false, badge = "" } = Array.isArray(opts) ? {} : opts; // list.map(tile) passes the array third
   return `<li style="--i:${Math.min(i, 16)}">${before}<a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
     <div class="media card-ratio"><div class="inner">${cardArt(l)}</div>
       <div class="corner-l">${conditionBadge(l)}${l.verificationPhoto ? `<span class="chip-img good" title="Tiene foto de verificación">${ic("camera")}<span class="sr-only">Tiene foto de verificación</span></span>` : ""}${l.authCheck ? `<span class="chip-img good" title="Revisada por ${esc(l.authCheck.shop)}">${ic("check")}<span class="sr-only">Revisada por ${esc(l.authCheck.shop)}</span></span>` : ""}</div>
-      ${onSale ? `<div class="corner-tr"><span class="sale-tag" title="Carta en venta en ${esc(CONFIG.APP_NAME)}">${ic("tag")}En venta<span class="sr-only"> en ${esc(CONFIG.APP_NAME)}</span></span></div>` : ""}
+      ${onSale || badge ? `<div class="corner-tr">${badge}${onSale ? `<span class="sale-tag" title="Carta en venta en ${esc(CONFIG.APP_NAME)}">${ic("tag")}En venta<span class="sr-only"> en ${esc(CONFIG.APP_NAME)}</span></span>` : ""}</div>` : ""}
       ${l.isDemo ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
     <p class="title">${esc(l.title)}</p>
     <p class="set">${esc([l.card.setName, l.card.number].filter(Boolean).join(" · "))}</p>
@@ -3105,13 +3093,17 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   // "Me interesa" on every card of someone else's profile (signed out, it asks to sign in first). On the
   // example sellers it works too, kept in this browser.
   const canMark = !ownerView && (demo ? CONFIG.SHOW_DEMO_LISTINGS : !!sb && interestsOn);
-  const cardExtra = (key) => (canMark ? interestBtn(key, marked.has(key)) : counts ? interestCount(counts.byKey.get(key)?.people ?? 0) : "");
+  const cardBtn = (key) => (canMark ? interestBtn(key, marked.has(key)) : "");
+  const wanted = (key) => (counts ? counts.byKey.get(key)?.people ?? 0 : 0);
+  const cardTag = (key) => (canMark ? "" : interestTag(wanted(key)));
   // One collection: the cards on sale and the ones shown from the portfolio, newest first. Category chips
   // and "En venta" narrow it down.
   const entries = [
-    ...listings.map((l) => ({ category: l.card.category, sale: true, at: Date.parse(l.createdAt) || 0, html: (i) => tile(l, i, { after: cardExtra(intKey("l", l.id)), onSale: true }) })),
-    ...coll.map((c) => ({ category: c.category, sale: false, at: Date.parse(c.created_at) || 0, html: (i) => collectionTile(c, i, cardExtra(intKey("p", c.id)), ownerView) })),
-  ].sort((a, b) => b.at - a.at);
+    ...listings.map((l) => ({ category: l.card.category, sale: true, at: Date.parse(l.createdAt) || 0, people: wanted(intKey("l", l.id)),
+      html: (i) => tile(l, i, { after: cardBtn(intKey("l", l.id)), onSale: true, badge: cardTag(intKey("l", l.id)) }) })),
+    ...coll.map((c) => ({ category: c.category, sale: false, at: Date.parse(c.created_at) || 0, people: wanted(intKey("p", c.id)),
+      html: (i) => collectionTile(c, i, cardBtn(intKey("p", c.id)), ownerView, cardTag(intKey("p", c.id))) })),
+  ].sort((a, b) => (ownerView ? b.people - a.people : 0) || b.at - a.at); // the owner sees the most wanted first
   setTitle(s.displayName);
   let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null, onlySale = params.get("venta") === "1";
   const count = (c, sale) => entries.filter((e) => (!c || e.category === c) && (!sale || e.sale)).length;
@@ -3140,9 +3132,9 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
       : id === PF_EXAMPLE_OWNER ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> así se ve tu perfil cuando muestras tus cartas. Los demás ven “Me interesa” en cada una; tú ves cuántas personas la quieren. <a class="link" href="#/portafolio/ejemplo">Ver mi portafolio de ejemplo</a></p>` : ""}
     <div class="rhead"><h2 id="collTitle">${who} colección</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
     ${ownerView && counts ? `<div class="int-big prof-int"><p class="v">${fmtN(counts.people)}</p><p class="s">${counts.people
-      ? `${counts.people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(counts.cards.length)} de tus cartas</b>. Debajo de cada carta ves cuántas la quieren; nunca quiénes. <a class="link" href="#/portafolio${showingExample ? "/ejemplo" : ""}">Ver el detalle</a>`
+      ? `${counts.people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(counts.cards.length)} de tus cartas</b>. Arriba a la derecha de cada carta ves cuántas la quieren; nunca quiénes. <a class="link" href="#/portafolio${showingExample ? "/ejemplo" : ""}">Ver el detalle</a>`
       : "personas interesadas todavía. Comparte tu perfil para que marquen las cartas que quieren."}</p></div>` : ""}
-    <p class="small muted coll-sub">${ownerView ? "Todas tus cartas: las que vendes y las de tu portafolio que muestras. Debajo de cada una ves cuántas personas la quieren (nunca quiénes)."
+    <p class="small muted coll-sub">${ownerView ? "Todas tus cartas: las que vendes y las de tu portafolio que muestras, primero las que más gente quiere. Arriba a la derecha de cada una ves cuántas personas la quieren (nunca quiénes)."
       : `Todas las cartas de ${name}, estén o no en venta. Marca “Me interesa” en las que quieras: verá cuántas personas la quieren, sin saber quiénes.`}</p>
     ${entries.length ? `<div class="coll-filters"><nav class="chips seller-chips" aria-label="Categorías"></nav>
       <div class="ranges coll-seg" role="group" aria-label="Qué cartas ver"><button type="button" data-sale="0"></button><button type="button" data-sale="1"></button></div></div>` : ""}
@@ -6808,42 +6800,41 @@ async function pfPublicPanel(app, items, ints) {
     box.innerHTML = `<div class="int-big"><p class="v">0</p><p class="s">Todavía nadie marcó “Me interesa” en tus cartas. Muéstralas en tu perfil y comparte el enlace.</p></div>`;
     return;
   }
+  // Cards on sale need their listing (photo, price) to look like they do in the feed.
   const lids = ints.cards.filter((c) => c.key.startsWith("l:")).map((c) => c.key.slice(2));
-  const ls = lids.length ? (await sb.from("listings").select("id, title, status").in("id", lids)).data ?? [] : [];
+  const ls = lids.length ? await sb.from("listings").select(listingCols()).in("id", lids).then(({ data }) => withProfiles(data ?? [])).catch(() => []) : [];
   if (!box.isConnected) return;
   const byListing = new Map(ls.map((l) => [l.id, l])), byItem = new Map(items.map((it) => [it.id, it]));
-  const rows = ints.cards.map((c) => {
+  const tiles = ints.cards.map((c, i) => {
     const id = c.key.slice(2);
-    if (c.key.startsWith("p:")) {
-      const it = byItem.get(id);
-      return it && { ...c, href: `#/portafolio/${encodeURIComponent(id)}`, name: `${it.subject}${it.grading_company ? ` · ${pfLabel(it)}` : ""}`, img: it.image_url, tag: it.is_public ? "En tu colección" : "En tu colección · ya no se ve en tu perfil" };
-    }
+    if (c.key.startsWith("p:")) { const it = byItem.get(id); return it && interestItemTile(it, i, c.people, `#/portafolio/${encodeURIComponent(id)}`); }
     const l = byListing.get(id);
-    return l && { ...c, href: `#/carta/${encodeURIComponent(id)}`, name: l.title, img: null, tag: { active: "En venta", reserved: "Reservada", sold: "Vendida" }[l.status] ?? "Retirada" };
+    return l && tile(l, i, { onSale: l.status === "active", badge: interestTag(c.people) });
   }).filter(Boolean);
-  box.innerHTML = interestSummaryHtml(ints.people, rows);
+  box.innerHTML = interestSummaryHtml(ints.people, tiles);
 }
-/** "N personas interesadas en M de tus cartas" and the cards, most wanted first (5, then "Ver las otras").
- *  rows: [{ href, name, img, tag, lastAt, people }]. */
-function interestSummaryHtml(people, rows) {
-  const row = (r) => `<li><a href="${esc(r.href)}">${r.img ? `<img src="${esc(r.img)}" alt="" loading="lazy">` : `<span class="ph">${ic("tag")}</span>`}
-      <span class="nm"><b>${esc(r.name)}</b><small>${esc(r.tag)} · último interés ${daysAgo(r.lastAt)}</small></span>
-      <span class="n">${ic("heart")}${peopleN(r.people)}</span></a></li>`;
-  return `<div class="int-big"><p class="v">${fmtN(people)}</p><p class="s">${people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(rows.length)} de tus cartas</b>. No te mostramos quiénes: solo cuántas quieren cada una.</p></div>
-    <ol class="int-list">${rows.slice(0, 5).map(row).join("")}</ol>
-    ${rows.length > 5 ? `<details class="int-more"><summary>Ver las otras ${fmtN(rows.length - 5)}${ic("chevronDown")}</summary><ol class="int-list">${rows.slice(5).map(row).join("")}</ol></details>` : ""}`;
+/** A card of the owner's portfolio as it looks in the feed, with how many people want it at the top right. */
+const interestItemTile = (it, i, people, href) => `<li style="--i:${Math.min(i, 16)}"><a class="pcard pf-card" href="${esc(href)}">
+    <div class="media card-ratio"><div class="inner">${pfArt(it, new Map())}</div>
+      <div class="corner-l"><span class="${it.grading_company ? "graded" : "cond"}">${esc(pfLabel(it))}</span></div>
+      <div class="corner-tr">${interestTag(people)}</div>${it.isDemo || it.example ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : ""}</div>
+    <p class="title">${esc(it.subject)}</p>
+    <p class="set">${esc([it.set_name, it.number].filter(Boolean).join(" · ") || categoryName(it.category))}</p>
+    <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b>${it.value_cents != null ? fmtEstimate(it.value_cents / 100) : "—"}</b></p></div>
+  </a></li>`;
+/** "N personas interesadas en M de tus cartas" and those cards, big like in the feed, most wanted first. */
+function interestSummaryHtml(people, tiles) {
+  return `<div class="int-big"><p class="v">${fmtN(people)}</p><p class="s">${people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(tiles.length)} de tus cartas</b>. No te mostramos quiénes: solo cuántas quieren cada una.</p></div>
+    <ul class="grid live coll-grid int-cards">${tiles.join("")}</ul>`;
 }
 /** Until the portfolio is saved in the account (0033/0036), Mi portafolio shows what the panel looks like, with example numbers. */
 function interestPreviewPanel() {
-  const rows = DEMO_COLLECTION.filter((c) => c.people >= 2).sort((a, b) => b.people - a.people).slice(0, 5).map((c, i) => ({
-    href: `#/vendedor/${encodeURIComponent(c.user_id)}`, name: `${c.subject}${c.grading_company ? ` · ${pfLabel(c)}` : ""}`, img: c.image_url,
-    tag: "Ejemplo", lastAt: new Date(Date.now() - (i * 19 + 5) * 3600000).toISOString(), people: c.people,
-  }));
+  const demo = DEMO_COLLECTION.filter((c) => c.people >= 2).sort((a, b) => b.people - a.people).slice(0, 4);
   return `<section class="panel pf-public" aria-labelledby="pfIntTitle">
     <div class="phead"><h2 class="ptitle" id="pfIntTitle">${ic("heart")}Interesados en tus cartas<span class="b neutral">Ejemplo</span></h2>
       <div class="share-row"><a class="btn sm" href="#/portafolio/ejemplo">${ic("eye")}Ver el ejemplo completo</a></div></div>
     <p class="notice soft small" style="margin:12px 0 0">Así se verá cuando muestres tus cartas en tu perfil: cualquiera podrá marcar “Me interesa” en ellas, estén o no en venta, y aquí verás cuántas personas quieren cada una. <b>Estos números son de ejemplo.</b></p>
-    ${interestSummaryHtml(Math.max(...rows.map((r) => r.people)) + 3, rows)}
+    ${interestSummaryHtml(demo[0].people + 3, demo.map((c, i) => interestItemTile(c, i, c.people, `#/vendedor/${encodeURIComponent(c.user_id)}`)))}
   </section>`;
 }
 
@@ -6888,12 +6879,11 @@ async function viewPortfolio(app, { example = false } = {}) {
     ${pubPanel}
     <ul class="grid live" id="pfGrid">${items.map((it, i) => `<li style="--i:${Math.min(i, 16)}"><a class="pcard pf-card" href="#/portafolio/${encodeURIComponent(it.id)}" data-pf="${esc(it.id)}">
       <div class="media card-ratio"><div class="inner">${pfArt(it, photos)}</div>
-        <div class="corner-l" data-pubchip><span class="cond">${esc(pfLabel(it))}</span>${pubChip(it)}</div>${(it.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${it.quantity}</span></div>` : ""}</div>
+        <div class="corner-l" data-pubchip><span class="cond">${esc(pfLabel(it))}</span>${pubChip(it)}</div>${ints?.byKey.get(intKey("p", it.id)) ? `<div class="corner-tr">${interestTag(ints.byKey.get(intKey("p", it.id)).people)}</div>` : ""}${(it.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${it.quantity}</span></div>` : ""}</div>
       <p class="title">${esc(it.subject)}</p>
       <p class="set">${esc([it.set_name, it.number].filter(Boolean).join(" · ") || categoryName(it.category))}</p>
       <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b data-val>${it.value_cents != null ? formatUsd(it.value_cents) : `<span class="spinner"></span>`}</b></p>
         <p class="pf-chg" data-chg>${pfChgLine(it)}</p>
-        ${ints?.byKey.get(intKey("p", it.id)) ? interestCount(ints.byKey.get(intKey("p", it.id)).people) : ""}
         <p class="pf-sale" data-sale><span class="spinner"></span></p></div></a></li>`).join("")}</ul>`
     : `<div class="empty-state"><span class="ico">${ic("trend")}</span><p style="font-weight:600">Tu portafolio está vacío.</p>
       <p class="small muted" style="margin:4px 0 16px;max-width:420px">Escanea una carta en “¿Cuánto vale tu carta?” y toca “Guardar en mi portafolio”. No se publica: aquí ves cuánto vale y en cuánto se vende.</p>
@@ -7092,12 +7082,14 @@ async function myCardInterests() {
 }
 const peopleN = (n) => `${fmtN(n)} ${n === 1 ? "persona" : "personas"}`;
 const interestBtn = (key, on) => `<button type="button" class="btn outline sm wl-add int-btn${on ? " on" : ""}" data-int="${esc(key)}" aria-pressed="${on}">${ic("heart")}<span>${on ? "Te interesa" : "Me interesa"}</span></button>`;
+/** Top right of a card, for its owner: "♥ 8 interesados" (nothing when nobody marked it). */
+const interestTag = (n) => (n ? `<span class="int-tag" title="${peopleN(n)} ${n === 1 ? "interesada" : "interesadas"} en esta carta">${ic("heart")}${fmtN(n)} ${n === 1 ? "interesado" : "interesados"}</span>` : "");
 /** What the owner sees under a card: how many people want it. */
 const interestCount = (n) => `<p class="int-count${n ? " on" : ""}">${ic("heart")}<span>${n ? `${peopleN(n)} ${n === 1 ? "interesada" : "interesadas"}` : "Nadie la ha marcado todavía"}</span></p>`;
 /** A card of someone's public collection (not a link: it has no page of its own). */
-const collectionTile = (c, i, after = "", own = false) => `<li style="--i:${Math.min(i, 16)}"><div class="pcard pf-card coll-card">
+const collectionTile = (c, i, after = "", own = false, badge = "") => `<li style="--i:${Math.min(i, 16)}"><div class="pcard pf-card coll-card">
     <div class="media card-ratio"><div class="inner">${pfArt(c, new Map())}</div>
-      <div class="corner-l"><span class="${c.grading_company ? "graded" : "cond"}">${esc(pfLabel(c))}</span></div>${c.isDemo || c.example ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : (c.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${c.quantity}</span></div>` : ""}</div>
+      <div class="corner-l"><span class="${c.grading_company ? "graded" : "cond"}">${esc(pfLabel(c))}</span></div>${badge ? `<div class="corner-tr">${badge}</div>` : ""}${c.isDemo || c.example ? `<div class="corner-r"><span class="demo">Ejemplo</span></div>` : (c.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${c.quantity}</span></div>` : ""}</div>
     <p class="title">${esc(c.subject)}</p>
     <p class="set">${esc([c.set_name, c.number].filter(Boolean).join(" · ") || categoryName(c.category))}</p>
     <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b>${c.value_cents != null ? fmtEstimate(c.value_cents / 100) : "—"}</b></p>
