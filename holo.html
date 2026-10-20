@@ -575,6 +575,7 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .coll-head { margin-top: 36px; }
 .coll-sub { margin: 4px 0 14px; max-width: 640px; }
 .pf-public .ptitle .b { margin-left: 4px; font-size: 11px; }
+.prof-int { margin: 4px 0 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); }
 .int-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 12px; }
 .int-big .v { margin: 0; font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .int-big .s { flex: 1 1 260px; margin: 0; font-size: 14px; color: var(--fg-2); }
@@ -2268,8 +2269,9 @@ async function route() {
 const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["eventos", "#/eventos", "Eventos", "calendar"], ["consultas", "#/consultas", "Consultas", "chat"], ["watchlist", "#/watchlist", "Mi watchlist", "bookmark"]];
 function renderNav() {
   const { path } = parseHash();
-  const current = { "/eventos": "eventos", "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/watchlist": "watchlist" }[path] ?? (path.startsWith("/portafolio/") ? "portafolio" : path.startsWith("/watchlist/") ? "watchlist" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi portafolio", "trend"], ["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
+  const myProfile = session ? `/vendedor/${encodeURIComponent(session.user.id)}` : null;
+  const current = { "/eventos": "eventos", "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/watchlist": "watchlist" }[path] ?? (path === myProfile ? "perfil" : undefined) ?? (path.startsWith("/portafolio/") ? "portafolio" : path.startsWith("/watchlist/") ? "watchlist" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi portafolio", "trend"], ["perfil", `#${myProfile}`, "Mi perfil", "eye"], ["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span>${k === "watchlist" ? watchNavBadge() : ""}</a>`).join("");
@@ -2290,6 +2292,8 @@ function renderNav() {
   };
   $("#acctBtn")?.addEventListener("click", (e) => openMenu(e.currentTarget, [
     { heading: session.user.email ?? name },
+    { label: "Mi perfil", icon: "eye", href: `#${myProfile}` },
+    { label: "Mi portafolio", icon: "trend", href: "#/portafolio" },
     { label: "Mi cuenta", icon: "user", href: "#/cuenta" },
     { label: "Mis consultas", icon: "chat", href: "#/consultas" },
     isSeller() ? { label: "Vender una carta", icon: "plus", href: "#/vender" } : { label: "Pasar a cuenta de vendedor", icon: "store", href: "#/cuenta?vendedor=1" },
@@ -3093,6 +3097,11 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   const s = seller, shop = s.isShop;
   // The example owner's profile (#/vendedor/demo-yo) is seen the way its owner sees it: counts, no buttons.
   const ownerView = isMe || id === PF_EXAMPLE_OWNER;
+  // My own profile with nothing to show yet: the example collection and its people interested, marked as an
+  // example, so I can see how it will look before I show my cards.
+  const ownExample = isMe && !listings.length && !coll.length && CONFIG.SHOW_DEMO_LISTINGS;
+  if (ownExample) ({ items: coll, ints: counts } = examplePortfolio());
+  const showingExample = ownExample || id === PF_EXAMPLE_OWNER;
   // "Me interesa" on every card of someone else's profile (signed out, it asks to sign in first). On the
   // example sellers it works too, kept in this browser.
   const canMark = !ownerView && (demo ? CONFIG.SHOW_DEMO_LISTINGS : !!sb && interestsOn);
@@ -3127,8 +3136,12 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     <section class="panel col" id="shopEvents" hidden></section>
     <section class="panel" id="sellerReviews" hidden></section></aside>
     <section class="seller-cards" aria-labelledby="collTitle">
-    ${id === PF_EXAMPLE_OWNER ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> así se ve tu perfil cuando muestras tus cartas. Los demás ven “Me interesa” en cada una; tú ves cuántas personas la quieren. <a class="link" href="#/portafolio/ejemplo">Ver mi portafolio de ejemplo</a></p>` : ""}
+    ${ownExample ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> todavía no muestras cartas en tu perfil. Así se verá cuando muestres tu colección: los demás ven “Me interesa” en cada carta y tú ves cuántas personas la quieren. Estas cartas y números son de ejemplo. <a class="link" href="#/portafolio">Elegir mis cartas en Mi portafolio</a></p>`
+      : id === PF_EXAMPLE_OWNER ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> así se ve tu perfil cuando muestras tus cartas. Los demás ven “Me interesa” en cada una; tú ves cuántas personas la quieren. <a class="link" href="#/portafolio/ejemplo">Ver mi portafolio de ejemplo</a></p>` : ""}
     <div class="rhead"><h2 id="collTitle">${who} colección</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
+    ${ownerView && counts ? `<div class="int-big prof-int"><p class="v">${fmtN(counts.people)}</p><p class="s">${counts.people
+      ? `${counts.people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(counts.cards.length)} de tus cartas</b>. Debajo de cada carta ves cuántas la quieren; nunca quiénes. <a class="link" href="#/portafolio${showingExample ? "/ejemplo" : ""}">Ver el detalle</a>`
+      : "personas interesadas todavía. Comparte tu perfil para que marquen las cartas que quieren."}</p></div>` : ""}
     <p class="small muted coll-sub">${ownerView ? "Todas tus cartas: las que vendes y las de tu portafolio que muestras. Debajo de cada una ves cuántas personas la quieren (nunca quiénes)."
       : `Todas las cartas de ${name}, estén o no en venta. Marca “Me interesa” en las que quieras: verá cuántas personas la quieren, sin saber quiénes.`}</p>
     ${entries.length ? `<div class="coll-filters"><nav class="chips seller-chips" aria-label="Categorías"></nav>
