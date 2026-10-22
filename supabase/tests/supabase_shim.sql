@@ -54,3 +54,9 @@ create or replace function cron.unschedule(p_name text) returns boolean language
 $$;
 
 grant usage on schema public, auth, storage to anon, authenticated, service_role;
+
+-- Supabase's default privileges: every new table, view, sequence and function in public is granted
+-- to anon/authenticated. Without this the tests would miss views that stay writable (see 0010).
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to anon, authenticated, service_role;

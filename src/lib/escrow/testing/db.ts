@@ -59,6 +59,21 @@ export class TestDb {
     });
   }
 
+  /**
+   * Like `as`, but also switches to the Postgres role the request would really have (anon or
+   * authenticated), so table privileges and RLS apply. `as` keeps the superuser, which bypasses both.
+   */
+  async asRole<T = Record<string, unknown>>(actor: Actor | { kind: "anon" }, sql: string, params: unknown[] = []): Promise<T[]> {
+    return this.pg.transaction(async (tx) => {
+      const sub = actor.kind === "user" ? actor.id : "";
+      const role = actor.kind === "user" ? "authenticated" : actor.kind === "anon" ? "anon" : "service_role";
+      await tx.query("select set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claim.role', $2, true)", [sub, role]);
+      await tx.query(`set local role ${role}`);
+      const r = await tx.query<T>(sql, params);
+      return r.rows;
+    });
+  }
+
   /** Same as `as`, for the SQL editor (admin context). */
   async q<T = Record<string, unknown>>(sql: string, params: unknown[] = []): Promise<T[]> {
     return this.as<T>({ kind: "admin" }, sql, params);

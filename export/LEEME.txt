@@ -8,7 +8,7 @@ CÓMO ABRIRLO
 
 QUÉ FUNCIONA
 - Ver cartas, buscar y filtrar (Pokémon, NBA, NFL, graduadas, provincia, precio).
-- Detalle de cada carta con precio estimado y costo de Compra Protegida.
+- Detalle de cada carta con precio estimado y "Consultar por WhatsApp".
 - Crear cuenta y entrar.
 - Publicar cartas con fotos reales. Al subir la foto, Holo reconoce la carta
   sola (cuál es y qué versión: set, número, rareza), llena el formulario,
@@ -66,9 +66,11 @@ QUÉ NO INCLUYE ESTE ARCHIVO
 - Contacto por WhatsApp: se activa al poner el número en CONFIG.WHATSAPP
   (al inicio del <script> dentro de holo.html).
 
-COMISIÓN (Compra Protegida, opcional para el comprador)
-4% del precio, mínimo $1 y máximo $40, más 7% de ITBMS sobre la comisión.
-Publicar es gratis para el vendedor.
+COMISIÓN
+7% para todos los vendedores (tiendas y particulares), descontado de lo que
+reciben cuando se completa una venta, más 7% de ITBMS sobre la comisión. El
+comprador paga solo el precio. Publicar es gratis. Ejemplo: en una carta de
+$100 el vendedor recibe $92.51.
 
 PARA DESARROLLADORES
 Todo el código (HTML, CSS y JavaScript) está dentro de holo.html. La

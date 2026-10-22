@@ -18,6 +18,9 @@ create or replace view public.public_collection as
          condition, image_url, quantity, value_cents, created_at
   from public.portfolio_items
   where is_public;
+-- Read-only: the view skips RLS and is auto-updatable, and Supabase grants ALL on new views, so without
+-- this revoke anyone could change or delete other people's cards through it (same fix as 0010).
+revoke insert, update, delete, truncate, references, trigger on public.public_collection from anon, authenticated;
 grant select on public.public_collection to anon, authenticated;
 
 -- ----------------------------------------------------------------- "Me interesa"
