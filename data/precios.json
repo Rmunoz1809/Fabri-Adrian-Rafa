@@ -1,6 +1,173 @@
 {
   "version": 1,
   "cartas": {
+    "sv1-247": {
+      "nombre": "Koraidon ex",
+      "set": "Scarlet & Violet",
+      "tcgplayer": {
+        "productId": 490044,
+        "groupId": 22873,
+        "grupo": "SV01: Scarlet & Violet Base Set",
+        "historico": "2026-10-26"
+      },
+      "cardmarket": {
+        "idProduct": 702543,
+        "historico": "2026-10-26"
+      },
+      "series": {
+        "tcgplayer": {
+          "holofoil": [
+            {"d": "2024-02-08", "market": 10.09, "low": 8, "mid": 10.95, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-02-12", "market": 9.69, "low": 7.99, "mid": 10.68, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-02-19", "market": 8.53, "low": 7.25, "mid": 10.5, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-02-26", "market": 9.16, "low": 7.1, "mid": 10.47, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-03-04", "market": 9.51, "low": 7.7, "mid": 10.5, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-03-11", "market": 10.14, "low": 7.7, "mid": 10.5, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-03-18", "market": 9.98, "low": 7.7, "mid": 10.47, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-03-25", "market": 10.85, "low": 7.7, "mid": 10.95, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-04-01", "market": 11.76, "low": 8.69, "mid": 11.07, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-04-08", "market": 10.38, "low": 8.69, "mid": 10.94, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-04-15", "market": 10.76, "low": 8.71, "mid": 10.8, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-04-22", "market": 10.54, "low": 8, "mid": 10.72, "high": 150, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-04-29", "market": 10.29, "low": 8.49, "mid": 10.8, "high": 150, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-05-06", "market": 10.8, "low": 7.99, "mid": 11, "high": 150, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-05-13", "market": 10.97, "low": 9, "mid": 11, "high": 150, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-05-20", "market": 11.78, "low": 9.17, "mid": 12, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-05-27", "market": 11.53, "low": 9.45, "mid": 12.09, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-06-03", "market": 12.13, "low": 9.49, "mid": 13.22, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-06-10", "market": 12.73, "low": 9.49, "mid": 14.89, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-06-17", "market": 13.31, "low": 9.49, "mid": 14.26, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-06-24", "market": 13.35, "low": 9.49, "mid": 14.69, "high": 43.98, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-07-01", "market": 12.51, "low": 9.49, "mid": 13.96, "high": 43.98, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-07-08", "market": 13.18, "low": 9.49, "mid": 13.76, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-07-15", "market": 12.9, "low": 9.49, "mid": 14, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-07-22", "market": 13.09, "low": 9.49, "mid": 13.55, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-07-29", "market": 14.01, "low": 10.97, "mid": 14.91, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-08-05", "market": 14.15, "low": 10.97, "mid": 14.48, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-08-12", "market": 13.84, "low": 10.89, "mid": 14, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-08-19", "market": 13.04, "low": 9.75, "mid": 14, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-08-26", "market": 13.07, "low": 9.75, "mid": 13.63, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-09-02", "market": 11.57, "low": 9.75, "mid": 12.99, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-09-09", "market": 11.87, "low": 9, "mid": 12.71, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-09-16", "market": 10.99, "low": 8.49, "mid": 12.03, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-09-23", "market": 11.06, "low": 8.05, "mid": 12, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-09-30", "market": 10.91, "low": 8.49, "mid": 11.7, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-10-07", "market": 9.91, "low": 7.25, "mid": 11.25, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-10-14", "market": 10.26, "low": 7.51, "mid": 11.4, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-10-21", "market": 9.98, "low": 8.49, "mid": 11.35, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-10-28", "market": 9.76, "low": 9.14, "mid": 11, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-11-04", "market": 9.9, "low": 8, "mid": 11.02, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-11-11", "market": 10.14, "low": 9.08, "mid": 11.07, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-11-18", "market": 10.77, "low": 9, "mid": 11.07, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-11-25", "market": 11.38, "low": 9, "mid": 11.69, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-12-02", "market": 11.94, "low": 10.18, "mid": 12.5, "high": 59.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-12-09", "market": 12.31, "low": 10, "mid": 12.74, "high": 41, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-12-16", "market": 12.97, "low": 9.99, "mid": 13.43, "high": 9999.99, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-12-23", "market": 13.23, "low": 10, "mid": 13.8, "high": 9999.99, "fuente": "tcgcsv-archivo"},
+            {"d": "2024-12-30", "market": 12.21, "low": 10.73, "mid": 13.02, "high": 9999.99, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-01-06", "market": 13.66, "low": 11, "mid": 15.51, "high": 9999.99, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-01-13", "market": 14.69, "low": 12, "mid": 16.23, "high": 9999.99, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-01-20", "market": 14.95, "low": 12, "mid": 18, "high": 9999.99, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-01-27", "market": 17.76, "low": 12, "mid": 19.68, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-02-03", "market": 19.2, "low": 12.57, "mid": 21.58, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-02-10", "market": 18.16, "low": 12, "mid": 20.06, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-02-17", "market": 18.87, "low": 14.99, "mid": 20, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-02-24", "market": 19.91, "low": 17.27, "mid": 23.29, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-03-03", "market": 20.5, "low": 18.06, "mid": 22.19, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-03-10", "market": 21.13, "low": 13.5, "mid": 21.47, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-03-17", "market": 18.77, "low": 15.98, "mid": 21.49, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-03-24", "market": 18.45, "low": 16, "mid": 20.4, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-03-31", "market": 18.16, "low": 14.23, "mid": 19.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-04-07", "market": 15.86, "low": 14, "mid": 18.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-04-14", "market": 15.79, "low": 13.78, "mid": 18.38, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-04-21", "market": 16.59, "low": 13.99, "mid": 18, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-04-28", "market": 14.87, "low": 12.01, "mid": 17.44, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-05-05", "market": 15.33, "low": 13.63, "mid": 16.98, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-05-12", "market": 13.75, "low": 13, "mid": 16.29, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-05-19", "market": 14.88, "low": 10.54, "mid": 17.81, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-05-26", "market": 14.3, "low": 11, "mid": 17.37, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-06-02", "market": 13.64, "low": 12.58, "mid": 17.18, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-06-09", "market": 14.11, "low": 13, "mid": 17.04, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-06-16", "market": 14.97, "low": 11.41, "mid": 16.4, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-06-23", "market": 14.34, "low": 12.5, "mid": 16, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-06-30", "market": 14.73, "low": 12.5, "mid": 15.98, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-07-07", "market": 15.05, "low": 12.61, "mid": 16, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-07-14", "market": 14.36, "low": 12.61, "mid": 15.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-07-21", "market": 14.39, "low": 12.61, "mid": 15.98, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-07-28", "market": 14.6, "low": 12, "mid": 15.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-08-04", "market": 14.05, "low": 12.9, "mid": 15.98, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-08-11", "market": 13.91, "low": 11.88, "mid": 15.97, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-08-18", "market": 14.03, "low": 12.5, "mid": 15.55, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-08-25", "market": 14.53, "low": 12.5, "mid": 15.63, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-09-01", "market": 14.47, "low": 12.5, "mid": 15.8, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-09-08", "market": 16.31, "low": 13.22, "mid": 17.4, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-09-15", "market": 18.27, "low": 15, "mid": 23.99, "high": 81.6, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-09-22", "market": 18.66, "low": 15.34, "mid": 22.04, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-09-29", "market": 18.48, "low": 15.34, "mid": 21.22, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-10-06", "market": 18.47, "low": 15.99, "mid": 21.41, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-10-13", "market": 17.54, "low": 16, "mid": 21.63, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-10-20", "market": 17.29, "low": 15.46, "mid": 20, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-10-27", "market": 17.76, "low": 16, "mid": 20, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-11-03", "market": 17, "low": 14, "mid": 18.84, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-11-10", "market": 15.56, "low": 13, "mid": 17.64, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-11-17", "market": 15.02, "low": 13.26, "mid": 17.15, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-11-24", "market": 15.14, "low": 12.89, "mid": 16.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-12-01", "market": 14.04, "low": 12, "mid": 16.34, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-12-08", "market": 14.4, "low": 12, "mid": 15.98, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-12-15", "market": 14.5, "low": 9.99, "mid": 15.64, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-12-22", "market": 13.91, "low": 11.76, "mid": 15.28, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2025-12-29", "market": 14.42, "low": 12, "mid": 16.64, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-01-05", "market": 14.73, "low": 12, "mid": 16.9, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-01-12", "market": 16.03, "low": 12, "mid": 17.57, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-01-19", "market": 16.92, "low": 12, "mid": 17.63, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-01-26", "market": 15.79, "low": 12, "mid": 17.63, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-02-02", "market": 15.48, "low": 12, "mid": 17.11, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-02-09", "market": 15.7, "low": 12, "mid": 16.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-02-16", "market": 15.11, "low": 12, "mid": 16.8, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-02-23", "market": 16.62, "low": 12, "mid": 17.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-03-02", "market": 16.81, "low": 13.84, "mid": 18, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-03-09", "market": 16.02, "low": 14.59, "mid": 18, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-03-16", "market": 17.28, "low": 13, "mid": 19.99, "high": 75, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-03-23", "market": 18.41, "low": 16, "mid": 21.56, "high": 4321, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-03-30", "market": 19.86, "low": 16.47, "mid": 21.91, "high": 362.2, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-04-06", "market": 21.28, "low": 17, "mid": 24.99, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-04-13", "market": 21.87, "low": 17.95, "mid": 26, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-04-20", "market": 22.34, "low": 18.29, "mid": 27.06, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-04-27", "market": 24.7, "low": 18, "mid": 26.92, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-05-04", "market": 22.1, "low": 18, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-05-11", "market": 23.1, "low": 16.97, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-05-18", "market": 23.91, "low": 19.52, "mid": 25.99, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-05-25", "market": 23.37, "low": 19.43, "mid": 26.27, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-06-01", "market": 23.54, "low": 19.2, "mid": 26.59, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-06-08", "market": 23.99, "low": 18, "mid": 27.2, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-06-15", "market": 23.69, "low": 19.65, "mid": 26.65, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-06-22", "market": 23.49, "low": 19.65, "mid": 26.75, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-06-29", "market": 25.28, "low": 19.65, "mid": 26.97, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-07-06", "market": 25.02, "low": 21.8, "mid": 27.19, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-07-13", "market": 22.92, "low": 20.99, "mid": 25.52, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-07-20", "market": 22.14, "low": 20.16, "mid": 25.24, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-07-27", "market": 21.42, "low": 20.9, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-08-03", "market": 22.76, "low": 21, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-08-10", "market": 22.94, "low": 20.7, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-08-17", "market": 22.14, "low": 17.98, "mid": 24.75, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-08-24", "market": 22.95, "low": 17, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-08-31", "market": 22.45, "low": 19.5, "mid": 24.75, "high": 200.97, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-09-07", "market": 23.94, "low": 19.71, "mid": 25, "high": 212.85, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-09-14", "market": 23.15, "low": 18.49, "mid": 25, "high": 164.7, "fuente": "tcgcsv-archivo"},
+            {"d": "2026-10-25", "market": 18.79, "low": 15, "mid": 21.67, "high": 164.7, "fuente": "tcgcsv"}
+          ]
+        },
+        "cardmarket": [
+          {"d": "2026-09-16", "avg": null, "low": 9.99, "trend": 24.75, "avg1": 22, "avg7": 20.94, "avg30": 22.84, "fuente": "cardmarket-espejo", "eurUsd": 1.1537, "fechaTasa": "2026-09-16"},
+          {"d": "2026-09-21", "avg": null, "low": 9.99, "trend": 21.49, "avg1": 19.19, "avg7": 22.84, "avg30": 23.28, "fuente": "cardmarket-espejo", "eurUsd": 1.149, "fechaTasa": "2026-09-21"},
+          {"d": "2026-09-28", "avg": null, "low": 9.97, "trend": 20.36, "avg1": 19.19, "avg7": 22.84, "avg30": 23.28, "fuente": "cardmarket-espejo", "eurUsd": 1.1378, "fechaTasa": "2026-09-28"},
+          {"d": "2026-10-06", "avg": null, "low": 9.85, "trend": 18.34, "avg1": 18, "avg7": 19.76, "avg30": 22.76, "fuente": "cardmarket-espejo", "eurUsd": 1.1269, "fechaTasa": "2026-10-06"},
+          {"d": "2026-10-12", "avg": null, "low": 9.02, "trend": 17.81, "avg1": 18.65, "avg7": 18.89, "avg30": 21.56, "fuente": "cardmarket-espejo", "eurUsd": 1.1181, "fechaTasa": "2026-10-12"},
+          {"d": "2026-10-19", "avg": null, "low": 9.9, "trend": 20.87, "avg1": 24.18, "avg7": 20.83, "avg30": 20.79, "fuente": "cardmarket-espejo", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"},
+          {"d": "2026-10-26", "avg": 21.81, "low": 9.02, "trend": 21.53, "avg1": 30, "avg7": 21.88, "avg30": 21.25, "fuente": "cardmarket", "eurUsd": 1.1188, "fechaTasa": "2026-10-26"}
+        ]
+      }
+    },
     "sv2-254": {
       "nombre": "Iono",
       "set": "Paldea Evolved",
@@ -157,7 +324,8 @@
             {"d": "2026-09-27", "market": 10.86, "low": 9, "mid": 11.92, "high": 218.6, "fuente": "tcgcsv"},
             {"d": "2026-10-04", "market": 10.73, "low": 8.75, "mid": 11.75, "high": 110.92, "fuente": "tcgcsv"},
             {"d": "2026-10-11", "market": 9.75, "low": 7.28, "mid": 11.4, "high": 110.9, "fuente": "tcgcsv"},
-            {"d": "2026-10-18", "market": 10.24, "low": 8.05, "mid": 11.26, "high": 110.62, "fuente": "tcgcsv"}
+            {"d": "2026-10-18", "market": 10.24, "low": 8.05, "mid": 11.26, "high": 110.62, "fuente": "tcgcsv"},
+            {"d": "2026-10-25", "market": 10.46, "low": 8.05, "mid": 11.25, "high": 920, "fuente": "tcgcsv"}
           ]
         },
         "cardmarket": [
@@ -165,7 +333,8 @@
           {"d": "2026-09-26", "avg": 5.11, "low": 2, "trend": 5.92, "avg1": 6.98, "avg7": 5.13, "avg30": 5.13, "fuente": "cardmarket", "eurUsd": 1.1403, "fechaTasa": "2026-09-25"},
           {"d": "2026-10-04", "avg": 5.11, "low": 2, "trend": 5.37, "avg1": 4.5, "avg7": 4.89, "avg30": 5.85, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-02"},
           {"d": "2026-10-12", "avg": 5.83, "low": 2, "trend": 5.41, "avg1": 3.95, "avg7": 5.23, "avg30": 5.74, "fuente": "cardmarket", "eurUsd": 1.1181, "fechaTasa": "2026-10-12"},
-          {"d": "2026-10-19", "avg": 5.83, "low": 2, "trend": 3.84, "avg1": 3.69, "avg7": 3.5, "avg30": 5.4, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"}
+          {"d": "2026-10-19", "avg": 5.83, "low": 2, "trend": 3.84, "avg1": 3.69, "avg7": 3.5, "avg30": 5.4, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"},
+          {"d": "2026-10-26", "avg": 5.83, "low": 2, "trend": 2.58, "avg1": 3.07, "avg7": 3.89, "avg30": 5.06, "fuente": "cardmarket", "eurUsd": 1.1188, "fechaTasa": "2026-10-26"}
         ]
       }
     },
@@ -325,7 +494,8 @@
             {"d": "2026-09-27", "market": 5.51, "low": 4.75, "mid": 8.1, "high": 139.8, "fuente": "tcgcsv"},
             {"d": "2026-10-04", "market": 6.61, "low": 4.46, "mid": 8.25, "high": 108.31, "fuente": "tcgcsv"},
             {"d": "2026-10-11", "market": 7.14, "low": 4.5, "mid": 8.25, "high": 108.31, "fuente": "tcgcsv"},
-            {"d": "2026-10-18", "market": 6.27, "low": 4.4, "mid": 8, "high": 111.19, "fuente": "tcgcsv"}
+            {"d": "2026-10-18", "market": 6.27, "low": 4.4, "mid": 8, "high": 111.19, "fuente": "tcgcsv"},
+            {"d": "2026-10-25", "market": 7.08, "low": 4.2, "mid": 8, "high": 96.95, "fuente": "tcgcsv"}
           ]
         },
         "cardmarket": [
@@ -333,7 +503,8 @@
           {"d": "2026-09-26", "avg": 7.58, "low": 1.99, "trend": 7.45, "avg1": 7.55, "avg7": 7.44, "avg30": 7.57, "fuente": "cardmarket", "eurUsd": 1.1403, "fechaTasa": "2026-09-25"},
           {"d": "2026-10-04", "avg": 7.58, "low": 1.99, "trend": 7.04, "avg1": 6.91, "avg7": 7.15, "avg30": 7.45, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-02"},
           {"d": "2026-10-12", "avg": 7.39, "low": 3.99, "trend": 7.42, "avg1": 8, "avg7": 7.49, "avg30": 7.39, "fuente": "cardmarket", "eurUsd": 1.1181, "fechaTasa": "2026-10-12"},
-          {"d": "2026-10-19", "avg": 7.39, "low": 3.98, "trend": 7.15, "avg1": 7.94, "avg7": 6.82, "avg30": 7.23, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"}
+          {"d": "2026-10-19", "avg": 7.39, "low": 3.98, "trend": 7.15, "avg1": 7.94, "avg7": 6.82, "avg30": 7.23, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"},
+          {"d": "2026-10-26", "avg": 7.39, "low": 3.3, "trend": 7.27, "avg1": 7.13, "avg7": 7.23, "avg30": 7.17, "fuente": "cardmarket", "eurUsd": 1.1188, "fechaTasa": "2026-10-26"}
         ]
       }
     },
@@ -493,7 +664,8 @@
             {"d": "2026-09-27", "market": 348.31, "low": 317.88, "mid": 384.9, "high": 10000, "fuente": "tcgcsv"},
             {"d": "2026-10-04", "market": 342.73, "low": 297.67, "mid": 376.44, "high": 10000, "fuente": "tcgcsv"},
             {"d": "2026-10-11", "market": 321.19, "low": 296, "mid": 360.25, "high": 10000, "fuente": "tcgcsv"},
-            {"d": "2026-10-18", "market": 313.36, "low": 280, "mid": 350, "high": 10000, "fuente": "tcgcsv"}
+            {"d": "2026-10-18", "market": 313.36, "low": 280, "mid": 350, "high": 10000, "fuente": "tcgcsv"},
+            {"d": "2026-10-25", "market": 294.42, "low": 275.95, "mid": 350, "high": 10000, "fuente": "tcgcsv"}
           ]
         },
         "cardmarket": [
@@ -501,7 +673,8 @@
           {"d": "2026-09-26", "avg": 370.41, "low": 109.98, "trend": 477.65, "avg1": 446.19, "avg7": 470.58, "avg30": 364.87, "fuente": "cardmarket", "eurUsd": 1.1403, "fechaTasa": "2026-09-25"},
           {"d": "2026-10-04", "avg": 370.41, "low": 109.98, "trend": 442.33, "avg1": 310, "avg7": 360.71, "avg30": 381.19, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-02"},
           {"d": "2026-10-12", "avg": 370.41, "low": 109.98, "trend": 392.47, "avg1": 792.5, "avg7": 392.73, "avg30": 397.15, "fuente": "cardmarket", "eurUsd": 1.1181, "fechaTasa": "2026-10-12"},
-          {"d": "2026-10-19", "avg": 386.27, "low": 109.98, "trend": 327.72, "avg1": 339.99, "avg7": 298.05, "avg30": 361.93, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"}
+          {"d": "2026-10-19", "avg": 386.27, "low": 109.98, "trend": 327.72, "avg1": 339.99, "avg7": 298.05, "avg30": 361.93, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"},
+          {"d": "2026-10-26", "avg": 386.27, "low": 189, "trend": 290.18, "avg1": 280.99, "avg7": 300.21, "avg30": 333.22, "fuente": "cardmarket", "eurUsd": 1.1188, "fechaTasa": "2026-10-26"}
         ]
       }
     },
@@ -622,7 +795,8 @@
             {"d": "2026-09-27", "market": 285.22, "low": 250, "mid": 313.74, "high": 549.95, "fuente": "tcgcsv"},
             {"d": "2026-10-04", "market": 286.31, "low": 250, "mid": 304.95, "high": 549.95, "fuente": "tcgcsv"},
             {"d": "2026-10-11", "market": 281.33, "low": 235.22, "mid": 301.55, "high": 549.95, "fuente": "tcgcsv"},
-            {"d": "2026-10-18", "market": 268.68, "low": 235.22, "mid": 295.55, "high": 549.95, "fuente": "tcgcsv"}
+            {"d": "2026-10-18", "market": 268.68, "low": 235.22, "mid": 295.55, "high": 549.95, "fuente": "tcgcsv"},
+            {"d": "2026-10-25", "market": 256.63, "low": 229.01, "mid": 287.25, "high": 549.95, "fuente": "tcgcsv"}
           ]
         },
         "cardmarket": [
@@ -630,7 +804,8 @@
           {"d": "2026-09-26", "avg": 259.65, "low": 179.99, "trend": 251.03, "avg1": 214.98, "avg7": 233.69, "avg30": 246.69, "fuente": "cardmarket", "eurUsd": 1.1403, "fechaTasa": "2026-09-25"},
           {"d": "2026-10-04", "avg": 259.65, "low": 179.99, "trend": 245.29, "avg1": 259.5, "avg7": 243.2, "avg30": 248.67, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-02"},
           {"d": "2026-10-12", "avg": 259.65, "low": 155, "trend": 322.42, "avg1": 231.65, "avg7": 306.52, "avg30": 268.81, "fuente": "cardmarket", "eurUsd": 1.1181, "fechaTasa": "2026-10-12"},
-          {"d": "2026-10-19", "avg": 272.09, "low": 160, "trend": 294.13, "avg1": 245, "avg7": 247.59, "avg30": 263.08, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"}
+          {"d": "2026-10-19", "avg": 272.09, "low": 160, "trend": 294.13, "avg1": 245, "avg7": 247.59, "avg30": 263.08, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"},
+          {"d": "2026-10-26", "avg": 272.09, "low": 164.95, "trend": 236.72, "avg1": 174.5, "avg7": 203.46, "avg30": 248.88, "fuente": "cardmarket", "eurUsd": 1.1188, "fechaTasa": "2026-10-26"}
         ]
       }
     },
@@ -790,7 +965,8 @@
             {"d": "2026-09-27", "market": 2214.79, "low": 1804.01, "mid": 2368.34, "high": 6000, "fuente": "tcgcsv"},
             {"d": "2026-10-04", "market": 2292.5, "low": 1804.01, "mid": 2296.25, "high": 6000, "fuente": "tcgcsv"},
             {"d": "2026-10-11", "market": 2267.62, "low": 1699.99, "mid": 2275, "high": 6000, "fuente": "tcgcsv"},
-            {"d": "2026-10-18", "market": 2324.5, "low": 1699, "mid": 2330.5, "high": 23543.49, "fuente": "tcgcsv"}
+            {"d": "2026-10-18", "market": 2324.5, "low": 1699, "mid": 2330.5, "high": 23543.49, "fuente": "tcgcsv"},
+            {"d": "2026-10-25", "market": 2298.95, "low": 1805, "mid": 2425.5, "high": 20487.76, "fuente": "tcgcsv"}
           ]
         },
         "cardmarket": [
@@ -798,7 +974,8 @@
           {"d": "2026-09-26", "avg": 1547.22, "low": 250, "trend": 1289.51, "avg1": 2650, "avg7": 1843.99, "avg30": 1811.56, "fuente": "cardmarket", "eurUsd": 1.1403, "fechaTasa": "2026-09-25"},
           {"d": "2026-10-04", "avg": 1547.22, "low": 220, "trend": 2026.85, "avg1": 2400, "avg7": 2079.63, "avg30": 1762.99, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-02"},
           {"d": "2026-10-12", "avg": 1830.92, "low": 220, "trend": 1930.74, "avg1": 1199, "avg7": 2037.33, "avg30": 1764.06, "fuente": "cardmarket", "eurUsd": 1.1181, "fechaTasa": "2026-10-12"},
-          {"d": "2026-10-19", "avg": 1830.92, "low": 220, "trend": 1805.9, "avg1": 1150, "avg7": 2249.8, "avg30": 1772.15, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"}
+          {"d": "2026-10-19", "avg": 1830.92, "low": 220, "trend": 1805.9, "avg1": 1150, "avg7": 2249.8, "avg30": 1772.15, "fuente": "cardmarket", "eurUsd": 1.1225, "fechaTasa": "2026-10-19"},
+          {"d": "2026-10-26", "avg": 1830.92, "low": 250, "trend": 1514.74, "avg1": 1187, "avg7": 1729.2, "avg30": 1702.84, "fuente": "cardmarket", "eurUsd": 1.1188, "fechaTasa": "2026-10-26"}
         ]
       }
     }
@@ -833,16 +1010,16 @@
       "url": "https://frankfurter.dev"
     }
   },
-  "actualizado": "2026-10-19T16:47:58.511Z",
+  "actualizado": "2026-10-26T16:30:17.375Z",
   "estado": {
     "tcgplayer": {
-      "tcgcsv": 5,
+      "tcgcsv": 6,
       "tcgdex": 0,
       "pokemontcg": 0,
       "repetido": 0
     },
     "cardmarket": {
-      "cardmarket": 5,
+      "cardmarket": 6,
       "tcgdex": 0,
       "pokemontcg": 0,
       "repetido": 0
