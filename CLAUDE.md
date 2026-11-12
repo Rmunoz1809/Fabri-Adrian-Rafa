@@ -29,4 +29,5 @@ Repo: https://github.com/Rmunoz1809/Fabri-Adrian-Rafa (remote `origin`, rama `ma
 - El flujo de órdenes vive en SQL (migración 0029, `docs/09-flujo-ordenes.md`). Sus pruebas (`src/lib/escrow/`) corren todas las migraciones en PGlite con `supabase/tests/supabase_shim.sql`: si agregas una migración, `npm test` la prueba también.
 - La comisión de Compra Protegida vive en `src/lib/fees.ts` (7% al vendedor, descontado de lo que recibe; el comprador paga solo el precio; sin mínimo ni máximo, más 7% de ITBMS sobre la comisión). Si cambia, actualiza también `export/holo.html`, `protected_quote()` en Supabase (migración nueva) y `docs/02-product-spec.md`.
 - `export/holo.html` es la versión de un solo archivo para compartir. Nunca debe contener claves secretas.
+- `holo-pay/` es un proyecto aparte (Next.js + Prisma) para el pago con el Botón de Pago de Yappy. Tiene sus propios checks: `cd holo-pay && npm test && npm run typecheck`. Ver `holo-pay/README.md`.
 - `holo.html` en la raíz del repo es lo que publica GitHub Pages. Si cambias `export/holo.html`, cópialo también a la raíz (`cp export/holo.html holo.html`) en el mismo commit.

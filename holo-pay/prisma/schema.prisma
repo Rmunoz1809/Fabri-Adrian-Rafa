@@ -1,0 +1,144 @@
+// Holo payments, phase 1. Money is always stored as integer cents (never floats).
+// SQLite in development; switch `provider` to "postgresql" for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum SellerKind {
+  store
+  person
+}
+
+enum ListingStatus {
+  active
+  reserved
+  sold
+}
+
+// Order lifecycle. Allowed moves live in src/lib/orders/state-machine.ts; never update
+// `status` without going through it.
+enum OrderStatus {
+  pending_payment // pendiente_pago
+  paid // pagada
+  seller_notified // vendedor_notificado
+  shipped // enviada
+  delivered // entregada
+  payout_released // pago_liberado
+  expired // expirada
+  cancelled // cancelada
+  rejected // rechazada
+  refunded // reembolso
+  under_review // en_revision: payments that don't add up, a human decides
+}
+
+// Outcome of validating one raw Yappy IPN.
+enum IpnResult {
+  valid // signature ok and the order moved
+  duplicate // signature ok, order already in that state (idempotent no-op)
+  invalid_signature // firma_invalida
+  order_not_found
+  invalid_status // unknown status letter
+  late_payment // "E" for an expired/cancelled order -> under_review
+  invalid_transition // signature ok but the order can't take that status
+  malformed // missing/invalid query params
+}
+
+model Seller {
+  id        String     @id @default(cuid())
+  name      String
+  kind      SellerKind
+  verified  Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  listings  Listing[]
+}
+
+model Listing {
+  id         String        @id @default(cuid())
+  title      String
+  priceCents Int
+  sellerId   String
+  seller     Seller        @relation(fields: [sellerId], references: [id])
+  status     ListingStatus @default(active)
+  stock      Int           @default(1)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  orders     Order[]
+
+  @@index([sellerId])
+}
+
+model Order {
+  id                      String            @id @default(cuid())
+  // Sent to Yappy as orderId and shown to the buyer: alphanumeric, 1-15 chars, unique.
+  publicId                String            @unique
+  listingId               String
+  listing                 Listing           @relation(fields: [listingId], references: [id])
+  // 8-digit Panamanian mobile without prefix (Yappy aliasYappy).
+  buyerPhone              String
+  // Card price taken from the listing at checkout (never from the client).
+  itemCents               Int
+  shippingCents           Int
+  // subtotal = item + shipping; total = subtotal + taxes. All fixed when the order is created.
+  subtotalCents           Int
+  taxesCents              Int               @default(0)
+  totalCents              Int
+  status                  OrderStatus       @default(pending_payment)
+  // True while this order holds one unit of the listing's stock (see stockAction()).
+  stockHeld               Boolean           @default(true)
+  // Yappy transaction reference returned by payment-wc and the IPN confirmation number.
+  yappyTransactionId      String?
+  yappyConfirmationNumber String?
+  expiresAt               DateTime
+  paidAt                  DateTime?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  events                  PaymentEvent[]
+  transitions             OrderTransition[]
+
+  @@index([status, expiresAt])
+  @@index([listingId])
+}
+
+// Every raw IPN is stored, valid or not, before anything else happens.
+model PaymentEvent {
+  id                 String     @id @default(cuid())
+  // orderId exactly as received (may not match any order).
+  receivedOrderId    String?
+  // Linked when the order exists.
+  orderId            String?
+  order              Order?     @relation(fields: [orderId], references: [id])
+  status             String?
+  hash               String?
+  domain             String?
+  confirmationNumber String?
+  // Full query string as JSON, for audits.
+  rawQuery           String
+  result             IpnResult?
+  // Reviewed by staff in the admin queue.
+  resolvedAt         DateTime?
+  resolvedNote       String?
+  createdAt          DateTime   @default(now())
+
+  @@index([orderId])
+  @@index([receivedOrderId])
+  @@index([result, resolvedAt])
+}
+
+// Audit trail of every status change (who/why), written by the central transition function.
+model OrderTransition {
+  id         String      @id @default(cuid())
+  orderId    String
+  order      Order       @relation(fields: [orderId], references: [id])
+  fromStatus OrderStatus
+  toStatus   OrderStatus
+  reason     String
+  createdAt  DateTime    @default(now())
+
+  @@index([orderId])
+}

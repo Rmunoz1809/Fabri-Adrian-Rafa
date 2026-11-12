@@ -1,0 +1,11 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+# Secrets: never commit real credentials
+.env
+.env.*
+!.env.example
+# Local SQLite databases
+prisma/*.db
+prisma/*.db-journal
