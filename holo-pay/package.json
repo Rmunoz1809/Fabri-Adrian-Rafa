@@ -12,7 +12,10 @@
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:seed": "node --env-file-if-exists=.env scripts/seed.mjs",
+    "ipn": "node --env-file-if-exists=.env scripts/send-ipn.mjs",
+    "yappy:test-key": "node scripts/test-key.mjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
