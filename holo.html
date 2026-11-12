@@ -383,6 +383,16 @@ dl.rows div.total dt { color: var(--fg); }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0 0; padding-top: 16px; border-top: 1px solid var(--border); font-size: 14px; }
 .facts dt { font-size: 12px; color: var(--fg-2); }
 .facts dd { margin: 2px 0 0; font-weight: 500; }
+.buy-lines { margin: 12px 0 0; display: grid; gap: 8px; font-size: 14px; }
+.buy-lines div { display: flex; justify-content: space-between; gap: 12px; }
+.buy-lines dt { color: var(--fg-2); }
+.buy-lines dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.buy-lines .buy-total { padding-top: 10px; border-top: 1px solid var(--border); font-size: 18px; }
+.buy-lines .buy-total dt { color: var(--fg); font-weight: 600; }
+.buy-lines .buy-total dd { font-weight: 800; }
+.btn.yappy { background: #0072ce; color: #fff; font-weight: 700; }
+.btn.yappy:hover { background: #0062b3; }
+.btn.yappy:disabled { opacity: .6; }
 .desc { margin-top: 8px; font-size: 14px; white-space: pre-line; }
 .seller { display: flex; align-items: center; gap: 12px; }
 .seller .nm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 600; }
@@ -1279,6 +1289,8 @@ const PROVINCES = [...new Set(LOCATIONS.map((l) => l.province))];
 const FLAT_LOCATIONS = LOCATIONS.flatMap((l) => l.neighborhoods.map((n) => ({ province: l.province, district: l.district, neighborhood: n })));
 
 const toCents = (usd) => Math.round(usd * 100);
+/** Shipping the buyer pays on top of the card price, in cents. */
+const SHIPPING_CENTS = 300;
 function formatUsd(cents) {
   return new Intl.NumberFormat("es-PA", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", minimumFractionDigits: cents % 100 === 0 ? 0 : 2 }).format(cents / 100);
 }
@@ -3255,11 +3267,10 @@ async function viewDetail(app, id) {
           : sb ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><div id="qaBox"><p class="loading"><span class="spinner"></span></p></div></section>` : ""}
       </div>
       <aside class="dside">
-        ${forSale && !isOwner ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Consultas</h2>
-          <p class="sub">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales consultas aquí y te atendemos por WhatsApp." : `¿Te interesa esta carta? Escríbenos y el equipo de ${esc(CONFIG.APP_NAME)} te ayuda con la compra por WhatsApp.`}</p>
-          <button type="button" class="btn primary block" id="inquiryBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>${ic("chat")}Consultar por WhatsApp</button>
-          <div id="intBox"></div>
-          <p class="xs muted" style="margin:10px 0 0">Tu consulta queda registrada con un código para darle seguimiento. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.</p></section>` : ""}
+        ${forSale && !isOwner ? `<section class="panel buy-panel"><h2 class="ptitle">${ic("tag")}Comprar</h2>
+          <dl class="buy-lines"><div><dt>Precio</dt><dd>${formatUsd(price)}</dd></div><div><dt>Envío</dt><dd>${formatUsd(SHIPPING_CENTS)}</dd></div><div class="buy-total"><dt>Total</dt><dd>${formatUsd(price + SHIPPING_CENTS)}</dd></div></dl>
+          <button type="button" class="btn yappy block" id="yappyBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>Pagar con Yappy</button>
+          <p class="xs muted" style="margin:10px 0 0">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales pagas aquí con Yappy." : `Pagas a ${esc(CONFIG.APP_NAME)} con Yappy y le pagamos al vendedor cuando la carta llega. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.`}</p></section>` : ""}
         ${isOwner && forSale ? `<section class="panel" id="intPanel" hidden><h2 class="ptitle">${ic("heart")}Interesados</h2><div id="intOwner"></div></section>` : ""}
         ${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline block wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}
         <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
@@ -3292,9 +3303,11 @@ async function viewDetail(app, id) {
   if ($("#watchBtn")) bindWatchToggle($("#watchBtn"), watchFromListing(l));
   if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
   if ($("#qaBox")) renderQuestions(l, $("#qaBox"));
-  $("#inquiryBtn")?.addEventListener("click", () => {
+  // Until the Yappy payment button (holo-pay/) is live, "Pagar con Yappy" opens the purchase with staff,
+  // who send the Yappy charge for price + shipping and record it as an order (0029).
+  $("#yappyBtn")?.addEventListener("click", () => {
     if (session) track("click_whatsapp", l.id); // "interesados" in the seller's dashboard (0018)
-    startInquiry({ source: "carta", listingId: l.id, subject: l.title, priceCents: price, url: listingUrl(l) });
+    startInquiry({ source: "carta", listingId: l.id, subject: `Pagar con Yappy: ${l.title} (${formatUsd(price)} + ${formatUsd(SHIPPING_CENTS)} de envío)`, priceCents: price + SHIPPING_CENTS, url: listingUrl(l) });
   });
   // "Me interesa" on a card on sale (0036; example listings keep it in this browser). The owner sees how many.
   const intBox = $("#intBox"), key = intKey("l", l.id);
