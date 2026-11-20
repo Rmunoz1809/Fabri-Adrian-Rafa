@@ -17,6 +17,13 @@ export interface ChargeRequest {
   totalCents: number;
   /** Where the provider sends its notification (IPN). */
   ipnUrl: string;
+  /** The buyer's Yappy phone, 8 digits without +507: Yappy sends the charge straight to that phone. */
+  aliasYappy?: string;
+  /**
+   * "Pago <card> #001", for our records and the mock. Not sent to Yappy: the Botón de Pago V2 request
+   * (payment-wc) has no free-text field; the only text Yappy gets is the orderId ("001").
+   */
+  description?: string;
 }
 
 /** What the page needs to show the payment button (Yappy's <btn-yappy> web component). */

@@ -149,7 +149,7 @@ describe("rules around the transitions", () => {
     await db.q("insert into public.offers (listing_id, buyer_id, seller_id, amount_cents, status) values ($1, $2, $3, 10000, 'accepted')",
       [LISTING.charizard, BUYER, SHOP]);
     const o = await requestOrder(db, LISTING.charizard);
-    expect(o).toMatchObject({ status: "pendiente_pago", price_cents: 10000, shipping_cents: 400 });
+    expect(o).toMatchObject({ status: "pendiente_pago", price_cents: 10000, shipping_cents: 300 });
     await db.as(user(BUYER), "select public.buyer_cancel_order($1)", [o.id]);
     await db.q("delete from public.offers where listing_id = $1", [LISTING.charizard]);
   });

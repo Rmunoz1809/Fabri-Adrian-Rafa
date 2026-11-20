@@ -18,18 +18,18 @@ describe("full flow with Holo delivery", () => {
     const o = await requestOrder(db, LISTING.charizard);
     expect(o.status).toBe("esperando_confirmacion_vendedor");
     expect(o.price_cents).toBe(12000);
-    expect(o.shipping_cents).toBe(400);
+    expect(o.shipping_cents).toBe(300);
     await sellerConfirm(db, o);
     expect((await order(db, o.id)).status).toBe("pendiente_pago");
 
     const a = await newAttempt(db, o);
-    expect(a.total_cents).toBe(12400); // price + shipping, from the database
+    expect(a.total_cents).toBe(12300); // price + shipping, from the database
     expect(a.attempt_id).toMatch(/^[A-Z0-9]{1,15}$/);
     expect(await notify(db, a.attempt_id, "E")).toBe("paid");
 
     const listing = await db.one<{ status: string }>("select status from public.listings where id = $1", [LISTING.charizard]);
     expect(listing.status).toBe("sold"); // marked sold as soon as it is paid
-    expect(await escrow(db, o)).toBe(12400);
+    expect(await escrow(db, o)).toBe(12300);
 
     await pickup(db, await order(db, o.id));
     expect((await order(db, o.id)).status).toBe("en_custodia");
@@ -42,12 +42,12 @@ describe("full flow with Holo delivery", () => {
     const done = await order(db, o.id);
     expect(done.status).toBe("completada");
 
-    // $120 − 7% ($8.40) − 7% ITBMS on it ($0.59) = $111.01; Holo keeps $8.40 + $0.59 + $4 shipping.
+    // $120 − 7% ($8.40) − 7% ITBMS on it ($0.59) = $111.01; Holo keeps $8.40 + $0.59 + $3 shipping.
     expect(await sellerBalance(db, SHOP)).toBe(11101);
     expect(await escrow(db, o)).toBe(0);
     expect(await accountBalance(db, "holo_comision")).toBe(-840);
     expect(await accountBalance(db, "holo_itbms")).toBe(-59);
-    expect(await accountBalance(db, "holo_envio")).toBe(-400);
+    expect(await accountBalance(db, "holo_envio")).toBe(-300);
     await expectLedgerBalanced(db);
 
     const steps = (await history(db, o)).map((h) => h.to_status);
@@ -65,14 +65,14 @@ describe("full flow with Holo delivery", () => {
     const p = await db.one<{ id: string }>("select id from public.payouts where seller_id = $1 and status = 'pendiente'", [SHOP]);
     await db.as(user(STAFF), "select public.staff_mark_payout_paid($1, 'YAPPY-889900')", [p.id]);
     expect(await sellerBalance(db, SHOP)).toBe(0);
-    expect(await accountBalance(db, "banco")).toBe(12400 - 11101);
+    expect(await accountBalance(db, "banco")).toBe(12300 - 11101);
     await expectLedgerBalanced(db);
 
     // Reconciliation: the day's charges match what the provider collected.
     const day = await db.one<{ payments: number; charged_cents: string; payouts_paid_cents: string }>(
       "select * from public.staff_reconciliation(7) limit 1", [], user(STAFF));
     expect(day.payments).toBe(1);
-    expect(Number(day.charged_cents)).toBe(12400);
+    expect(Number(day.charged_cents)).toBe(12300);
     expect(Number(day.payouts_paid_cents)).toBe(11101);
   });
 });
@@ -94,7 +94,7 @@ describe("cancellations and refunds", () => {
     expect((await order(db, o.id)).status).toBe("cancelada");
     const r = await db.one<{ id: string; amount_cents: number; status: string }>(
       "select id, amount_cents, status from public.refund_requests where order_id = $1", [o.id]);
-    expect(r).toMatchObject({ amount_cents: 8400, status: "pendiente" });
+    expect(r).toMatchObject({ amount_cents: 8300, status: "pendiente" });
     expect(await escrow(db, o)).toBe(0);
     await db.as(user(STAFF), "select public.staff_mark_refund_paid($1, 'YAPPY-REF-1')", [r.id]);
     const comprador = await db.one<{ b: string }>(
@@ -126,7 +126,7 @@ describe("cancellations and refunds", () => {
     await db.as(user(STAFF), "select public.staff_return_to_seller($1)", [o.id]);
     expect((await order(db, o.id)).status).toBe("reembolsada");
     const r = await db.one<{ amount_cents: number }>("select amount_cents from public.refund_requests where order_id = $1", [o.id]);
-    expect(r.amount_cents).toBe(3500); // $35 card back, $4 shipping kept
+    expect(r.amount_cents).toBe(3500); // $35 card back, $3 shipping kept
     expect(await escrow(db, o)).toBe(0);
     const l = await db.one<{ status: string }>("select status from public.listings where id = $1", [LISTING.wemby]);
     expect(l.status).toBe("active");
@@ -182,7 +182,7 @@ describe("disputes", () => {
     expect((await order(db, o.id)).status).toBe("reembolsada");
     expect(await sellerBalance(db, SHOP)).toBe(before);
     const r = await db.one<{ amount_cents: number }>("select amount_cents from public.refund_requests where order_id = $1", [o.id]);
-    expect(r.amount_cents).toBe(5400);
+    expect(r.amount_cents).toBe(5300);
     await expectLedgerBalanced(db);
   });
 });
@@ -201,7 +201,7 @@ describe("incidents", () => {
     expect(await sellerBalance(db, SHOP)).toBe(before + 20000);
     expect(await accountBalance(db, "fondo_reserva")).toBe(20000);
     const r = await db.one<{ amount_cents: number }>("select amount_cents from public.refund_requests where order_id = $1", [o.id]);
-    expect(r.amount_cents).toBe(30400);
+    expect(r.amount_cents).toBe(30300);
     expect(await escrow(db, o)).toBe(0);
     await expectLedgerBalanced(db);
   });

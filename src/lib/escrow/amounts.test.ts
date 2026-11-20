@@ -12,10 +12,10 @@ beforeAll(async () => {
 afterAll(() => db.close());
 
 describe("quoteOrder (TypeScript)", () => {
-  it("$100 card: buyer pays $104 with shipping, seller gets $92.51", () => {
+  it("$100 card: buyer pays $103 with shipping, seller gets $92.51", () => {
     const q = quoteOrder(10_000);
     expect(q).toMatchObject({
-      priceCents: 10_000, shippingCents: 400, orderTotalCents: 10_400,
+      priceCents: 10_000, shippingCents: 300, orderTotalCents: 10_300,
       sellerFeeCents: 700, sellerItbmsCents: 49, sellerPayoutCents: 9_251, platformRevenueCents: 700,
     });
   });
@@ -60,10 +60,10 @@ describe("order_quote (database) matches quoteOrder", () => {
 describe("amounts come from the database", () => {
   it("the order takes the listing's price and the configured shipping; the attempt the order's total", async () => {
     const o = await requestOrder(db, LISTING.umbreon);
-    expect(o).toMatchObject({ price_cents: 8000, shipping_cents: 400, seller_fee_cents: 560, seller_itbms_cents: 39 });
+    expect(o).toMatchObject({ price_cents: 8000, shipping_cents: 300, seller_fee_cents: 560, seller_itbms_cents: 39 });
     await sellerConfirm(db, o);
     const a = await newAttempt(db, o);
-    expect(a.total_cents).toBe(8400);
+    expect(a.total_cents).toBe(8300);
     // There is no parameter to send an amount: the RPC signatures only take ids.
     const args = await db.q<{ args: string }>(
       "select pg_get_function_arguments(p.oid) as args from pg_proc p where proname in ('request_order', 'new_payment_attempt', 'seller_confirm_order')");
@@ -79,7 +79,7 @@ describe("amounts come from the database", () => {
     await expect(db.as(user(STAFF), "select public.staff_set_setting('commission_bps', 20000)")).rejects.toThrow(/bps over/);
     await expect(db.as(user(STAFF), "select public.staff_set_setting('nope', 1)")).rejects.toThrow(/unknown key/);
     await db.as(user(STAFF), "select public.staff_set_setting('commission_bps', 700)");
-    await db.as(user(STAFF), "select public.staff_set_setting('shipping_cents', 400)");
+    await db.as(user(STAFF), "select public.staff_set_setting('shipping_cents', 300)");
     await db.as(user(BUYER), "select public.buyer_cancel_order($1)", [o.id]);
   });
 });
@@ -88,7 +88,7 @@ describe("staff concierge orders", () => {
   it("are priced by the database and start waiting for payment", async () => {
     const o = await db.one<{ status: string; price_cents: number; shipping_cents: number; buyer_contact: string }>(
       "select * from public.staff_create_order($1, null, 'Carlos 6000-0000', false)", [LISTING.wemby], user(STAFF));
-    expect(o).toMatchObject({ status: "pendiente_pago", price_cents: 3500, shipping_cents: 400, buyer_contact: "Carlos 6000-0000" });
+    expect(o).toMatchObject({ status: "pendiente_pago", price_cents: 3500, shipping_cents: 300, buyer_contact: "Carlos 6000-0000" });
     await expect(db.as(user(BUYER), "select public.staff_create_order($1, null, 'x y z', false)", [LISTING.gengar])).rejects.toThrow(/staff only/);
   });
 });

@@ -399,6 +399,16 @@ dl.rows div.total dt { color: var(--fg); }
 .btn.yappy:hover { background: var(--card-hover); border-color: var(--fg-3); }
 .btn.yappy:disabled { opacity: .6; }
 .btn.yappy .yappy-logo { width: 24px; height: 24px; flex-shrink: 0; }
+.buy-pay { margin-top: 14px; display: grid; gap: 10px; }
+.buy-pay .notice { margin: 0; }
+.buy-phone { margin: 0; font-size: 13px; color: var(--fg-2); display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.buy-phone b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.buy-wait { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); display: grid; gap: 8px; font-size: 14px; }
+.buy-wait h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.buy-wait p { margin: 0; }
+.buy-wait b { font-variant-numeric: tabular-nums; }
+.buy-wait.paid h3 { color: var(--good); }
+.buy-pay button.link, .buy-wait button.link, .sale button.link { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 .desc { margin-top: 8px; font-size: 14px; white-space: pre-line; }
 .seller { display: flex; align-items: center; gap: 12px; }
 .seller .nm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 600; }
@@ -1242,6 +1252,10 @@ const CONFIG = {
   // lives there as a secret, never in this file). If it is not deployed or fails, the page falls
   // back to reading the card's text in the browser (OCR) and matching it against the catalog.
   IDENTIFY_FUNCTION: "identificar-carta",
+  // "Pagar con Yappy" (migration 0043): this Edge Function creates the order and has Yappy send the charge
+  // to the buyer's phone. While it isn't deployed with the Yappy secrets, the page creates the order itself
+  // and staff sends the charge from Yappy Comercial (Panel ▸ Ventas shows the description). "" = always that.
+  PAY_FUNCTION: "yappy-pago",
   // Datos legales que aparecen en #/terminos y #/privacidad. Completar antes de abrir al público
   // (mientras falten, las páginas muestran "[por completar]").
   LEGAL: { COMPANY: "", RUC: "", ADDRESS: "", EMAIL: "", UPDATED: "16 de octubre de 2026" },
@@ -3267,7 +3281,7 @@ async function viewDetail(app, id) {
       <aside class="dside">
         ${forSale && !isOwner ? `<section class="panel buy-panel"><h2 class="ptitle">${ic("tag")}Comprar</h2>
           <dl class="buy-lines"><div><dt>Precio</dt><dd>${formatUsd(price)}</dd></div><div><dt>Envío</dt><dd>${formatUsd(SHIPPING_CENTS)}</dd></div><div class="buy-total"><dt>Total</dt><dd>${formatUsd(price + SHIPPING_CENTS)}</dd></div></dl>
-          <button type="button" class="btn yappy block" id="yappyBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>Pagar con Yappy<img class="yappy-logo" src="img/brand/yappy.png" alt="" width="24" height="24"></button>
+          <div id="buyBox"><div class="buy-pay">${yappyButton(l.isDemo)}</div></div>
           <p class="xs muted" style="margin:10px 0 0">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales pagas aquí con Yappy." : `Pagas a ${esc(CONFIG.APP_NAME)} con Yappy y le pagamos al vendedor cuando la carta llega. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.`}</p></section>` : ""}
         ${isOwner && forSale ? `<section class="panel" id="intPanel" hidden><h2 class="ptitle">${ic("heart")}Interesados</h2><div id="intOwner"></div></section>` : ""}
         ${sellerPanel(l.seller)}
@@ -3297,12 +3311,8 @@ async function viewDetail(app, id) {
   if ($("#watchBtn")) bindWatchToggle($("#watchBtn"), watchFromListing(l));
   if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
   if ($("#qaBox")) renderQuestions(l, $("#qaBox"));
-  // Until the Yappy payment button (holo-pay/) is live, "Pagar con Yappy" opens the purchase with staff,
-  // who send the Yappy charge for price + shipping and record it as an order (0029).
-  $("#yappyBtn")?.addEventListener("click", () => {
-    if (session) track("click_whatsapp", l.id); // "interesados" in the seller's dashboard (0018)
-    startInquiry({ source: "carta", listingId: l.id, subject: `Pagar con Yappy: ${l.title} (${formatUsd(price)} + ${formatUsd(SHIPPING_CENTS)} de envío)`, priceCents: price + SHIPPING_CENTS, url: listingUrl(l) });
-  });
+  // "Pagar con Yappy" creates the order and sends the Yappy charge to the account's phone (0043).
+  if ($("#buyBox") && !l.isDemo) yappyCheckout(l, $("#buyBox"), price);
   // "Me interesa" on a card on sale (0036; example listings keep it in this browser). The owner sees how many.
   const intBox = $("#intBox"), key = intKey("l", l.id);
   if (intBox) (l.isDemo ? Promise.resolve(demoMarks.read()) : interestsReady().then((ok) => (ok ? myInterestKeys(l.sellerId) : null))).then((marked) => {
@@ -5416,6 +5426,181 @@ function startInquiry(o) {
     el.querySelector("[data-x]").addEventListener("click", () => close());
     el.querySelector('a[href="#/consultas"]').addEventListener("click", () => close());
   });
+}
+
+// ------------------------------------------------------------- "Pagar con Yappy" (migration 0043)
+// One tap, no form: the order (#001, #002…) is created with the account's Yappy phone and the charge goes
+// to that phone, with the description "Pago <card> #001". With CONFIG.PAY_FUNCTION deployed with the
+// Yappy secrets, Yappy sends the charge and its notice marks the order paid by itself; the panel waits for
+// it. Otherwise the order is created here (web_checkout) and staff sends the charge from Yappy Comercial.
+// Sellers and shops already gave a phone; a buyer account types it once, right in the panel, and it stays
+// on the account. Until 0043 runs, the button opens the consulta as before.
+const yappyButton = (disabled = false, label = "Pagar con Yappy") =>
+  `<button type="button" class="btn yappy block" id="yappyBtn"${disabled ? " disabled" : ""}>${esc(label)}<img class="yappy-logo" src="img/brand/yappy.png" alt="" width="24" height="24"></button>`;
+const CHECKOUT_ERR = [
+  [/phone required/, "Escribe tu celular de Yappy para mandarte el cobro.", true],
+  [/phone must be a mobile/, "Escribe un celular de Panamá con Yappy, por ejemplo 6123-4567.", true],
+  [/listing not available/, "Esta carta ya no está disponible."],
+  [/own listing/, "No puedes comprar tu propia carta."],
+  [/listing on hold/, "Alguien está pagando esta carta en este momento. Intenta de nuevo en unos minutos."],
+  [/already paid/, "Ya pagaste esta carta."],
+  [/too many attempts/, "Demasiados intentos de pago para esta orden. Escríbenos."],
+  [/too many/, "Hiciste muchas órdenes hoy. Escríbenos si necesitas ayuda."],
+  [/login required|JWT/, "Inicia sesión para pagar."],
+];
+const checkoutMissing = (e) => ["PGRST202", "PGRST205", "42883", "42P01"].includes(e?.code);
+const checkoutErr = (e) => {
+  const m = CHECKOUT_ERR.find(([re]) => re.test(e?.message ?? ""));
+  return { error: m?.[1] ?? "No pudimos crear tu orden. Revisa tu conexión e intenta de nuevo.", need_phone: !!m?.[2] };
+};
+const isYappyPhone = (p) => /^\+5076\d{7}$/.test(p ?? "");
+const PAY_WAIT_MS = 6 * 60000; // Yappy rejects a charge that isn't accepted within 5 minutes
+const PAY_FAIL = {
+  rejected: "El cobro venció o Yappy lo rechazó.", cancelled: "Cancelaste el cobro en Yappy.",
+  expired: "El cobro venció en Yappy.", failed: "No pudimos mandar el cobro a Yappy.",
+};
+const ORDER_PAID = ["pagada", "retirada", "en_ruta", "entregada"];
+
+/** POST to the yappy-pago Edge Function. Its answer, or null when it isn't deployed (or is an older deploy without checkout). */
+async function payFunction(listingId, phone) {
+  if (!CONFIG.PAY_FUNCTION) return null;
+  try {
+    const token = (await sb.auth.getSession()).data.session?.access_token;
+    if (!token) return null;
+    const res = await withTimeout(fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${CONFIG.PAY_FUNCTION}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: CONFIG.SUPABASE_KEY, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ listing_id: listingId, phone }),
+    }), 30000);
+    const body = await res.json().catch(() => null);
+    return body?.checkout ? body : null; // 404, 503 "todavía no está configurado" or an older deploy: no checkout flag
+  } catch (e) {
+    console.warn("pay function", e);
+    return null;
+  }
+}
+
+/** The "Comprar" panel's button and everything after the tap. */
+function yappyCheckout(l, box, price) {
+  const st = { phone: null, order: null, editing: false, msg: null, mode: null, legacy: false, busy: false };
+  let polling = 0;
+  const legacyInquiry = () => startInquiry({ source: "carta", listingId: l.id, subject: `Pagar con Yappy: ${l.title} (${formatUsd(price)} + ${formatUsd(SHIPPING_CENTS)} de envío)`, priceCents: price + SHIPPING_CENTS, url: listingUrl(l) });
+  const orderLine = (o) => `Orden <b>#${esc(o.order_label)}</b> · “${esc(o.description)}”`;
+
+  function render() {
+    const o = st.order;
+    if (o && ORDER_PAID.includes(o.status)) {
+      box.innerHTML = `<div class="buy-wait paid" role="status"><h3>${ic("check")}¡Pago recibido!</h3><p>${orderLine(o)}</p>
+        <p class="small muted">Te escribimos por WhatsApp para coordinar la entrega.</p></div>`;
+      return;
+    }
+    if (st.mode === "waiting") {
+      box.innerHTML = `<div class="buy-wait" role="status"><h3><span class="spinner"></span>Revisa tu Yappy</h3>
+        <p>Te mandamos el cobro de <b>${formatUsd(o.total_cents)}</b> a tu Yappy <b>${esc(fmtPhone(o.phone))}</b>. Acéptalo en la app en los próximos 5 minutos.</p>
+        <p class="xs muted">${orderLine(o)}</p></div>`;
+      return;
+    }
+    if (st.mode === "manual") {
+      box.innerHTML = `<div class="buy-wait" role="status"><h3>${ic("check")}Orden #${esc(o.order_label)} creada</h3>
+        <p>En unos minutos te llega a tu Yappy <b>${esc(fmtPhone(o.phone))}</b> el cobro de <b>${formatUsd(o.total_cents)}</b> con la descripción “${esc(o.description)}”. Acéptalo para completar la compra.</p>
+        <p class="xs muted">¿Ese no es tu Yappy? <button type="button" class="link" data-edit>Cambiar el celular</button></p></div>`;
+      box.querySelector("[data-edit]").addEventListener("click", () => { st.mode = null; st.editing = true; render(); box.querySelector("[name=yappyPhone]")?.focus(); });
+      return;
+    }
+    const askPhone = session && !st.legacy && (st.editing || !st.phone);
+    const failed = o?.status === "nueva" && o.payment && o.payment.status !== "created" ? PAY_FAIL[o.payment.status] : null;
+    box.innerHTML = `<div class="buy-pay">
+      ${askPhone ? `<label class="f">Tu celular de Yappy<input class="input" name="yappyPhone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="6123-4567" value="${esc(st.phone ? fmtPhone(st.phone) : "")}"><span class="hint xs">Ahí te llega el cobro. Lo guardamos en tu cuenta para la próxima.</span></label>` : ""}
+      ${yappyButton(st.busy, st.busy ? "Mandando el cobro…" : o?.status === "nueva" && o.payment ? "Mandar el cobro otra vez" : "Pagar con Yappy")}
+      ${session && st.phone && !askPhone ? `<p class="buy-phone">Cobro a tu Yappy <b>${esc(fmtPhone(st.phone))}</b><button type="button" class="link" data-edit>Cambiar</button></p>` : ""}
+      ${o?.status === "nueva" && !st.msg ? `<p class="xs muted" style="margin:0">Tienes la orden <b>#${esc(o.order_label)}</b> pendiente de pago.${failed ? ` ${esc(failed)}` : ""}</p>` : ""}
+      ${st.msg ? `<p class="notice bad" role="alert">${esc(st.msg)}</p>` : ""}</div>`;
+    box.querySelector("#yappyBtn").addEventListener("click", pay);
+    box.querySelector("[data-edit]")?.addEventListener("click", () => { st.editing = true; render(); box.querySelector("[name=yappyPhone]")?.focus(); });
+    box.querySelector("[name=yappyPhone]")?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); pay(); } });
+  }
+
+  function waitForPayment() {
+    const id = ++polling, started = Date.now();
+    const tick = async () => {
+      if (id !== polling || !box.isConnected) return;
+      const { data } = await sb.rpc("my_web_checkout", { p_listing: l.id }).then((x) => x, () => ({ data: null }));
+      if (id !== polling || !box.isConnected) return;
+      const o = data?.order;
+      if (o?.sale_id === st.order?.sale_id) st.order = o;
+      const ps = st.order?.payment?.status;
+      if (ORDER_PAID.includes(st.order?.status)) {
+        st.mode = null; render();
+        toast(`¡Pago recibido! Orden #${st.order.order_label}`, { description: "Te escribimos por WhatsApp para coordinar la entrega." });
+        return;
+      }
+      if (ps && ps !== "created") { st.mode = null; st.msg = `${PAY_FAIL[ps] ?? "El cobro no se completó."} Puedes mandarlo otra vez.`; render(); return; }
+      if (Date.now() - started > PAY_WAIT_MS) { st.mode = null; st.msg = "Todavía no vemos tu pago. Si no te llegó el cobro, mándalo otra vez."; render(); return; }
+      setTimeout(tick, 4000);
+    };
+    setTimeout(tick, 4000);
+  }
+
+  async function pay() {
+    if (st.busy) return;
+    if (!sb) return toast("Los pagos se activan cuando la página está conectada.", { type: "error" });
+    if (!session) {
+      toast("Entra o crea tu cuenta para pagar.");
+      return go(`/entrar?next=${encodeURIComponent(location.hash.replace(/^#/, "") || "/")}`);
+    }
+    if (st.legacy) return legacyInquiry();
+    const input = box.querySelector("[name=yappyPhone]");
+    let phone = null;
+    if (input) {
+      phone = paPhone(input.value);
+      if (!isYappyPhone(phone)) { st.msg = "Escribe un celular de Panamá con Yappy, por ejemplo 6123-4567."; render(); box.querySelector("[name=yappyPhone]").focus(); return; }
+    }
+    track("click_whatsapp", l.id); // "interesados" in the seller's dashboard (0018)
+    st.busy = true; st.msg = null; render();
+    const r = await payFunction(l.id, phone);
+    if (r) {
+      st.busy = false;
+      if (r.order) { st.order = r.order; st.phone = r.order.phone; }
+      if (r.error) {
+        st.msg = r.error;
+        if (r.need_phone) st.editing = true;
+        render();
+        return;
+      }
+      st.editing = false; st.mode = "waiting"; render(); waitForPayment();
+      return;
+    }
+    // No payment button yet: the order is created here and staff sends the charge.
+    const { data, error } = await sb.rpc("web_checkout", { p_listing: l.id, p_phone: phone }).then((x) => x, () => ({ error: { code: "network" } }));
+    st.busy = false;
+    if (error) {
+      if (checkoutMissing(error)) { st.legacy = true; render(); return legacyInquiry(); } // 0043 not applied yet
+      if (!/phone|too many|on hold|not available|own listing/.test(error.message ?? "")) console.error(error);
+      const e = checkoutErr(error);
+      st.msg = e.error;
+      if (e.need_phone) st.editing = true;
+      render();
+      return;
+    }
+    st.order = data; st.phone = data.phone; st.editing = false;
+    st.mode = ORDER_PAID.includes(data.status) ? null : "manual";
+    render();
+  }
+
+  render();
+  if (!sb || !session) return;
+  sb.rpc("my_web_checkout", { p_listing: l.id }).then(({ data, error }) => {
+    if (!box.isConnected) return;
+    if (error) { if (checkoutMissing(error)) { st.legacy = true; render(); } else console.warn("my_web_checkout", error); return; }
+    st.phone = data?.phone ?? null;
+    const o = data?.order;
+    if (o && (o.status === "nueva" || ORDER_PAID.includes(o.status))) st.order = o;
+    // A charge sent a moment ago (the page was reloaded): keep waiting for it.
+    if (o?.status === "nueva" && o.payment?.status === "created" && Date.now() - Date.parse(o.payment.created_at) < 5 * 60000) {
+      st.mode = "waiting"; render(); waitForPayment(); return;
+    }
+    render();
+  }, (e) => console.warn("my_web_checkout", e));
 }
 
 // The signed-in person's consultas (also in Mi cuenta).
@@ -7768,6 +7953,9 @@ const SALE_ERR = [
 /** "sábado 3 de enero" for a date-only value (no time zone shift). */
 const fmtSaleDay = (d) => { const [y, m, day] = String(d).split("-").map(Number); return new Date(y, m - 1, day).toLocaleDateString("es-PA", { weekday: "long", day: "numeric", month: "long" }); };
 const saleErr = (e) => SALE_ERR.find(([re]) => re.test(e?.message ?? ""))?.[1] ?? "No se pudo guardar. Intenta de nuevo.";
+// The last automatic Yappy charge of a web order (0043).
+const SALE_PAY_STATUS = { created: "enviado, esperando que el comprador lo acepte", executed: "pagado", rejected: "rechazado o vencido",
+  cancelled: "cancelado por el comprador", expired: "vencido", failed: "no se pudo mandar" };
 
 async function adminSales(body, params) {
   if (params.get("nueva")) return adminSaleNew(body, params);
@@ -7785,6 +7973,10 @@ async function adminSales(body, params) {
     <ol class="sale-flow">${SALE_STEPS.slice(0, 5).map(([, t, d], i) => `<li><b>${i + 1}. ${t}</b><span>${d}</span></li>`).join("")}</ol>
     <div class="row-input" style="justify-content:flex-start;flex-wrap:wrap">${chips.map(([k, t]) => `<a class="btn sm ${k === filter ? "primary" : "outline"}" href="#/admin?tab=ventas&amp;estado=${k}">${t} · ${count(k)}</a>`).join("")}</div>
     ${rows.length ? `<ul class="admin-list">${rows.map(saleCard).join("")}</ul>` : `<p class="muted small">No hay ventas ${filter === "todas" ? "todavía" : "en este estado"}. Crea una desde una consulta o con “Nueva venta”.</p>`}`;
+  body.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); toast("Descripción copiada", { description: b.dataset.copy }); }
+    catch { toast(b.dataset.copy, { description: "Cópiala para el cobro en Yappy Comercial." }); }
+  }));
   body.querySelectorAll("[data-step]").forEach((b) => b.addEventListener("click", async () => {
     const li = b.closest("li"), msg = li.querySelector(".order-msg"), stepName = b.dataset.step;
     const ref = li.querySelector(`[data-ref="${stepName}"]`)?.value.trim() || null;
@@ -7806,7 +7998,9 @@ function saleCard(s) {
   const today = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
   const schedule = `<label class="f sale-inline">Día de distribución<span class="row-input"><input class="input sale-date" type="date" min="${today}" value="${esc(s.distribution_date ?? "")}"><button class="btn outline" data-step="programar">Guardar día</button></span></label>`;
   const next = {
-    nueva: `<p class="small" style="margin:0">Cuando el comprador pague <b>${formatUsd(total)}</b> por Yappy, anota la referencia. La carta deja de estar disponible.</p>
+    nueva: `${s.yappy_description ? `<p class="small" style="margin:0">Cobro por Yappy: <b>${formatUsd(total)}</b> al <b>${esc(fmtPhone(s.buyer_phone))}</b> con la descripción <b>“${esc(s.yappy_description)}”</b> <button type="button" class="link" data-copy="${esc(s.yappy_description)}">Copiar</button></p>` : ""}
+      ${s.source === "web" ? `<p class="xs muted" style="margin:0">${s.last_payment_id ? `Cobro automático #${esc(s.last_payment_id)}: ${esc(SALE_PAY_STATUS[s.last_payment_status] ?? s.last_payment_status)}. ` : ""}Orden hecha en la página: con el Botón de Pago activo se marca pagada sola cuando el comprador acepta el cobro; si no, mándaselo desde Yappy Comercial.</p>` : ""}
+      <p class="small" style="margin:0">Cuando el comprador pague <b>${formatUsd(total)}</b> por Yappy, anota la referencia. La carta deja de estar disponible.</p>
       <div class="row-input"><input class="input" data-ref="pagada" maxlength="80" placeholder="Referencia del Yappy del comprador"><button class="btn primary" data-step="pagada">Marcar pagada</button></div>
       <button class="btn danger sm" data-step="cancelada" style="justify-self:start">Cancelar venta</button>`,
     pagada: `<p class="small" style="margin:0">Ve a buscar la carta${s.seller_pickup_address ? ` a <a class="link" target="_blank" rel="noopener" href="${esc(addrMapsHref(s.seller_pickup_address))}">${esc(s.seller_pickup_address)}</a>` : ""} y págale al vendedor <b>${formatUsd(s.payout_cents)}</b> por Yappy${s.seller_yappy ? ` al <b>${esc(fmtPhone(s.seller_yappy))}</b>` : ""}.</p>
@@ -7815,16 +8009,16 @@ function saleCard(s) {
       <div class="row-input"><input class="input" data-ref="cancelada" maxlength="80" placeholder="Referencia del reembolso (si cancelas)"><button class="btn danger" data-step="cancelada">Cancelar y reembolsar</button></div>`,
     retirada: `<p class="small" style="margin:0">La carta está con nosotros hasta el día de distribución${s.distribution_date ? `: <b>${esc(fmtSaleDay(s.distribution_date))}</b>` : " (todavía sin día)"}.</p>
       ${schedule}<button class="btn primary" data-step="en_ruta" style="justify-self:start">Salió a distribución</button>`,
-    en_ruta: `<p class="small" style="margin:0">Entrega a ${esc(s.buyer_name)} en ${esc(s.delivery_address)}.</p><button class="btn primary" data-step="entregada" style="justify-self:start">Entregada al comprador</button>`,
+    en_ruta: `<p class="small" style="margin:0">Entrega a ${esc(s.buyer_name)}${s.delivery_address ? ` en ${esc(s.delivery_address)}` : " (dirección coordinada por WhatsApp)"}.</p><button class="btn primary" data-step="entregada" style="justify-self:start">Entregada al comprador</button>`,
   }[s.status] ?? "";
   return `<li class="panel sale" data-id="${s.id}">
-    <div class="phead"><span><span class="inq-code">${esc(s.code)}</span> · ${s.listing_id ? `<a href="#/carta/${encodeURIComponent(s.listing_id)}" style="font-weight:600">${esc(s.title)}</a>` : `<b>${esc(s.title)}</b>`}</span>
+    <div class="phead"><span>${s.order_label ? `<b>#${esc(s.order_label)}</b> · ` : ""}<span class="inq-code">${esc(s.code)}</span>${s.source === "web" ? ` <span class="b prot">Web</span>` : ""} · ${s.listing_id ? `<a href="#/carta/${encodeURIComponent(s.listing_id)}" style="font-weight:600">${esc(s.title)}</a>` : `<b>${esc(s.title)}</b>`}</span>
       <span class="b ${SALE_BADGE[s.status] ?? "neutral"}">${esc(SALE_STEPS.find(([k]) => k === s.status)?.[1] ?? s.status)}</span></div>
     <p class="xs muted" style="margin:4px 0 0">Creada ${fmtDate(s.created_at)}${s.inquiry_code ? ` · consulta <span class="inq-code">${esc(s.inquiry_code)}</span>` : ""}${s.distribution_date ? ` · distribución el ${esc(fmtSaleDay(s.distribution_date))}` : ""}</p>
     <div class="sale-grid">
       <div><p class="k">Comprador</p><p><b>${userLink(s.buyer_id, s.buyer_name)}</b></p>
-        <p><a class="link" target="_blank" rel="noopener" href="${waHref(s.buyer_phone, `Hola ${s.buyer_name}, te escribimos de ${CONFIG.APP_NAME} por tu compra ${s.code}: “${s.title}”.`)}">${esc(fmtPhone(s.buyer_phone))}</a></p>
-        <p><a class="link" target="_blank" rel="noopener" href="${esc(addrMapsHref(s.delivery_address))}">${esc(s.delivery_address)}</a></p></div>
+        <p><a class="link" target="_blank" rel="noopener" href="${waHref(s.buyer_phone, `Hola ${s.buyer_name}, te escribimos de ${CONFIG.APP_NAME} por tu ${s.order_label ? `orden #${s.order_label}` : `compra ${s.code}`}: “${s.title}”.`)}">${esc(fmtPhone(s.buyer_phone))}</a></p>
+        ${s.delivery_address ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(addrMapsHref(s.delivery_address))}">${esc(s.delivery_address)}</a></p>` : `<p class="muted">Dirección de entrega: por coordinar por WhatsApp</p>`}</div>
       <div><p class="k">Vendedor${s.seller_kind === "tienda" ? " · tienda" : ""}</p><p><b>${userLink(s.seller_id, s.seller_name)}</b></p>
         ${s.seller_phone ? `<p><a class="link" target="_blank" rel="noopener" href="${waHref(s.seller_phone, `Hola, te escribimos de ${CONFIG.APP_NAME}: vendiste “${s.title}” (${s.code}).`)}">${esc(fmtPhone(s.seller_phone))}</a></p>` : `<p class="muted">Sin teléfono</p>`}
         ${s.seller_pickup_address ? `<p><a class="link" target="_blank" rel="noopener" href="${esc(addrMapsHref(s.seller_pickup_address))}">${esc(s.seller_pickup_address)}</a></p>` : `<p class="muted">Sin dirección de retiro</p>`}
@@ -8360,11 +8554,11 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Tiendas:</b> para verificar la tienda y firmar el acuerdo para tiendas, el nombre de la tienda, el nombre y la cédula del responsable, la dirección del local, el teléfono, el Instagram, el número de Yappy para pagarle, el horario de retiro y la firma (con la fecha, la hora y el navegador con que se firmó). Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}; los guardamos mientras la tienda venda con nosotros, como constancia del acuerdo.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Compras:</b> tu celular de Yappy, donde te mandamos el cobro (lo guardamos en tu cuenta y solo lo ve el equipo de ${esc(CONFIG.APP_NAME)}), y tus órdenes con su número.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Tiendas:</b> para verificar la tienda y firmar el acuerdo para tiendas, el nombre de la tienda, el nombre y la cédula del responsable, la dirección del local, el teléfono, el Instagram, el número de Yappy para pagarle, el horario de retiro y la firma (con la fecha, la hora y el navegador con que se firmó). Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}; los guardamos mientras la tienda venda con nosotros, como constancia del acuerdo.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Responder tus consultas y coordinar las compras.</li><li>Coordinar contigo y retirar en tu dirección las cartas que vendes.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo, tu teléfono y tu dirección nunca se muestran.</b></p>`],
-    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>Tiendas aliadas</b>: si pides una Revisión en tienda, le damos a la tienda tu nombre para mostrar y los datos de la carta para coordinar la cita.</li><li><b>Yappy (Banco General)</b>: procesa los pagos en línea. Recibe el monto y la referencia de tu compra; tus datos de pago los das directamente en la app de Yappy y nunca pasan por ${esc(CONFIG.APP_NAME)}.</li><li><b>WhatsApp (Meta)</b>: cuando haces una consulta o nos escribes por ahí.</li><li><b>Cloudflare Turnstile</b>: el captcha de entrar y crear cuenta. Revisa datos técnicos de tu navegador para distinguir personas de robots.</li><li><b>Google Fonts y jsDelivr</b>: sirven la letra y el código de la página; reciben tu IP al descargarlos, como cualquier sitio web.</li><li><b>Catálogos y guías de precios</b> (TCGdex, Pokémon TCG API, PriceCharting, Cardmarket y otros): les pedimos datos de la carta, nunca datos tuyos.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
+    ["Con quién los compartimos", `<p>Usamos proveedores que procesan datos por nosotros, con medidas de seguridad:</p><ul><li><b>Supabase</b>: base de datos, cuentas y almacenamiento de fotos.</li><li><b>Anthropic</b>: análisis de las fotos para identificar la carta y búsqueda de precios. No usa tus fotos para entrenar sus modelos.</li><li><b>GitHub</b>: aloja la página.</li><li><b>Tiendas aliadas</b>: si pides una Revisión en tienda, le damos a la tienda tu nombre para mostrar y los datos de la carta para coordinar la cita.</li><li><b>Yappy (Banco General)</b>: procesa los pagos en línea. Recibe tu celular de Yappy, el monto y el número de orden de tu compra; tus datos de pago los das directamente en la app de Yappy y nunca pasan por ${esc(CONFIG.APP_NAME)}.</li><li><b>WhatsApp (Meta)</b>: cuando haces una consulta o nos escribes por ahí.</li><li><b>Cloudflare Turnstile</b>: el captcha de entrar y crear cuenta. Revisa datos técnicos de tu navegador para distinguir personas de robots.</li><li><b>Google Fonts y jsDelivr</b>: sirven la letra y el código de la página; reciben tu IP al descargarlos, como cualquier sitio web.</li><li><b>Catálogos y guías de precios</b> (TCGdex, Pokémon TCG API, PriceCharting, Cardmarket y otros): les pedimos datos de la carta, nunca datos tuyos.</li></ul><p>Algunos de estos proveedores guardan datos fuera de Panamá (por ejemplo, en Estados Unidos). Al aceptar esta política autorizas esa transferencia, que hacemos con proveedores que ofrecen un nivel de protección adecuado. Compartiremos datos con autoridades solo cuando la ley lo exija.</p>`],
     ["Cuánto tiempo los guardamos", `<p>Mientras tengas tu cuenta. Si la cierras, borramos tus datos en un plazo razonable, salvo lo que debamos conservar por obligaciones legales o contables (por ejemplo, registros de pagos) o para resolver disputas.</p>`],
     ["Tus derechos", `<p>Tienes derecho a <b>acceder</b> a tus datos, <b>rectificarlos</b>, <b>cancelarlos</b> (borrarlos), <b>oponerte</b> a su uso y pedir su <b>portabilidad</b>. Puedes cambiar tu nombre, tus fotos y, si vendes, tu teléfono y tu dirección de retiro desde <a href="#/cuenta">Mi cuenta</a>; para lo demás escribe a ${legalVal("EMAIL")} y te respondemos en los plazos de la ley. Si no quedas conforme, puedes acudir a la Autoridad Nacional de Transparencia y Acceso a la Información (ANTAI).</p>`],
     ["Cookies y almacenamiento en tu navegador", `<p>No usamos cookies de publicidad ni rastreadores de terceros (como Google Analytics o el píxel de Meta). Guardamos en el almacenamiento local de tu navegador solo esto:</p><ul><li><b>Tu sesión</b>, para que no tengas que entrar cada vez.</li><li><b>Un identificador anónimo de uso</b>, para contar visitas sin saber quién eres.</li><li><b>Una copia temporal de precios</b>, para que la página cargue más rápido.</li></ul><p>Puedes borrarlo cuando quieras desde la configuración de tu navegador; si lo haces, se cierra tu sesión.</p>`],

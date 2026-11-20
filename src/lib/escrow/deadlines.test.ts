@@ -54,7 +54,7 @@ describe("deadlines", () => {
     expect(await runDeadlines(db)).toMatchObject({ delivery_expired: 1 });
     expect((await order(db, o.id)).status).toBe("cancelada");
     const refund = await db.one<{ amount_cents: number }>("select amount_cents from public.refund_requests where order_id = $1", [o.id]);
-    expect(refund.amount_cents).toBe(8400); // includes shipping
+    expect(refund.amount_cents).toBe(8300); // includes shipping
     const pen = await db.one<{ level: string; amount_cents: number }>("select level, amount_cents from public.seller_penalties where seller_id = $1", [ANA]);
     expect(pen).toEqual({ level: "advertencia", amount_cents: 0 }); // a person, not a shop: no fine
     const paused = await db.q<{ status: string }>("select status from public.listings where seller_id = $1 and paused_by_penalty", [ANA]);

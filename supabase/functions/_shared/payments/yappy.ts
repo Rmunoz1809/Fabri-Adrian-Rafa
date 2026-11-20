@@ -57,13 +57,16 @@ export class YappyProvider implements PaymentProvider {
     const v = await this.post(`${api}/payments/validate/merchant`, { merchantId: this.cfg.merchantId, urlDomain: this.cfg.domain });
     const token = v.data?.body?.token;
     if (!v.ok || !token) throw new ProviderError("Yappy no está disponible en este momento. Intenta en un rato.", "validate");
+    // The buyer's phone: Yappy sends the charge to it. In pruebas only the phone registered in Yappy's
+    // test program works, so YAPPY_TEST_PHONE (when set) replaces it there.
+    const alias = this.cfg.env === "pruebas" && this.cfg.testPhone ? this.cfg.testPhone : req.aliasYappy;
     const order = {
       merchantId: this.cfg.merchantId,
       orderId: req.orderId,
       domain: this.cfg.domain,
       // TODO(yappy real): confirm in the test environment that paymentDate takes Yappy's epochTime.
       paymentDate: v.data?.body?.epochTime ?? Math.floor(Date.now() / 1000),
-      ...(this.cfg.env === "pruebas" && this.cfg.testPhone ? { aliasYappy: this.cfg.testPhone } : {}),
+      ...(alias ? { aliasYappy: alias } : {}),
       ipnUrl: req.ipnUrl,
       discount: "0.00",
       taxes: money(req.taxesCents),
