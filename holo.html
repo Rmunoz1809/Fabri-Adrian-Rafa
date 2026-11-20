@@ -3259,8 +3259,6 @@ async function viewDetail(app, id) {
           ${l.grading?.cert ? `<div><dt>Certificado</dt><dd>${esc(l.grading.cert)}</dd></div>` : ""}
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
         ${isSealed(l) || isLot(l) ? "" : `<section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>`}
-        ${l.isDemo ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><p class="sub">En los anuncios reales puedes preguntarle al vendedor aquí mismo (estado, centrado, entrega…). Él responde en el anuncio y todos ven la respuesta.</p></section>`
-          : sb ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><div id="qaBox"><p class="loading"><span class="spinner"></span></p></div></section>` : ""}
       </div>
       <aside class="dside">
         ${forSale && !isOwner ? `<section class="panel buy-panel"><h2 class="ptitle">${ic("tag")}Comprar</h2>
