@@ -1206,7 +1206,7 @@ a.pcard:hover .act .i { transform: translateX(2px); }
     <button class="icon-btn" id="menuBtn" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="sideNav"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <a class="logo" href="#/" data-logo="h" aria-label="MarketZlab, inicio"></a>
     <div class="top-right">
-      <button class="search-trigger" id="searchBtn" type="button" aria-label="Buscar cartas" aria-haspopup="dialog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Buscar cartas…</span><kbd id="searchKbd">⌘K</kbd></button>
+      <button class="search-trigger" id="searchBtn" type="button" aria-label="Buscar cartas" aria-haspopup="dialog"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span>Buscar cartas…</span></button>
       <div class="nav-account" id="nav"></div>
     </div>
   </div>
@@ -8611,7 +8611,6 @@ async function mountCaptcha(box) {
 document.querySelectorAll("[data-logo]").forEach((n) => n.insertAdjacentHTML("afterbegin", brandLockup(n.dataset.logo, { mini: n.dataset.logo === "f" })));
 document.querySelectorAll(".brand-name").forEach((n) => (n.innerHTML = brandName()));
 motion.init();
-if (!/Mac|iPhone|iPad/i.test(navigator.userAgentData?.platform ?? navigator.platform ?? "")) $("#searchKbd").textContent = "Ctrl K";
 $("#searchBtn").addEventListener("click", openSearch);
 $("#menuBtn").addEventListener("click", () => toggleSideNav());
 $("#sideClose").addEventListener("click", () => toggleSideNav(false));
