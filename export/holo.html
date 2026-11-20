@@ -3962,12 +3962,12 @@ function sellerFields({ phone = "", address = "", parts = null, email = null, di
     <fieldset class="addr"><legend>${shop ? "Dirección del local" : "Dirección exacta de residencia"}</legend>
       ${address && !parts ? `<p class="xs muted" style="margin:0">Dirección guardada: ${esc(address)}. Escríbela por partes para actualizarla.</p>` : ""}
       <div class="grid2"><label class="f">Provincia<select class="select" name="addrProvince" autocomplete="address-level1"${off}><option value="">Elige</option>${PA_PROVINCES.map((x) => `<option${parts?.province === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
-        ${input("district", "Distrito", "Ej.: Panamá", ` list="addrDistricts" autocomplete="address-level2"`)}</div>
-      ${input("area", "Corregimiento o barrio", "Ej.: San Francisco", ` list="addrAreas" autocomplete="address-level3"`)}
-      ${input("street", "Calle o avenida", "Ej.: Calle 74", ` autocomplete="address-line1"`)}
-      <div class="grid2">${input("house", "Casa, edificio o PH", "Ej.: PH Las Palmas")}
-        ${input("unit", `Apartamento o piso <span class="muted">(opcional)</span>`, "Ej.: Apto 3B", ` autocomplete="address-line2"`)}</div>
-      ${input("ref", `Punto de referencia <span class="muted">(opcional)</span>`, "Ej.: Frente al parque")}
+        ${input("district", "Distrito", "", ` list="addrDistricts" autocomplete="address-level2"`)}</div>
+      ${input("area", "Corregimiento o barrio", "", ` list="addrAreas" autocomplete="address-level3"`)}
+      ${input("street", "Calle o avenida", "", ` autocomplete="address-line1"`)}
+      <div class="grid2">${input("house", "Casa, edificio o PH", "")}
+        ${input("unit", `Apartamento o piso <span class="muted">(opcional)</span>`, "", ` autocomplete="address-line2"`)}</div>
+      ${input("ref", `Punto de referencia <span class="muted">(opcional)</span>`, "")}
       <datalist id="addrDistricts">${opts(LOCATIONS.map((l) => l.district))}</datalist><datalist id="addrAreas">${opts(LOCATIONS.flatMap((l) => l.neighborhoods))}</datalist>
     </fieldset>
     <p class="notice soft pickup-note">${ic("pin")}<span><b>Aquí retiramos ${shop ? "las cartas que vendas" : "tus cartas"}.</b> Cuando vendas una, el equipo de ${esc(CONFIG.APP_NAME)} pasa a buscarla a esta dirección. Solo la ve nuestro equipo${shop ? "" : ": nunca sale en tus anuncios"}.</span></p>`;
@@ -4474,7 +4474,7 @@ function viewSell(app) {
         <label class="f">Categoría<select class="select" name="category" id="category">${CATEGORIES.map((c) => `<option value="${c.slug}">${c.name}</option>`).join("")}</select></label>
         <div id="catalogBox" class="panel accent">
           <p class="ptitle" style="font-size:15px">${ic("search")}¿No la reconocimos? Búscala en el catálogo de Pokémon</p>
-          <div class="grid2" style="margin-top:12px"><input class="input" id="catName" placeholder="Nombre (ej. Charizard ex)" aria-label="Nombre de la carta" enterkeyhint="search"><input class="input" id="catNum" placeholder="Número (ej. 199/165)" aria-label="Número de la carta" enterkeyhint="search"></div>
+          <div class="grid2" style="margin-top:12px"><input class="input" id="catName" placeholder="Nombre" aria-label="Nombre de la carta" enterkeyhint="search"><input class="input" id="catNum" placeholder="Número" aria-label="Número de la carta" enterkeyhint="search"></div>
           <button type="button" class="btn outline sm" id="catBtn" style="margin-top:10px">Buscar</button>
           <div id="catResults" aria-live="polite"></div>
         </div>
@@ -5364,7 +5364,7 @@ function startInquiry(o) {
   const { el, close } = modal("dlg inq-dlg", `<h2 id="inqT">${general ? "Nueva consulta" : "Consultar por esta carta"}</h2>
     ${general ? "" : `<p class="inq-subj">${esc(o.subject)}${o.priceCents ? ` · ${formatUsd(o.priceCents)}` : ""}</p>`}
     <form id="inqForm" novalidate>
-      ${general ? `<label class="f">¿Sobre qué es?<input class="input" name="subject" maxlength="160" required placeholder="Ej.: busco un Charizard graduado"></label>` : ""}
+      ${general ? `<label class="f">¿Sobre qué es?<input class="input" name="subject" maxlength="160" required></label>` : ""}
       <label class="f">${general ? "Cuéntanos más (opcional)" : "¿Qué quieres saber? (opcional)"}<textarea class="textarea" name="message" rows="3" maxlength="500" placeholder="${general ? "Lo que necesites" : "Estado, entrega, si aceptan cambio…"}"></textarea></label>
       ${wa ? "" : `<label class="f">Tu WhatsApp<input class="input" name="phone" type="tel" inputmode="tel" maxlength="30" required placeholder="6123-4567"><span class="xs muted" style="font-weight:400">Para responderte. Solo lo ve el equipo de ${esc(CONFIG.APP_NAME)}.</span></label>`}
       <div id="inqMsg" aria-live="polite"></div>
@@ -5877,7 +5877,7 @@ async function viewWatchlist(app, params) {
     const lead = !st.cards.length;
     return `<div class="panel wl-free"><div>
       <p style="font-weight:700;margin:0">${lead ? (st.down ? "El catálogo no responde en este momento" : `«${esc(st.q)}» no está en el catálogo de Pokémon`) : "¿No es ninguna de estas?"}</p>
-      <p class="small muted" style="margin:4px 0 0">${lead ? `Agrégala tal cual. Para NBA y NFL escribe jugador, set y año (ej.: Wembanyama Prizm 2023): la buscamos en los anuncios de ${APP}.` : `Agrégala tal cual: «${esc(st.q)}».`}</p></div>
+      <p class="small muted" style="margin:4px 0 0">${lead ? `Agrégala tal cual. Para NBA y NFL escribe jugador, set y año: la buscamos en los anuncios de ${APP}.` : `Agrégala tal cual: «${esc(st.q)}».`}</p></div>
       <button type="button" class="btn ${lead ? "primary" : "outline"} sm wl-add" data-w="free" aria-pressed="false">${ic("plus")}<span>Agregar a mi watchlist</span></button></div>`;
   };
   const paintIdle = (hint = "") => {
@@ -7571,7 +7571,7 @@ async function viewAccount(app) {
           <label class="acc-shop" title="Cambiar foto del local">${pic(profilePhotoUrl(prof.shop_photo_path), "shp", "Sube una foto de la fachada o del mostrador")}
             <input type="file" id="shopIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
           <span class="xs muted" style="font-weight:400">Una foto real del local da confianza: la gente ve que existes.</span></div>
-        ${shopCols ? `<label class="f">Dirección del local<input class="input" name="shopAddress" maxlength="160" placeholder="Ej.: Multiplaza, segundo piso, local 210" value="${esc(prof.shop_address ?? "")}"><span class="xs muted" style="font-weight:400">Sale en tu página con un enlace a Google Maps.</span></label>
+        ${shopCols ? `<label class="f">Dirección del local<input class="input" name="shopAddress" maxlength="160" value="${esc(prof.shop_address ?? "")}"><span class="xs muted" style="font-weight:400">Sale en tu página con un enlace a Google Maps.</span></label>
         <div class="grid2"><label class="f">Provincia<select class="select" name="shopProvince"><option value="">Elige</option>${PROVINCES.map((v) => `<option ${prof.shop_province === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
           <label class="f">Horario<input class="input" name="shopHours" maxlength="200" placeholder="Lun a sáb, 10 a. m. a 8 p. m." value="${esc(prof.shop_hours ?? "")}"></label></div>
         <label class="check"><input type="checkbox" name="shopPickup"${prof.shop_pickup ? " checked" : ""}><span><b>Retiro en tienda:</b> quien te compra puede pasar a buscar su compra al local. Le damos tu dirección y un código que te muestra al retirarla.${prof.verified ? "" : " Se activa cuando tu tienda esté verificada."}</span></label>` : ""}
