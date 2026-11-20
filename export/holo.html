@@ -390,9 +390,10 @@ dl.rows div.total dt { color: var(--fg); }
 .buy-lines .buy-total { padding-top: 10px; border-top: 1px solid var(--border); font-size: 18px; }
 .buy-lines .buy-total dt { color: var(--fg); font-weight: 600; }
 .buy-lines .buy-total dd { font-weight: 800; }
-.btn.yappy { background: #0072ce; color: #fff; font-weight: 700; }
-.btn.yappy:hover { background: #0062b3; }
+.btn.yappy { background: var(--bg); border-color: var(--border); color: #fff; font-weight: 700; }
+.btn.yappy:hover { background: var(--card-hover); border-color: var(--fg-3); }
 .btn.yappy:disabled { opacity: .6; }
+.btn.yappy .yappy-logo { width: 24px; height: 24px; flex-shrink: 0; }
 .desc { margin-top: 8px; font-size: 14px; white-space: pre-line; }
 .seller { display: flex; align-items: center; gap: 12px; }
 .seller .nm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-weight: 600; }
@@ -3269,7 +3270,7 @@ async function viewDetail(app, id) {
       <aside class="dside">
         ${forSale && !isOwner ? `<section class="panel buy-panel"><h2 class="ptitle">${ic("tag")}Comprar</h2>
           <dl class="buy-lines"><div><dt>Precio</dt><dd>${formatUsd(price)}</dd></div><div><dt>Envío</dt><dd>${formatUsd(SHIPPING_CENTS)}</dd></div><div class="buy-total"><dt>Total</dt><dd>${formatUsd(price + SHIPPING_CENTS)}</dd></div></dl>
-          <button type="button" class="btn yappy block" id="yappyBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>Pagar con Yappy</button>
+          <button type="button" class="btn yappy block" id="yappyBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>Pagar con Yappy<img class="yappy-logo" src="img/brand/yappy.png" alt="" width="24" height="24"></button>
           <p class="xs muted" style="margin:10px 0 0">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales pagas aquí con Yappy." : `Pagas a ${esc(CONFIG.APP_NAME)} con Yappy y le pagamos al vendedor cuando la carta llega. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.`}</p></section>` : ""}
         ${isOwner && forSale ? `<section class="panel" id="intPanel" hidden><h2 class="ptitle">${ic("heart")}Interesados</h2><div id="intOwner"></div></section>` : ""}
         ${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline block wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}
