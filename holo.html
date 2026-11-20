@@ -3957,8 +3957,8 @@ const SELLER_MSG = {
 };
 // The pickup address is asked in parts, like a delivery form, and saved as one line (seller_accounts.pickup_address,
 // 10 to 240 characters). The parts also go in the account metadata (pickup_parts) so editing fills the same boxes.
-const PA_PROVINCES = ["Panamá", "Panamá Oeste", "Colón", "Chiriquí", "Coclé", "Herrera", "Los Santos", "Veraguas", "Bocas del Toro", "Darién",
-  "Comarca Guna Yala", "Comarca Emberá-Wounaan", "Comarca Ngäbe-Buglé", "Comarca Naso Tjër Di"];
+// For now we only operate in the province of Panamá (2026-11-20).
+const PA_PROVINCES = ["Panamá"];
 const ADDR_FIELDS = { province: "addrProvince", district: "addrDistrict", area: "addrArea", street: "addrStreet", house: "addrHouse", unit: "addrUnit", ref: "addrRef" };
 /** The address parts typed in a form made with sellerFields(). */
 const addressParts = (root) => Object.fromEntries(Object.entries(ADDR_FIELDS).map(([k, name]) => [k, cleanAddress(root.querySelector(`[name="${name}"]:not(:disabled)`)?.value)]));
@@ -3980,14 +3980,14 @@ function sellerFields({ phone = "", address = "", parts = null, email = null, di
     <label class="f">Teléfono (WhatsApp)<input class="input" name="sellerPhone" type="tel" inputmode="tel" autocomplete="tel-national" maxlength="20" placeholder="6123-4567" value="${esc(phone ? fmtPhone(phone) : "")}"${off}><span class="hint xs">Por aquí coordinamos contigo cada venta.</span></label>
     <fieldset class="addr"><legend>${shop ? "Dirección del local" : "Dirección exacta de residencia"}</legend>
       ${address && !parts ? `<p class="xs muted" style="margin:0">Dirección guardada: ${esc(address)}. Escríbela por partes para actualizarla.</p>` : ""}
-      <div class="grid2"><label class="f">Provincia<select class="select" name="addrProvince" autocomplete="address-level1"${off}><option value="">Elige</option>${PA_PROVINCES.map((x) => `<option${parts?.province === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
+      <div class="grid2"><label class="f">Provincia<select class="select" name="addrProvince" autocomplete="address-level1"${off}>${PA_PROVINCES.map((x) => `<option${parts?.province === x ? " selected" : ""}>${esc(x)}</option>`).join("")}</select></label>
         ${input("district", "Distrito", "", ` list="addrDistricts" autocomplete="address-level2"`)}</div>
       ${input("area", "Corregimiento o barrio", "", ` list="addrAreas" autocomplete="address-level3"`)}
       ${input("street", "Calle o avenida", "", ` autocomplete="address-line1"`)}
       <div class="grid2">${input("house", "Casa, edificio o PH", "")}
         ${input("unit", `Apartamento o piso <span class="muted">(opcional)</span>`, "", ` autocomplete="address-line2"`)}</div>
       ${input("ref", `Punto de referencia <span class="muted">(opcional)</span>`, "")}
-      <datalist id="addrDistricts">${opts(LOCATIONS.map((l) => l.district))}</datalist><datalist id="addrAreas">${opts(LOCATIONS.flatMap((l) => l.neighborhoods))}</datalist>
+      <datalist id="addrDistricts">${opts(LOCATIONS.filter((l) => PA_PROVINCES.includes(l.province)).map((l) => l.district))}</datalist><datalist id="addrAreas">${opts(LOCATIONS.filter((l) => PA_PROVINCES.includes(l.province)).flatMap((l) => l.neighborhoods))}</datalist>
     </fieldset>
     <p class="notice soft pickup-note">${ic("pin")}<span><b>Aquí retiramos ${shop ? "las cartas que vendas" : "tus cartas"}.</b> Cuando vendas una, el equipo de ${esc(CONFIG.APP_NAME)} pasa a buscarla a esta dirección. Solo la ve nuestro equipo${shop ? "" : ": nunca sale en tus anuncios"}.</span></p>`;
 }
@@ -7591,7 +7591,7 @@ async function viewAccount(app) {
             <input type="file" id="shopIn" accept="image/jpeg,image/png,image/webp" class="sr-only"></label>
           <span class="xs muted" style="font-weight:400">Una foto real del local da confianza: la gente ve que existes.</span></div>
         ${shopCols ? `<label class="f">Dirección del local<input class="input" name="shopAddress" maxlength="160" value="${esc(prof.shop_address ?? "")}"><span class="xs muted" style="font-weight:400">Sale en tu página con un enlace a Google Maps.</span></label>
-        <div class="grid2"><label class="f">Provincia<select class="select" name="shopProvince"><option value="">Elige</option>${PROVINCES.map((v) => `<option ${prof.shop_province === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
+        <div class="grid2"><label class="f">Provincia<select class="select" name="shopProvince">${PA_PROVINCES.map((v) => `<option ${prof.shop_province === v ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
           <label class="f">Horario<input class="input" name="shopHours" maxlength="200" placeholder="Lun a sáb, 10 a. m. a 8 p. m." value="${esc(prof.shop_hours ?? "")}"></label></div>
         <label class="check"><input type="checkbox" name="shopPickup"${prof.shop_pickup ? " checked" : ""}><span><b>Retiro en tienda:</b> quien te compra puede pasar a buscar su compra al local. Le damos tu dirección y un código que te muestra al retirarla.${prof.verified ? "" : " Se activa cuando tu tienda esté verificada."}</span></label>` : ""}
         ${prof.verified ? `<p class="notice good" style="margin:0">✓ Tu tienda está verificada.</p>`
