@@ -3238,7 +3238,7 @@ async function viewDetail(app, id) {
           ${meta ? `<p class="dmeta">${meta}</p>` : ""}
           <div class="dbadges">${conditionBadge(l)}${l.verificationPhoto ? verifBadge() : ""}${l.authCheck ? authBadge(l) : ""}${verdictBadge(l)}</div>
         </div>
-        <div class="dprice"><p class="big">${formatUsd(price)}</p>${marketDelta(l)}</div>
+        <div class="dprice"><p class="big">${formatUsd(price)}</p></div>
       </div>
       ${l.isDemo ? `<p class="notice warn">Anuncio de ejemplo para mostrar cómo funciona la plataforma. No está a la venta.</p>` : ""}
       ${!l.isDemo && statusNote ? `<p class="notice ${l.status === "sold" ? "good" : "warn"}" style="font-weight:600">${statusNote}</p>` : ""}
