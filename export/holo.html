@@ -3255,8 +3255,6 @@ async function viewDetail(app, id) {
           <p class="sub">${esc(l.authCheck.shop)} revisó esta carta en persona${l.authCheck.at ? ` el ${new Date(l.authCheck.at).toLocaleDateString("es-PA", { day: "numeric", month: "long", year: "numeric" })}` : ""} y no encontró señales de réplica. Es la opinión de la tienda, no una garantía: igual revisa la carta antes de pagar.</p></section>` : ""}
       </div>
       <div class="dmain">
-        ${isSealed(l) || isLot(l) ? "" : `<section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
-        ${estimatePanel(l.estimate, l.priceUsd)}`}
         <section class="panel"><h2 class="ptitle">${ic("text")}Descripción</h2><p class="desc">${esc(l.description) || '<span class="muted">Sin descripción.</span>'}</p>
           <dl class="facts"><div><dt>Categoría</dt><dd>${esc(categoryName(l.card.category))}</dd></div>
           ${isLot(l) ? `<div><dt>Lote</dt><dd>${l.lotCount} cartas${cond ? ` · condición general ${cond.label} (${cond.code})` : " · condición mixta"}</dd></div>`
@@ -3264,6 +3262,7 @@ async function viewDetail(app, id) {
             : `<div><dt>${l.grading ? "Graduación" : "Condición"}</dt><dd>${l.grading ? `${esc(l.grading.company)} ${esc(l.grading.grade)}` : cond ? `${cond.label} (${cond.code})` : "—"}</dd></div>`}
           ${l.grading?.cert ? `<div><dt>Certificado</dt><dd>${esc(l.grading.cert)}</dd></div>` : ""}
           <div><dt>Ubicación</dt><dd>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</dd></div><div><dt>Provincia</dt><dd>${esc(l.location.province)}</dd></div></dl></section>
+        ${isSealed(l) || isLot(l) ? "" : `<section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>`}
         ${l.isDemo ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><p class="sub">En los anuncios reales puedes preguntarle al vendedor aquí mismo (estado, centrado, entrega…). Él responde en el anuncio y todos ven la respuesta.</p></section>`
           : sb ? `<section class="panel"><h2 class="ptitle">${ic("chat")}Preguntas</h2><div id="qaBox"><p class="loading"><span class="spinner"></span></p></div></section>` : ""}
       </div>
@@ -3274,9 +3273,6 @@ async function viewDetail(app, id) {
           <p class="xs muted" style="margin:10px 0 0">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales pagas aquí con Yappy." : `Pagas a ${esc(CONFIG.APP_NAME)} con Yappy y le pagamos al vendedor cuando la carta llega. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.`}</p></section>` : ""}
         ${isOwner && forSale ? `<section class="panel" id="intPanel" hidden><h2 class="ptitle">${ic("heart")}Interesados</h2><div id="intOwner"></div></section>` : ""}
         ${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline block wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}
-        <section class="panel"><h2 class="ptitle">${ic("external")}Compartir</h2>
-          <p class="sub">Comparte la carta en tus grupos: te armamos una imagen con la foto, el precio y el link.</p>
-          <div class="share-row"><button type="button" class="btn outline" id="shareBtn">${ic("external")}Compartir</button><a class="btn outline" id="shareWa" target="_blank" rel="noopener">${ic("chat")}WhatsApp</a><button type="button" class="btn outline" id="shareStory">${ic("camera")}Historia</button></div></section>
         ${sellerPanel(l.seller)}
         ${isOwner && ["active", "reserved"].includes(l.status) ? `<section class="panel"><h2 class="ptitle">${ic("tag")}¿Ya no la tienes?</h2>
           <p class="sub">Márcala como vendida para que deje de aparecer.</p>
@@ -3300,7 +3296,6 @@ async function viewDetail(app, id) {
     t.addEventListener("click", () => pick(t));
     t.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(t); } });
   });
-  setupShare(l);
   if ($("#watchBtn")) bindWatchToggle($("#watchBtn"), watchFromListing(l));
   if ($("#authCheckBody")) renderAuthCheck(l, $("#authCheckBody"));
   if ($("#qaBox")) renderQuestions(l, $("#qaBox"));
