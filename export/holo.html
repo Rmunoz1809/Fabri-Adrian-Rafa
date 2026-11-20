@@ -476,6 +476,7 @@ img.avatar { display: block; padding: 0; background: var(--muted); }
 .seller-seg a.on { background: var(--bg); color: var(--fg); box-shadow: var(--shadow-sm); }
 .seller-seg .i { width: 15px; height: 15px; }
 .shop-note { margin-top: 12px; }
+.shop-note[hidden] { display: none; }
 .tseller[data-seller]:not([data-seller=""]) { cursor: pointer; }
 .tseller[data-seller]:not([data-seller=""]):hover .nm { text-decoration: underline; text-underline-offset: 3px; }
 .seller-page .tseller { display: none; } /* every card on this page is from the same seller */
@@ -1579,7 +1580,7 @@ const progress = (() => {
 // holographic band, and the header firms up once the page scrolls. All of it is off with reduced
 // motion. The CSS side is the "MarketZlab brand layer" at the end of the stylesheet.
 const motion = (() => {
-  const BUILD = 'h1:not(.sr-only), .page .eyebrow, .lead, .cta > .btn, .seller-seg, .shop-note, .toolbar, .rhead, .crumbs, .dset, .dmeta, .dbadges, .dprice, .dhead .notice, .big-art, .thumbs, .media-note, .panel, .fees-sec > .h2, .fees-sec > p, .dash-head, .dtile, .event, .notif-list > li, .empty-state, .admin-tabs, .legal-toc, section[id^="legal-"], .gate-hero > :not(h1), .gate-form';
+  const BUILD = 'h1:not(.sr-only), .page .eyebrow, .lead, .cta > .btn, .seller-seg, .shop-note, .toolbar, .rhead, .crumbs, .dset, .dmeta, .dbadges, .dprice, .dhead .notice, .big-art, .thumbs, .media-note, .panel, .fees-sec > .h2, .fees-sec > p, .dash-head, .dtile, .notif-list > li, .empty-state, .admin-tabs, .legal-toc, section[id^="legal-"], .gate-hero > :not(h1), .gate-form';
   const COUNT = ".dprice .big, .dtile .v, .est-range";
   const fine = matchMedia("(hover: hover) and (pointer: fine)");
   let io = null, until = 0, queue = [], frame = 0;
@@ -2992,7 +2993,7 @@ async function viewHome(app, params) {
       <nav class="seller-seg" style="margin-top:24px" aria-label="Tipo de vendedor">
         ${[[undefined, "Todos"], ["tiendas", `${ic("store")}Tiendas verificadas`], ["particulares", "Particulares"]].map(([v, t]) => `<a class="${f.seller === v ? "on" : ""}" href="${hrefWith(f, { vendedor: v })}"${f.seller === v ? ' aria-current="true"' : ""}>${t}</a>`).join("")}
       </nav>
-      ${f.seller === "tiendas" ? `<div class="panel shop-note"><p style="font-weight:600">Tiendas con local o marca comprobados por ${esc(CONFIG.APP_NAME)}</p>
+      ${f.seller === "tiendas" ? `<div class="panel shop-note" id="shopNote" hidden><p style="font-weight:600">Tiendas con local o marca comprobados por ${esc(CONFIG.APP_NAME)}</p>
         <p class="small muted" style="margin-top:4px">Verificamos que la tienda existe y que vende cartas originales. Aun así, revisa cada carta antes de pagar.</p>
         <p class="small" style="margin-top:8px">¿Tienes una tienda? <a class="link" href="#/cuenta?tienda=1" style="font-weight:600">Pide tu verificación</a></p></div>` : ""}
       ${f.seller === "particulares" ? `<p class="notice soft" style="margin-top:12px">Coleccionistas que venden sus propias cartas. Pide fotos reales del frente y el reverso: consúltanos por WhatsApp y te ayudamos con la compra.</p>` : ""}
@@ -3038,6 +3039,8 @@ async function viewHome(app, params) {
   $("#sortBtn").addEventListener("click", (e) => openMenu(e.currentTarget, Object.entries(SORT_LABELS).map(([k, label]) => ({
     label, checked: f.sort === k, onSelect: () => goList(hrefWith(f, { orden: k === "recientes" ? undefined : k })),
   }))));
+  // The "Tiendas verificadas" note is only for shop accounts; buyers and sellers don't see it.
+  if ($("#shopNote")) showShopNote($("#shopNote"));
   $("#filtersBtn").addEventListener("click", openFilters);
   $("#fpanel [data-close]").addEventListener("click", () => $("#fpanel")._close?.());
   enableDrawerDrag($("#fpanel"));
@@ -3067,6 +3070,13 @@ function alignDetailPanels() {
   a.style.minHeight = b.style.minHeight = `${h}px`;
 }
 addEventListener("resize", () => alignDetailPanels());
+
+async function showShopNote(box) {
+  if (!session || !sb) return;
+  if (isShopSignup()) { box.hidden = false; return; }
+  const { data } = await sb.from("profiles").select("is_shop").eq("id", session.user.id).maybeSingle();
+  if (data?.is_shop && box.isConnected) box.hidden = false;
+}
 
 function sellerPanel(s) {
   const shop = s.isShop;
