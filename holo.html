@@ -782,23 +782,6 @@ label.check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px
 .shop-place li { display: flex; gap: 8px; align-items: flex-start; min-width: 0; }
 .shop-place .i { flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px; color: var(--fg-2); }
 .shop-place a, .shop-place span { overflow-wrap: anywhere; }
-.events-page { max-width: 760px; margin: 24px auto 48px; }
-.events { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.event { display: flex; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card); min-width: 0; }
-.event.off { opacity: .6; }
-.ev-date { flex-shrink: 0; display: grid; place-items: center; align-content: center; width: 52px; height: 56px; border-radius: var(--radius-md); background: var(--muted); line-height: 1.1; }
-.ev-date span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-2); }
-.ev-date b { font-size: 22px; }
-.ev-body { min-width: 0; flex: 1; display: grid; gap: 4px; }
-.ev-body h3 { margin: 0; font-size: 16px; overflow-wrap: anywhere; }
-.ev-body p { margin: 0; }
-.ev-kind { font-size: 12px; font-weight: 600; color: var(--fg-2); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.ev-desc { white-space: pre-line; overflow-wrap: anywhere; color: var(--fg-2); }
-.ev-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
-.ev-form .grid2 { grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); }
-.ev-form .input { min-width: 0; }
-.home-events { margin-top: 20px; }
-.home-events .rhead { margin-bottom: 10px; }
 .pickup-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
 .dlv { display: grid; gap: 12px; }
 .dlv .radio { align-items: flex-start; }
@@ -1110,10 +1093,10 @@ a.pcard:hover .act .i { transform: translateX(2px); }
 .mz-r:not(.mz-in) :is(.range .fill, .range .mark, .range .lbl, .fbar div, .goal div, .daily span) { animation-play-state: paused; }
 
 /* Hover depth for tiles, steps, events and notifications. */
-.steps > li, .dtile, .event, .notif-list a { transition: transform .35s var(--ease-out), border-color .25s var(--ease), background-color .25s var(--ease), box-shadow .35s var(--ease-out); }
+.steps > li, .dtile, .notif-list a { transition: transform .35s var(--ease-out), border-color .25s var(--ease), background-color .25s var(--ease), box-shadow .35s var(--ease-out); }
 .num-badge { transition: transform .45s var(--ease-spring); }
 @media (hover: hover) and (pointer: fine) {
-  .steps > li:hover, .dtile:hover, .event:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--hairline), var(--shadow-md); }
+  .steps > li:hover, .dtile:hover { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: var(--hairline), var(--shadow-md); }
   .steps > li:hover .num-badge { transform: rotate(-8deg) scale(1.08); }
   .notif-list a:hover { transform: translateX(3px); }
 }
@@ -1588,7 +1571,7 @@ const progress = (() => {
 // holographic band, and the header firms up once the page scrolls. All of it is off with reduced
 // motion. The CSS side is the "MarketZlab brand layer" at the end of the stylesheet.
 const motion = (() => {
-  const BUILD = 'h1:not(.sr-only), .page .eyebrow, .lead, .cta > .btn, .seller-seg, .shop-note, .toolbar, .rhead, .home-events, .crumbs, .dset, .dmeta, .dbadges, .dprice, .dhead .notice, .big-art, .thumbs, .media-note, .panel, .fees-sec > .h2, .fees-sec > p, .dash-head, .dtile, .event, .notif-list > li, .empty-state, .admin-tabs, .legal-toc, section[id^="legal-"], .gate-hero > :not(h1), .gate-form';
+  const BUILD = 'h1:not(.sr-only), .page .eyebrow, .lead, .cta > .btn, .seller-seg, .shop-note, .toolbar, .rhead, .crumbs, .dset, .dmeta, .dbadges, .dprice, .dhead .notice, .big-art, .thumbs, .media-note, .panel, .fees-sec > .h2, .fees-sec > p, .dash-head, .dtile, .event, .notif-list > li, .empty-state, .admin-tabs, .legal-toc, section[id^="legal-"], .gate-hero > :not(h1), .gate-form';
   const COUNT = ".dprice .big, .dtile .v, .est-range";
   const fine = matchMedia("(hover: hover) and (pointer: fine)");
   let io = null, until = 0, queue = [], frame = 0;
@@ -2255,7 +2238,7 @@ async function route() {
     if (path === "/" || path === "") return await viewHome(app, params);
     if (path.startsWith("/carta/")) return await viewDetail(app, safeDecode(path.slice(7)));
     if (path.startsWith("/vendedor/")) return await viewSeller(app, safeDecode(path.slice(10)), params);
-    if (path === "/eventos") { app.innerHTML = `<div class="wrap"></div>`; return await viewEvents(app.firstElementChild, params); }
+    if (path === "/eventos") return go("/"); // events were removed (2026-11-20)
     if (path === "/escanear") return viewScan(app);
     if (path === "/terminos") return viewTerms(app);
     if (path === "/privacidad") return viewPrivacy(app);
@@ -2290,12 +2273,12 @@ async function route() {
   }
 }
 
-const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["eventos", "#/eventos", "Eventos", "calendar"], ["consultas", "#/consultas", "Consultas", "chat"], ["watchlist", "#/watchlist", "Mi watchlist", "bookmark"]];
+const NAV_LINKS = [["explorar", "#/", "Explorar", "grid"], ["consultas", "#/consultas", "Consultas", "chat"], ["watchlist", "#/watchlist", "Mi watchlist", "bookmark"]];
 function renderNav() {
   const { path } = parseHash();
   const myProfile = session ? `/vendedor/${encodeURIComponent(session.user.id)}` : null;
-  const current = { "/eventos": "eventos", "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/watchlist": "watchlist" }[path] ?? (path === myProfile ? "perfil" : undefined) ?? (path.startsWith("/portafolio/") ? "portafolio" : path.startsWith("/watchlist/") ? "watchlist" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
-  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi portafolio", "trend"], ["perfil", `#${myProfile}`, "Mi perfil", "eye"], ["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
+  const current = { "/consultas": "consultas", "/portafolio": "portafolio", "/cuenta": "cuenta", "/admin": "admin", "/watchlist": "watchlist" }[path] ?? (path === myProfile ? "perfil" : undefined) ?? (path.startsWith("/portafolio/") ? "portafolio" : path.startsWith("/watchlist/") ? "watchlist" : undefined) ?? (path === "/" || path === "" || path.startsWith("/carta/") || path.startsWith("/vendedor/") ? "explorar" : "");
+  const all = [...NAV_LINKS, ...(session ? [["portafolio", "#/portafolio", "Mi cartera", "trend"], ["perfil", `#${myProfile}`, "Mi perfil", "eye"], ["cuenta", "#/cuenta", "Mi cuenta", "user"]] : []), ...(isStaff ? [["admin", "#/admin", "Admin", "layout"]] : [])];
   const name = session ? profileName ?? session.user.email?.split("@")[0] ?? "Tu cuenta" : null;
   const initial = esc((name ?? "?").slice(0, 1).toUpperCase());
   $("#sideLinks").innerHTML = all.map(([k, href, text, icon]) => `<a href="${href}"${k === current ? ' aria-current="page"' : ""}>${ic(icon)}<span>${text}</span>${k === "watchlist" ? watchNavBadge() : ""}</a>`).join("");
@@ -2317,7 +2300,7 @@ function renderNav() {
   $("#acctBtn")?.addEventListener("click", (e) => openMenu(e.currentTarget, [
     { heading: session.user.email ?? name },
     { label: "Mi perfil", icon: "eye", href: `#${myProfile}` },
-    { label: "Mi portafolio", icon: "trend", href: "#/portafolio" },
+    { label: "Mi cartera", icon: "trend", href: "#/portafolio" },
     { label: "Mi cuenta", icon: "user", href: "#/cuenta" },
     { label: "Mis consultas", icon: "chat", href: "#/consultas" },
     isSeller() ? { label: "Vender una carta", icon: "plus", href: "#/vender" } : { label: "Pasar a cuenta de vendedor", icon: "store", href: "#/cuenta?vendedor=1" },
@@ -2995,8 +2978,7 @@ async function viewHome(app, params) {
   const active = [f.graded, f.province, f.minPrice, f.maxPrice].filter((v) => v != null).length;
   setTitle(f.q ? `Resultados para “${f.q}”` : undefined);
   app.innerHTML = `
-    ${filtered ? "" : `<h1 class="sr-only">Cartas coleccionables en Panamá, con precio claro</h1>
-    <section class="wrap home-events" id="homeEvents" aria-labelledby="homeEventsTitle" hidden></section>`}
+    ${filtered ? "" : `<h1 class="sr-only">Cartas coleccionables en Panamá, con precio claro</h1>`}
     <div class="wrap">
       <nav class="seller-seg" style="margin-top:24px" aria-label="Tipo de vendedor">
         ${[[undefined, "Todos"], ["tiendas", `${ic("store")}Tiendas verificadas`], ["particulares", "Particulares"]].map(([v, t]) => `<a class="${f.seller === v ? "on" : ""}" href="${hrefWith(f, { vendedor: v })}"${f.seller === v ? ' aria-current="true"' : ""}>${t}</a>`).join("")}
@@ -3051,7 +3033,6 @@ async function viewHome(app, params) {
   $("#fpanel [data-close]").addEventListener("click", () => $("#fpanel")._close?.());
   enableDrawerDrag($("#fpanel"));
 
-  if (!filtered) renderHomeEvents($("#homeEvents"));
   const listEl = $("#list"), countEl = $("#count");
   const demo = CONFIG.SHOW_DEMO_LISTINGS ? DEMO.filter((l) => matchesFilters(l, f)) : [];
   const real = await fetchRealListings(f).catch(() => []);
@@ -3169,16 +3150,15 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
         ${shop && s.verified ? `<p class="notice good small">Tienda verificada: ${esc(CONFIG.APP_NAME)} confirmó que la tienda existe y que es de este vendedor.</p>` : shop ? `<p class="notice soft small">Esta tienda todavía no está verificada por ${esc(CONFIG.APP_NAME)}.</p>` : ""}
         ${isMe ? `<a class="btn" href="#/cuenta">Editar mi perfil</a>` : ""}
       </div></section>
-    <section class="panel col" id="shopEvents" hidden></section>
     <section class="panel" id="sellerReviews" hidden></section></aside>
     <section class="seller-cards" aria-labelledby="collTitle">
-    ${ownExample ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> todavía no muestras cartas en tu perfil. Así se verá cuando muestres tu colección: los demás ven “Me interesa” en cada carta y tú ves cuántas personas la quieren. Estas cartas y números son de ejemplo. <a class="link" href="#/portafolio">Elegir mis cartas en Mi portafolio</a></p>`
-      : id === PF_EXAMPLE_OWNER ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> así se ve tu perfil cuando muestras tus cartas. Los demás ven “Me interesa” en cada una; tú ves cuántas personas la quieren. <a class="link" href="#/portafolio/ejemplo">Ver mi portafolio de ejemplo</a></p>` : ""}
+    ${ownExample ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> todavía no muestras cartas en tu perfil. Así se verá cuando muestres tu colección: los demás ven “Me interesa” en cada carta y tú ves cuántas personas la quieren. Estas cartas y números son de ejemplo. <a class="link" href="#/portafolio">Elegir mis cartas en Mi cartera</a></p>`
+      : id === PF_EXAMPLE_OWNER ? `<p class="notice warn" style="margin:0 0 16px"><b>Ejemplo:</b> así se ve tu perfil cuando muestras tus cartas. Los demás ven “Me interesa” en cada una; tú ves cuántas personas la quieren. <a class="link" href="#/portafolio/ejemplo">Ver mi cartera de ejemplo</a></p>` : ""}
     <div class="rhead"><h2 id="collTitle">${who} colección</h2><p class="small muted num" id="sellerCount" aria-live="polite"></p></div>
     ${ownerView && counts ? `<div class="int-big prof-int"><p class="v">${fmtN(counts.people)}</p><p class="s">${counts.people
       ? `${counts.people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(counts.cards.length)} de tus cartas</b>. Arriba a la derecha de cada carta ves cuántas la quieren; nunca quiénes. <a class="link" href="#/portafolio${showingExample ? "/ejemplo" : ""}">Ver el detalle</a>`
       : "personas interesadas todavía. Comparte tu perfil para que marquen las cartas que quieren."}</p></div>` : ""}
-    <p class="small muted coll-sub">${ownerView ? "Todas tus cartas: las que vendes y las de tu portafolio que muestras, primero las que más gente quiere. Arriba a la derecha de cada una ves cuántas personas la quieren (nunca quiénes)."
+    <p class="small muted coll-sub">${ownerView ? "Todas tus cartas: las que vendes y las de tu cartera que muestras, primero las que más gente quiere. Arriba a la derecha de cada una ves cuántas personas la quieren (nunca quiénes)."
       : `Todas las cartas de ${name}, estén o no en venta. Marca “Me interesa” en las que quieras: verá cuántas personas la quieren, sin saber quiénes.`}</p>
     ${entries.length ? `<div class="coll-filters"><nav class="chips seller-chips" aria-label="Categorías"></nav>
       <div class="ranges coll-seg" role="group" aria-label="Qué cartas ver"><button type="button" data-sale="0"></button><button type="button" data-sale="1"></button></div></div>` : ""}
@@ -3199,14 +3179,13 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
     $("#sellerList").innerHTML = list.length ? `<ul class="grid live coll-grid">${list.map((e, i) => e.html(i)).join("")}</ul>`
       : entries.length ? `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${ownerView ? "No tienes" : `${name} no tiene`} cartas${cat ? ` de ${esc(categoryName(cat))}` : ""}${onlySale ? " en venta" : ""}.</p><button type="button" class="btn outline" style="margin-top:16px" data-reset>Ver toda ${ownerView ? "tu" : "su"} colección</button></div>`
       : ownerView ? `<div class="empty-state"><span class="ico">${ic("eye")}</span><p style="font-weight:600">Todavía no muestras ninguna carta.</p>
-        <p class="small muted" style="margin:4px 0 16px;max-width:440px">Elige en Mi portafolio qué cartas se ven aquí, o publica una en venta. Cualquiera podrá marcar “Me interesa”, estén o no en venta.</p>
-        <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/portafolio">Ir a Mi portafolio</a><a class="btn outline" href="#/vender">Publicar una carta</a></div></div>`
+        <p class="small muted" style="margin:4px 0 16px;max-width:440px">Elige en Mi cartera qué cartas se ven aquí, o publica una en venta. Cualquiera podrá marcar “Me interesa”, estén o no en venta.</p>
+        <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/portafolio">Ir a Mi cartera</a><a class="btn outline" href="#/vender">Publicar una carta</a></div></div>`
       : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">${name} todavía no muestra cartas.</p><p class="small muted" style="margin-top:4px">Vuelve más tarde o <a class="link" href="#/">mira otras cartas</a>.</p></div>`;
     history.replaceState(null, "", `#/vendedor/${encodeURIComponent(id)}${cat || onlySale ? `?${new URLSearchParams({ ...(cat ? { cat } : {}), ...(onlySale ? { venta: "1" } : {}) })}` : ""}`);
   };
   renderList();
   if (!demo && sb) renderSellerReviews(id, isMe);
-  if (!demo && sb && isVerifiedShop(s)) renderShopEventsPublic(id, $("#shopEvents"));
   app.querySelector(".seller-cards").addEventListener("click", (e) => {
     const ib = e.target.closest("button[data-int]");
     if (ib) return toggleInterestBtn(ib, marked, s.displayName, `/vendedor/${id}`);
@@ -6116,191 +6095,6 @@ async function viewWatchCard(app, slug, params) {
 // The daily quota lives in the database (scan_quota, migration 0012).
 let pendingSellFiles = null;
 const quotaText = (q) => `Te ${q.limit - q.used === 1 ? "queda" : "quedan"} ${Math.max(0, q.limit - q.used)} de ${q.limit} escaneos gratis hoy.`;
-// ============================================================= shop events (#/eventos, migration 0028)
-// Verified shops publish tournaments, leagues and launches. "Me interesa" gets a reminder the day before
-// (remind_events in the database) and a notice if the shop cancels.
-let eventsOn = true;
-const EVENT_GAMES = [["pokemon", "Pokémon"], ["one_piece", "One Piece"], ["magic", "Magic"], ["yugioh", "Yu-Gi-Oh!"], ["lorcana", "Lorcana"], ["deportivas", "Cartas deportivas"], ["otro", "Otro juego"]];
-const EVENT_KINDS = [["torneo", "Torneo"], ["liga", "Liga"], ["prerelease", "Prerelease"], ["lanzamiento", "Lanzamiento"], ["intercambio", "Intercambio"], ["otro", "Evento"]];
-const optName = (list, v) => list.find(([k]) => k === v)?.[1] ?? v;
-const PA_TZ = "America/Panama";
-const paDate = (ts) => new Intl.DateTimeFormat("en-CA", { timeZone: PA_TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
-const paTime = (ts) => new Intl.DateTimeFormat("en-GB", { timeZone: PA_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(ts));
-const fmtEventTime = (ts) => new Date(ts).toLocaleTimeString("es-PA", { hour: "numeric", minute: "2-digit", timeZone: PA_TZ });
-async function fetchEvents(shop = null) {
-  if (!eventsOn || !sb) return [];
-  const { data, error } = await sb.rpc("upcoming_events", shop ? { p_shop: shop } : {});
-  if (error) { if (["PGRST202", "42883"].includes(error.code)) eventsOn = false; else console.error(error); return []; }
-  return data ?? [];
-}
-function eventCard(e, { showShop = true, manage = false, compact = false } = {}) {
-  const d = new Date(e.starts_at);
-  const day = d.toLocaleDateString("es-PA", { day: "numeric", timeZone: PA_TZ });
-  const month = d.toLocaleDateString("es-PA", { month: "short", timeZone: PA_TZ }).replace(".", "");
-  const when = `${d.toLocaleDateString("es-PA", { weekday: "long", day: "numeric", month: "long", timeZone: PA_TZ })}, ${fmtEventTime(e.starts_at)}${e.ends_at ? ` a ${fmtEventTime(e.ends_at)}` : ""}`;
-  const facts = [when, e.fee_cents ? `Inscripción ${formatUsd(e.fee_cents)}` : "Gratis", e.capacity ? `Cupo para ${e.capacity}` : ""].filter(Boolean);
-  const people = e.interested ? `${e.interested} ${e.interested === 1 ? "persona interesada" : "personas interesadas"}` : "";
-  const action = manage ? (e.cancelled ? "" : `<button type="button" class="btn outline sm" data-ev="edit">Editar</button><button type="button" class="btn ghost sm" data-ev="cancel">Cancelar evento</button>`)
-    : e.cancelled ? "" : `<button type="button" class="btn ${e.mine ? "primary" : "outline"} sm" data-ev="interest" aria-pressed="${e.mine}">${ic(e.mine ? "check" : "bell")}${e.mine ? "Te interesa" : "Me interesa"}</button>`;
-  return `<li class="event${e.cancelled ? " off" : ""}" data-event="${esc(e.id)}">
-    <div class="ev-date" aria-hidden="true"><span>${esc(month)}</span><b>${esc(day)}</b></div>
-    <div class="ev-body"><p class="ev-kind">${esc(optName(EVENT_KINDS, e.kind))} · ${esc(optName(EVENT_GAMES, e.game))}${e.cancelled ? `<span class="b warn">Cancelado</span>` : ""}</p>
-      <h3>${esc(e.title)}</h3>
-      <p class="xs muted">${facts.map(esc).join(" · ")}</p>
-      ${showShop ? `<p class="small"><a class="link" href="#/vendedor/${encodeURIComponent(e.shop_id)}">${esc(e.shop_name)}</a>${e.shop_address ? ` · ${esc(e.shop_address)}` : e.shop_province ? ` · ${esc(e.shop_province)}` : ""}</p>` : ""}
-      ${e.description && !compact ? `<p class="small ev-desc">${esc(e.description)}</p>` : ""}
-      ${action || people ? `<div class="ev-actions">${action}${people ? `<span class="xs muted">${people}</span>` : ""}</div>` : ""}</div></li>`;
-}
-// "Me interesa" on any list of event cards; redraw() re-renders that list.
-function bindInterest(listEl, events, redraw) {
-  listEl.addEventListener("click", async (ev) => {
-    const b = ev.target.closest('[data-ev="interest"]');
-    if (!b) return;
-    if (!session) return go(`/entrar?next=${encodeURIComponent(location.hash.replace(/^#/, "") || "/eventos")}`);
-    const e = events.find((x) => x.id === b.closest("[data-event]").dataset.event);
-    if (!e) return;
-    b.disabled = true;
-    const { error } = e.mine
-      ? await sb.from("event_interest").delete().eq("event_id", e.id).eq("user_id", session.user.id)
-      : await sb.from("event_interest").insert({ event_id: e.id, user_id: session.user.id });
-    if (error && error.code !== "23505") { b.disabled = false; console.error(error); return toast("No pudimos guardarlo. Intenta de nuevo.", { type: "error" }); }
-    if (!error) e.interested += e.mine ? -1 : 1;
-    e.mine = !e.mine;
-    if (e.mine) toast("Listo. Te recordamos un día antes.");
-    redraw();
-  });
-}
-async function viewEvents(app, params) {
-  setTitle("Eventos");
-  let game = EVENT_GAMES.some(([k]) => k === params.get("juego")) ? params.get("juego") : null;
-  app.innerHTML = `<div class="events-page col" style="gap:16px">
-    <div><h1 class="display" style="font-size:30px;margin:0">Eventos en tiendas</h1>
-      <p class="muted" style="margin:6px 0 0">Torneos, ligas y lanzamientos en las tiendas verificadas de Panamá. Marca “Me interesa” y te recordamos un día antes.</p></div>
-    <nav class="chips" id="evChips" aria-label="Juegos"></nav>
-    <div id="evList"><p class="loading"><span class="spinner"></span>Cargando eventos…</p></div>
-    <p class="small muted" style="margin:8px 0 0">¿Tienes una tienda? Con la tienda verificada publicas tus eventos desde <a class="link" href="#/cuenta">Mi cuenta</a>.</p></div>`;
-  const listEl = $("#evList");
-  const events = (await fetchEvents()).filter((e) => !e.cancelled || e.mine);
-  if (!listEl.isConnected) return;
-  const draw = () => {
-    const games = EVENT_GAMES.filter(([k]) => events.some((e) => e.game === k));
-    $("#evChips").innerHTML = games.length > 1 ? [[null, "Todos"], ...games].map(([k, n]) => `<button type="button" class="chip ${game === k ? "on" : ""}" data-game="${k ?? ""}" aria-pressed="${game === k}">${n}</button>`).join("") : "";
-    const list = events.filter((e) => !game || e.game === game);
-    listEl.innerHTML = list.length ? `<ul class="events">${list.map((e) => eventCard(e)).join("")}</ul>`
-      : `<div class="empty-state"><span class="ico">${ic("calendar")}</span><p style="font-weight:600">${eventsOn ? "Todavía no hay eventos publicados." : "Los eventos se abren pronto."}</p><p class="small muted" style="margin-top:4px">Las tiendas verificadas publican aquí sus torneos y lanzamientos.</p></div>`;
-  };
-  draw();
-  $("#evChips").addEventListener("click", (e) => {
-    const b = e.target.closest("[data-game]");
-    if (!b) return;
-    game = b.dataset.game || null;
-    history.replaceState(null, "", `#/eventos${game ? `?juego=${game}` : ""}`);
-    draw();
-  });
-  bindInterest(listEl, events, draw);
-}
-// Home: the next 3 events, only when there are any.
-async function renderHomeEvents(box) {
-  if (!box) return;
-  const events = (await fetchEvents()).filter((e) => !e.cancelled).slice(0, 3);
-  if (!box.isConnected || !events.length) return;
-  const draw = () => {
-    box.innerHTML = `<div class="rhead"><h2 id="homeEventsTitle">Próximos eventos en tiendas</h2><a class="btn ghost sm" href="#/eventos">Ver todos${ic("arrowRight")}</a></div>
-      <ul class="events">${events.map((e) => eventCard(e, { compact: true })).join("")}</ul>`;
-  };
-  draw();
-  box.hidden = false;
-  bindInterest(box, events, draw);
-}
-// Shop page: that shop's upcoming events.
-async function renderShopEventsPublic(id, box) {
-  if (!box) return;
-  const isMe = session?.user.id === id;
-  const events = (await fetchEvents(id)).filter((e) => !e.cancelled || e.mine);
-  if (!box.isConnected || (!events.length && !isMe)) return;
-  const draw = () => {
-    box.innerHTML = `<div class="phead"><h2>Próximos eventos</h2>${isMe ? `<a class="btn ghost sm" href="#/cuenta">Administrar</a>` : ""}</div>
-      ${events.length ? `<ul class="events">${events.map((e) => eventCard(e, { showShop: false, compact: true })).join("")}</ul>` : `<p class="small muted" style="margin:0">No tienes eventos próximos. Publícalos desde Mi cuenta.</p>`}`;
-  };
-  draw();
-  box.hidden = false;
-  bindInterest(box, events, draw);
-}
-const eventError = (e) => /contact info/.test(e?.message ?? "") ? "Quita teléfonos, enlaces o redes del texto. La gente marca “Me interesa” y te encuentra en tu página de tienda."
-  : /date/.test(e?.message ?? "") ? "La fecha debe ser desde hoy y hasta 6 meses."
-  : /too many/.test(e?.message ?? "") ? "Ya tienes 40 eventos próximos, el máximo."
-  : /verified shops/.test(e?.message ?? "") ? "Solo las tiendas verificadas pueden publicar eventos."
-  : "No pudimos guardar el evento. Revisa tu conexión e intenta de nuevo.";
-// Mi cuenta (verified shops): publish, edit and cancel events.
-async function renderShopEvents(uid, box) {
-  if (!box || !eventsOn) return;
-  const events = await fetchEvents(uid);
-  if (!box.isConnected) return;
-  if (!eventsOn) { box.innerHTML = ""; return; }
-  box.innerHTML = `<section class="panel col"><div class="phead"><h2>Eventos de tu tienda</h2><button type="button" class="btn primary sm" id="evNew">${ic("plus")}Publicar evento</button></div>
-    <p class="xs muted" style="margin:0">Salen en Eventos, en tu página de tienda y en la portada. Quien marca “Me interesa” recibe un recordatorio un día antes.</p>
-    <div id="evForm"></div>
-    ${events.length ? `<ul class="events" id="evMine">${events.map((e) => eventCard(e, { showShop: false, manage: true })).join("")}</ul>` : `<p class="small muted" style="margin:0">No tienes eventos próximos.</p>`}</section>`;
-  const reload = () => renderShopEvents(uid, box);
-  const opts = (list, v) => list.map(([k, n]) => `<option value="${k}"${k === v ? " selected" : ""}>${esc(n)}</option>`).join("");
-  const openForm = (e = null) => {
-    const f = $("#evForm");
-    f.innerHTML = `<form class="col ev-form" style="gap:10px;padding:14px;border:1px solid var(--border);border-radius:var(--radius-lg)" novalidate>
-      <h3 style="margin:0;font-size:16px">${e ? "Editar evento" : "Nuevo evento"}</h3>
-      <label class="f">Nombre del evento<input class="input" name="evTitle" maxlength="80" required placeholder="Ej.: Liga Pokémon de los sábados" value="${esc(e?.title ?? "")}"></label>
-      <div class="grid2"><label class="f">Juego<select class="select" name="game">${opts(EVENT_GAMES, e?.game ?? "pokemon")}</select></label>
-        <label class="f">Tipo<select class="select" name="kind">${opts(EVENT_KINDS, e?.kind ?? "torneo")}</select></label></div>
-      <label class="f">Día<input class="input" type="date" name="day" required value="${e ? paDate(e.starts_at) : ""}" min="${paDate(Date.now())}"></label>
-      <div class="grid2"><label class="f">Empieza<input class="input" type="time" name="start" required value="${e ? paTime(e.starts_at) : ""}"></label>
-        <label class="f">Termina (opcional)<input class="input" type="time" name="end" value="${e?.ends_at ? paTime(e.ends_at) : ""}"></label></div>
-      <div class="grid2"><label class="f">Inscripción (USD)<input class="input" type="number" name="fee" min="0" max="1000" step="0.01" inputmode="decimal" placeholder="0 = gratis" value="${e?.fee_cents ? (e.fee_cents / 100).toFixed(2) : ""}"></label>
-        <label class="f">Cupo (opcional)<input class="input" type="number" name="capacity" min="1" max="1000" step="1" inputmode="numeric" value="${e?.capacity ?? ""}"></label></div>
-      <label class="f">Detalles (opcional)<textarea class="textarea" name="description" rows="3" maxlength="600" placeholder="Formato, premios, qué traer…">${esc(e?.description ?? "")}</textarea></label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary sm">${e ? "Guardar cambios" : "Publicar evento"}</button><button type="button" class="btn ghost sm" data-close>Cerrar</button></div></form>`;
-    const form = f.querySelector("form");
-    const fe = form.elements;
-    fe.evTitle.focus();
-    form.querySelector("[data-close]").addEventListener("click", () => (f.innerHTML = ""));
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const title = fe.evTitle.value.trim(), day = fe.day.value, start = fe.start.value, end = fe.end.value;
-      const fee = fe.fee.value.trim() ? Math.round(Number(fe.fee.value) * 100) : 0, cap = fe.capacity.value.trim() ? Number(fe.capacity.value) : null;
-      const bad = (t) => toast(t, { type: "error" });
-      if (title.length < 3) return bad("Escribe el nombre del evento.");
-      if (!day || !start) return bad("Elige el día y la hora de inicio.");
-      if (!(fee >= 0 && fee <= 100000)) return bad("La inscripción debe ser entre $0 y $1,000.");
-      if (cap != null && !(Number.isInteger(cap) && cap >= 1 && cap <= 1000)) return bad("El cupo debe ser un número entre 1 y 1,000.");
-      const startsAt = new Date(`${day}T${start}:00-05:00`); // Panamá: UTC-5 all year
-      let endsAt = end ? new Date(`${day}T${end}:00-05:00`) : null;
-      if (endsAt && endsAt <= startsAt) endsAt = new Date(endsAt.getTime() + 86400000); // ends after midnight
-      if (startsAt < new Date(Date.now() - 3600000)) return bad("Esa hora ya pasó.");
-      const row = { title, game: fe.game.value, kind: fe.kind.value, starts_at: startsAt.toISOString(), ends_at: endsAt?.toISOString() ?? null,
-        fee_cents: fee, capacity: cap, description: fe.description.value.trim() || null };
-      const btn = form.querySelector("button.primary");
-      btn.disabled = true;
-      const { error } = e ? await sb.from("shop_events").update(row).eq("id", e.id) : await sb.from("shop_events").insert({ ...row, shop_id: uid });
-      btn.disabled = false;
-      if (error) { console.error(error); return bad(eventError(error)); }
-      toast(e ? "Evento actualizado." : "¡Evento publicado!");
-      reload();
-    });
-  };
-  $("#evNew").addEventListener("click", () => openForm());
-  $("#evMine")?.addEventListener("click", async (ev) => {
-    const b = ev.target.closest("[data-ev]");
-    if (!b) return;
-    const e = events.find((x) => x.id === b.closest("[data-event]").dataset.event);
-    if (!e) return;
-    if (b.dataset.ev === "edit") { openForm(e); $("#evForm").scrollIntoView({ block: "nearest" }); return; }
-    if (b.dataset.ev !== "cancel") return;
-    if (!(await confirmDialog({ title: "¿Cancelar este evento?", body: e.interested ? `Les avisamos a las ${e.interested} personas interesadas. No se puede deshacer.` : "No se puede deshacer.", confirm: "Sí, cancelarlo", cancel: "No, mantenerlo", danger: true }))) return;
-    const { error } = await sb.from("shop_events").update({ cancelled_at: new Date().toISOString() }).eq("id", e.id);
-    if (error) { console.error(error); return toast(eventError(error), { type: "error" }); }
-    toast("Evento cancelado.");
-    reload();
-  });
-}
-
 function quotaSpent(q) {
   return `<section class="panel accent" style="margin-top:16px"><h2 class="ptitle">${ic("trend")}Usaste tus ${q.limit} escaneos gratis de hoy</h2>
     <p class="sub">Mañana tienes ${q.limit} más.</p></section>`;
@@ -6385,8 +6179,8 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
         ${ai?.is_graded && !grading ? `<p class="notice warn small" style="margin:10px 0 0">Vimos un slab pero no pudimos leer la nota. Mostramos el valor sin graduar.</p>` : ""}
         ${retryWithAI ? `<p class="small" style="margin:12px 0 0">¿No es tu carta? <button type="button" class="link" data-ai style="background:none;border:0;padding:0;cursor:pointer;font:inherit">Analizarla con IA</button> <span class="xs muted">(no gasta otro escaneo)</span></p>` : ""}</section>
       <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy…</p></section>
-      <div class="share-row"><button type="button" class="btn primary" data-keep>${ic("plus")}Guardar en mi portafolio</button><button type="button" class="btn outline" data-sell>${ic("tag")}Véndela en ${esc(CONFIG.APP_NAME)}</button><button type="button" class="btn outline" data-share>${ic("external")}Compartir</button>${again}</div>
-      <p class="xs muted" style="margin:0">En tu portafolio la guardas sin publicarla: ves cuánto vale y en cuánto se vende, y la publicas cuando quieras.</p>
+      <div class="share-row"><button type="button" class="btn primary" data-keep>${ic("plus")}Guardar en mi cartera</button><button type="button" class="btn outline" data-sell>${ic("tag")}Véndela en ${esc(CONFIG.APP_NAME)}</button><button type="button" class="btn outline" data-share>${ic("external")}Compartir</button>${again}</div>
+      <p class="xs muted" style="margin:0">En tu cartera la guardas sin publicarla: ves cuánto vale y en cuánto se vende, y la publicas cuando quieras.</p>
       <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
     </div></div>`;
   const history = loadPriceChart(l);
@@ -6410,8 +6204,8 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
     try {
       const { item } = await savePortfolioItem(row, file);
       if (!btn.isConnected) return;
-      btn.outerHTML = `<a class="btn primary" href="#/portafolio/${encodeURIComponent(item.id)}">${ic("checkCircle")}En tu portafolio</a>`;
-      toast("Guardada en tu portafolio", { description: "No se publica: la ves en Mi portafolio con su valor de hoy." });
+      btn.outerHTML = `<a class="btn primary" href="#/portafolio/${encodeURIComponent(item.id)}">${ic("checkCircle")}En tu cartera</a>`;
+      toast("Guardada en tu cartera", { description: "No se publica: la ves en Mi cartera con su valor de hoy." });
     } catch (err) {
       console.error(err);
       btn.disabled = false;
@@ -6431,7 +6225,7 @@ function renderScanResult(out, res, file, askedGraded, retryWithAI = null) {
   });
 }
 
-// ============================================================= Mi portafolio (#/portafolio, migration 0033)
+// ============================================================= Mi cartera (#/portafolio, migration 0033)
 // The cards a person owns, saved from "¿Cuánto vale tu carta?" without publishing them. Each one shows
 // what it is worth today (the listing page's price sources), what it sells for on MarketZlab and in
 // Panamá, and keeps the scanned photo: "Vender esta carta" opens #/vender with it (a sale draft).
@@ -6516,12 +6310,12 @@ async function savePortfolioItem(row, file) {
       }
       return { item: data, local: false };
     }
-    if (/limit 500/.test(error.message ?? "")) throw Object.assign(error, { userMsg: "Tu portafolio llegó a 500 cartas." });
+    if (/limit 500/.test(error.message ?? "")) throw Object.assign(error, { userMsg: "Tu cartera llegó a 500 cartas." });
     if (!pfMissing(error)) throw error;
     portfolioOn = false; // migration 0033 not applied yet: keep it in this browser
   }
   const list = pfLocal.read();
-  if (list.length >= 500) throw Object.assign(new Error("portfolio: limit 500"), { userMsg: "Tu portafolio llegó a 500 cartas." });
+  if (list.length >= 500) throw Object.assign(new Error("portfolio: limit 500"), { userMsg: "Tu cartera llegó a 500 cartas." });
   const item = { ...pfRow(row), id: crypto.randomUUID(), photo_path: null, created_at: new Date().toISOString(), local: true };
   list.unshift(item);
   if (!pfLocal.write(list)) throw Object.assign(new Error("portfolio: storage"), { userMsg: "Tu navegador no deja guardar datos. Revisa que no estés en modo privado." });
@@ -6837,7 +6631,7 @@ const pfArt = (it, photos) => {
     : `<div class="card" style="display:grid;place-items:center;height:100%;background:var(--muted);color:var(--fg-3)">${ic("camera")}</div>`;
 };
 
-/** Mi portafolio ▸ "Interesados en tus cartas": how many people want which cards (collection and on sale),
+/** Mi cartera ▸ "Interesados en tus cartas": how many people want which cards (collection and on sale),
  *  and which cards show on the profile. */
 async function pfPublicPanel(app, items, ints) {
   const example = items.some((it) => it.example), link = `${location.origin}${location.pathname}${pfProfileHref(example)}`;
@@ -6845,7 +6639,7 @@ async function pfPublicPanel(app, items, ints) {
     const n = items.filter((it) => it.is_public).length;
     $("#pfPubLine").innerHTML = n
       ? `<b>${fmtN(n)} de ${fmtN(items.length)}</b> ${n === 1 ? "carta se ve" : "cartas se ven"} en tu perfil. Ahí cualquiera puede marcar “Me interesa”; nunca ve lo que pagaste, tus notas ni tus fotos.`
-      : "Ninguna carta de tu portafolio se ve en tu perfil todavía. Muéstralas para que cualquiera pueda marcar “Me interesa”, estén o no en venta. Nunca se ve lo que pagaste, tus notas ni tus fotos.";
+      : "Ninguna carta de tu cartera se ve en tu perfil todavía. Muéstralas para que cualquiera pueda marcar “Me interesa”, estén o no en venta. Nunca se ve lo que pagaste, tus notas ni tus fotos.";
     for (const it of items) {
       const corner = app.querySelector(`[data-pf="${CSS.escape(it.id)}"] [data-pubchip]`);
       if (corner) corner.innerHTML = `<span class="cond">${esc(pfLabel(it))}</span>${it.is_public ? `<span class="chip-img good" title="Se ve en tu perfil">${ic("eye")}<span class="sr-only">Se ve en tu perfil</span></span>` : ""}`;
@@ -6901,7 +6695,7 @@ function interestSummaryHtml(people, tiles) {
   return `<div class="int-big"><p class="v">${fmtN(people)}</p><p class="s">${people === 1 ? "persona interesada" : "personas interesadas"} en <b>${fmtN(tiles.length)} de tus cartas</b>. No te mostramos quiénes: solo cuántas quieren cada una.</p></div>
     <ul class="grid live coll-grid int-cards">${tiles.join("")}</ul>`;
 }
-/** Until the portfolio is saved in the account (0033/0036), Mi portafolio shows what the panel looks like, with example numbers. */
+/** Until the portfolio is saved in the account (0033/0036), Mi cartera shows what the panel looks like, with example numbers. */
 function interestPreviewPanel() {
   const demo = DEMO_COLLECTION.filter((c) => c.people >= 2).sort((a, b) => b.people - a.people).slice(0, 4);
   return `<section class="panel pf-public" aria-labelledby="pfIntTitle">
@@ -6912,7 +6706,7 @@ function interestPreviewPanel() {
   </section>`;
 }
 
-/** The signed-in person's cards on sale (Mi portafolio ▸ Mis cartas en venta). */
+/** The signed-in person's cards on sale (Mi cartera ▸ Mis cartas en venta). */
 async function fetchMyListings() {
   if (!sb || !session) return [];
   const mine = () => sb.from("listings").select(listingCols()).eq("seller_id", session.user.id).eq("status", "active").order("created_at", { ascending: false }).limit(200);
@@ -6924,12 +6718,12 @@ async function fetchMyListings() {
 
 async function viewPortfolio(app, { example = false, params = new URLSearchParams() } = {}) {
   const salesTab = params.get("ver") === "venta";
-  setTitle(example ? "Mi portafolio (ejemplo)" : "Mi portafolio");
+  setTitle(example ? "Mi cartera (ejemplo)" : "Mi cartera");
   if (sb && !session && !example) return go("/entrar?next=/portafolio");
-  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tu portafolio…</p>`;
+  app.innerHTML = `<p class="loading"><span class="spinner"></span>Cargando tu cartera…</p>`;
   const holder = app.firstElementChild;
   let res;
-  try { res = example ? { items: examplePortfolio().items, local: false } : await loadPortfolio(); } catch (e) { console.error(e); if (holder.isConnected) app.innerHTML = `<p class="notice bad">No pudimos cargar tu portafolio. Recarga la página.</p>`; return; }
+  try { res = example ? { items: examplePortfolio().items, local: false } : await loadPortfolio(); } catch (e) { console.error(e); if (holder.isConnected) app.innerHTML = `<p class="notice bad">No pudimos cargar tu cartera. Recarga la página.</p>`; return; }
   if (!holder.isConnected) return;
   const { items, local } = res;
   // Interest counts also tell whether 0036 is there: without it there is no public collection.
@@ -6946,9 +6740,9 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
   // Two tabs at the top: the portfolio, and the cards I have on sale.
   const base = example ? "#/portafolio/ejemplo" : "#/portafolio";
   const tabs = `<nav class="seller-seg pf-tabs" aria-label="Mis cartas">
-      <a class="${salesTab ? "" : "on"}" href="${base}"${salesTab ? "" : ' aria-current="page"'}>${ic("grid")}Mi portafolio<span class="chip-n">${fmtN(items.length)}</span></a>
+      <a class="${salesTab ? "" : "on"}" href="${base}"${salesTab ? "" : ' aria-current="page"'}>${ic("grid")}Mi cartera<span class="chip-n">${fmtN(items.length)}</span></a>
       <a class="${salesTab ? "on" : ""}" href="${base}?ver=venta"${salesTab ? ' aria-current="page"' : ""}>${ic("tag")}Mis cartas en venta<span class="chip-n">${fmtN(shownSales.length)}</span></a></nav>`;
-  const exampleNote = example ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> así se ve tu portafolio cuando muestras tus cartas en tu perfil y la gente marca “Me interesa”. Las cartas y los interesados son de ejemplo; los valores son los del mercado de hoy. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : "";
+  const exampleNote = example ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> así se ve tu cartera cuando muestras tus cartas en tu perfil y la gente marca “Me interesa”. Las cartas y los interesados son de ejemplo; los valores son los del mercado de hoy. <a class="link" href="#/portafolio">Ir a mi cartera</a></p>` : "";
   if (salesTab) {
     setTitle(example ? "Mis cartas en venta (ejemplo)" : "Mis cartas en venta");
     app.innerHTML = `<div class="col" style="gap:20px;margin-top:24px">
@@ -6960,8 +6754,8 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
       ${salesNote}
       ${shownSales.length ? `<ul class="grid live coll-grid pf-sales">${saleTiles(shownSales)}</ul>`
         : `<div class="empty-state"><span class="ico">${ic("tag")}</span><p style="font-weight:600">No tienes cartas en venta.</p>
-          <p class="small muted" style="margin:4px 0 16px;max-width:440px">Publica una carta, o abre una de tu portafolio y toca “Vender esta carta”: se abre el formulario con la foto que escaneaste.</p>
-          <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/vender">${ic("plus")}Publicar una carta</a>${items.length ? `<a class="btn outline" href="${base}">Ver mi portafolio</a>` : ""}</div></div>`}
+          <p class="small muted" style="margin:4px 0 16px;max-width:440px">Publica una carta, o abre una de tu cartera y toca “Vender esta carta”: se abre el formulario con la foto que escaneaste.</p>
+          <div class="share-row" style="justify-content:center"><a class="btn primary" href="#/vender">${ic("plus")}Publicar una carta</a>${items.length ? `<a class="btn outline" href="${base}">Ver mi cartera</a>` : ""}</div></div>`}
     </div>`;
     return;
   }
@@ -6981,14 +6775,14 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
         ${items.length ? `<div class="share-row"><button type="button" class="btn sm" data-pub="1">Mostrar todas en mi perfil</button><button type="button" class="btn ghost sm" data-pub="0">Ocultar todas</button></div>` : ""}</div>
     </section>` : CONFIG.SHOW_DEMO_LISTINGS ? interestPreviewPanel() : "";
   app.innerHTML = `<div class="col" style="gap:20px;margin-top:24px">
-    <div class="pf-head"><div><p class="kicker">${canShow ? "Privado · tú eliges qué cartas se ven en tu perfil" : "Solo tú lo ves · no se publica"}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi portafolio</h1>
+    <div class="pf-head"><div><p class="kicker">${canShow ? "Privado · tú eliges qué cartas se ven en tu perfil" : "Solo tú lo ves · no se publica"}</p><h1 class="display" style="font-size:30px;margin:2px 0 0">Mi cartera</h1>
       <p class="muted" style="margin:6px 0 0;max-width:620px">Tus cartas, lo que valen hoy y en cuánto se están vendiendo. Agrégalas escaneándolas en “¿Cuánto vale tu carta?” y publícalas cuando quieras.</p></div>
       <a class="btn primary" href="#/escanear">${ic("camera")}Agregar con una foto</a></div>
     ${tabs}
     ${exampleNote}
-    ${local && items.length ? `<p class="notice soft" style="margin:0">Por ahora tu portafolio se guarda en este navegador. Pronto se guardará en tu cuenta y lo verás en todos tus dispositivos.</p>` : ""}
+    ${local && items.length ? `<p class="notice soft" style="margin:0">Por ahora tu cartera se guarda en este navegador. Pronto se guardará en tu cuenta y lo verás en todos tus dispositivos.</p>` : ""}
     ${items.length ? "" : pubPanel}
-    ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu portafolio">
+    ${items.length ? `<section class="dash-tiles" aria-label="Resumen de tu cartera">
       ${statTile("grid", "Cartas", fmtN(qty), `${fmtN(items.length)} ${items.length === 1 ? "distinta" : "distintas"}`)}
       ${statTile("trend", "Valor estimado", `<span class="spinner"></span>`, "calculando…", "pfTotal")}
       ${statTile("trend", "Desde que las agregaste", `<span class="spinner"></span>`, "calculando…", "pfMoved")}
@@ -6997,7 +6791,7 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
     </section>
     ${pubPanel}
     ${salesSection}
-    <div class="rhead pf-mine"><h2>Mis cartas</h2><p class="small muted num">${fmtN(items.length)} ${items.length === 1 ? "carta" : "cartas"} en tu portafolio</p></div>
+    <div class="rhead pf-mine"><h2>Mis cartas</h2><p class="small muted num">${fmtN(items.length)} ${items.length === 1 ? "carta" : "cartas"} en tu cartera</p></div>
     <ul class="grid live" id="pfGrid">${items.map((it, i) => `<li style="--i:${Math.min(i, 16)}"><a class="pcard pf-card" href="#/portafolio/${encodeURIComponent(it.id)}" data-pf="${esc(it.id)}">
       <div class="media card-ratio"><div class="inner">${pfArt(it, photos)}</div>
         <div class="corner-l" data-pubchip><span class="cond">${esc(pfLabel(it))}</span>${pubChip(it)}</div>${ints?.byKey.get(intKey("p", it.id)) ? `<div class="corner-tr">${interestTag(ints.byKey.get(intKey("p", it.id)).people)}</div>` : ""}${(it.quantity ?? 1) > 1 ? `<div class="corner-r"><span class="pf-qty">×${it.quantity}</span></div>` : ""}</div>
@@ -7006,8 +6800,8 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
       <div class="pf-rows"><p class="pf-val"><span class="k">Valor hoy</span><b data-val>${it.value_cents != null ? formatUsd(it.value_cents) : `<span class="spinner"></span>`}</b></p>
         <p class="pf-chg" data-chg>${pfChgLine(it)}</p>
         <p class="pf-sale" data-sale><span class="spinner"></span></p></div></a></li>`).join("")}</ul>`
-    : `${salesSection}<div class="empty-state"><span class="ico">${ic("trend")}</span><p style="font-weight:600">Tu portafolio está vacío.</p>
-      <p class="small muted" style="margin:4px 0 16px;max-width:420px">Escanea una carta en “¿Cuánto vale tu carta?” y toca “Guardar en mi portafolio”. No se publica: aquí ves cuánto vale y en cuánto se vende.</p>
+    : `${salesSection}<div class="empty-state"><span class="ico">${ic("trend")}</span><p style="font-weight:600">Tu cartera está vacía.</p>
+      <p class="small muted" style="margin:4px 0 16px;max-width:420px">Escanea una carta en “¿Cuánto vale tu carta?” y toca “Guardar en mi cartera”. No se publica: aquí ves cuánto vale y en cuánto se vende.</p>
       <a class="btn primary" href="#/escanear">${ic("camera")}Escanear una carta</a></div>`}
   </div>`;
   if (canShow) pfPublicPanel(app, items, ints);
@@ -7068,20 +6862,20 @@ async function viewPortfolioItem(app, id) {
   if (!example && !pfItems.has(id)) await loadPortfolio().catch((e) => console.error(e));
   if (!holder.isConnected) return;
   const it = example ? examplePortfolio().items.find((x) => x.id === id) : pfItems.get(id);
-  if (!it) { setTitle("Carta no encontrada"); app.innerHTML = `<div class="empty-state" style="margin-top:32px"><p style="font-weight:600">Esta carta ya no está en tu portafolio.</p><a class="btn primary" style="margin-top:12px" href="#/portafolio">Ir a Mi portafolio</a></div>`; return; }
+  if (!it) { setTitle("Carta no encontrada"); app.innerHTML = `<div class="empty-state" style="margin-top:32px"><p style="font-weight:600">Esta carta ya no está en tu cartera.</p><a class="btn primary" style="margin-top:12px" href="#/portafolio">Ir a Mi cartera</a></div>`; return; }
   setTitle(it.subject);
   const [photos, ints] = await Promise.all([pfPhotoUrls([it]), example ? examplePortfolio().ints : it.local ? null : myCardInterests()]);
   if (!holder.isConnected) return;
   const photo = photos.get(it.photo_path), canShow = example || (!!ints && pfPublicCol);
   const meta = [it.set_name, it.year, it.number, it.variant].filter(Boolean).map(esc).join(" · ");
-  app.innerHTML = `<nav class="crumbs" aria-label="Ruta" style="margin-top:16px"><a href="#/portafolio${example ? "/ejemplo" : ""}">Mi portafolio${example ? " (ejemplo)" : ""}</a>${ic("chevronRight")}<span aria-current="page">${esc(it.subject)}</span></nav>
+  app.innerHTML = `<nav class="crumbs" aria-label="Ruta" style="margin-top:16px"><a href="#/portafolio${example ? "/ejemplo" : ""}">Mi cartera${example ? " (ejemplo)" : ""}</a>${ic("chevronRight")}<span aria-current="page">${esc(it.subject)}</span></nav>
     <div class="scan-result">
       <div class="col" style="gap:12px">
         <div class="panel scan-card">${it.image_url || photo ? `<img src="${esc(it.image_url || photo)}" alt="${esc(it.subject)}" class="card">` : `<div class="card" style="display:grid;place-items:center;width:100%;max-width:280px;aspect-ratio:63/88;background:var(--muted)">${ic("camera")}</div>`}</div>
         ${photo && it.image_url ? `<div class="panel" style="padding:12px"><p class="xs muted" style="margin:0 0 8px">Tu foto</p><img src="${esc(photo)}" alt="Tu foto de la carta" style="width:100%;border-radius:10px"></div>` : ""}
       </div>
       <div class="col" style="gap:16px;min-width:0">
-        <section class="panel"><p class="eyebrow" style="margin:0">${esc(categoryName(it.category))} · en tu portafolio</p>
+        <section class="panel"><p class="eyebrow" style="margin:0">${esc(categoryName(it.category))} · en tu cartera</p>
           <h1 style="margin:6px 0 4px;font-size:24px">${esc(it.subject)}</h1>${meta ? `<p class="small muted" style="margin:0">${meta}</p>` : ""}
           <div class="dbadges" style="margin-top:10px"><span class="b ${it.grading_company ? "prot" : "neutral"}">${it.grading_company ? esc(pfLabel(it)) : "Sin graduar · Near Mint"}</span></div>
           <form class="pf-edit" id="pfEdit" novalidate>
@@ -7097,7 +6891,7 @@ async function viewPortfolioItem(app, id) {
         <section class="panel" id="pfPerf"><h2 class="ptitle">${ic("trend")}Rendimiento</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Viendo cuánto ha subido o bajado desde que la agregaste…</p></section>
         <section class="panel" id="priceChart"><h2 class="ptitle">${ic("trend")}Valor en el mercado</h2><p class="loading" style="padding:28px 0"><span class="spinner"></span>Buscando el precio de hoy y su historial…</p></section>
         <section class="panel" id="pfSale"><h2 class="ptitle">${ic("store")}En venta en ${esc(CONFIG.APP_NAME)}</h2><p class="loading" style="padding:12px 0"><span class="spinner"></span></p></section>
-        ${example ? `<p class="notice warn small" style="margin:0">Carta de ejemplo: los cambios no se guardan. <a class="link" href="#/portafolio">Ir a mi portafolio</a></p>` : `<div class="share-row"><button type="button" class="btn primary" id="pfSell">${ic("tag")}Vender esta carta</button><button type="button" class="btn outline" id="pfRemove">${ic("trash")}Quitar del portafolio</button></div>`}
+        ${example ? `<p class="notice warn small" style="margin:0">Carta de ejemplo: los cambios no se guardan. <a class="link" href="#/portafolio">Ir a mi cartera</a></p>` : `<div class="share-row"><button type="button" class="btn primary" id="pfSell">${ic("tag")}Vender esta carta</button><button type="button" class="btn outline" id="pfRemove">${ic("trash")}Quitar de la cartera</button></div>`}
         <p class="xs muted" style="margin:0">El valor es una referencia de ventas en otros mercados, no una tasación. La condición real de tu carta cambia el precio.</p>
       </div></div>`;
   loadPriceChart(pfListing(it), (h) => { pfRecord(it, h); showPfPerf(it, h); });
@@ -7145,8 +6939,8 @@ async function viewPortfolioItem(app, id) {
     go("/vender");
   });
   $("#pfRemove")?.addEventListener("click", async () => {
-    if (!(await confirmDialog({ title: "¿Quitar esta carta de tu portafolio?", body: "Se borra de tu lista. No afecta tus anuncios.", confirm: "Quitar", danger: true }))) return;
-    try { await removePortfolioItem(it); toast("La quitamos de tu portafolio."); go("/portafolio"); } catch (err) { console.error(err); toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
+    if (!(await confirmDialog({ title: "¿Quitar esta carta de tu cartera?", body: "Se borra de tu lista. No afecta tus anuncios.", confirm: "Quitar", danger: true }))) return;
+    try { await removePortfolioItem(it); toast("La quitamos de tu cartera."); go("/portafolio"); } catch (err) { console.error(err); toast("No pudimos quitarla. Intenta de nuevo.", { type: "error" }); }
   });
 }
 
@@ -7753,7 +7547,7 @@ async function viewAccount(app) {
     buyer: ["accInquiries", "accSeller", shopParam ? "accShop" : null],
     seller: ["accSeller", "accInquiries", "accIdentity", "accShop"],
     review: ["accShop", "accSeller", "accInquiries"],
-    shop: ["accEvents", "accSeller", "accInquiries", "accShop"],
+    shop: ["accSeller", "accInquiries", "accShop"],
   }[role].filter(Boolean);
   const pic = (url, cls, empty) => url ? `<img src="${esc(url)}" alt="" class="${cls}">` : `<span class="${cls} empty">${empty}</span>`;
   app.innerHTML = `<div class="account dash">
@@ -7791,7 +7585,6 @@ async function viewAccount(app) {
   renderSellerSection($("#accSeller"), parseHash().params.get("vendedor") === "1");
   renderMyInquiries($("#accInquiries"));
   if ($("#accIdentity")) renderIdentity(uid, prof, $("#accIdentity"));
-  if ($("#accEvents")) renderShopEvents(uid, $("#accEvents"));
   renderDashboard(uid, prof, $("#dash"), { hideEmpty: role === "buyer" || role === "review" });
   const form = $("#accForm"), desc = form.shopDescription;
   const count = () => ($("#descCount").textContent = `${desc.value.length}/280`);
@@ -8556,7 +8349,7 @@ function viewTerms(app) {
 function viewPrivacy(app) {
   legalPage(app, "Política de privacidad", `Cómo cuidamos tus datos personales, de acuerdo con la Ley 81 de 2019 de Panamá y su reglamento.`, [
     ["Responsable", `<p>El responsable del tratamiento de tus datos es ${legalVal("COMPANY")}, RUC ${legalVal("RUC")}, con domicilio en ${legalVal("ADDRESS")}. Para cualquier tema de privacidad escribe a ${legalVal("EMAIL")}.</p>`],
-    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Eventos:</b> los eventos de tiendas que marcas con “Me interesa”, para recordártelos. La tienda solo ve cuántas personas están interesadas, no quiénes.</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Tiendas:</b> para verificar la tienda y firmar el acuerdo para tiendas, el nombre de la tienda, el nombre y la cédula del responsable, la dirección del local, el teléfono, el Instagram, el número de Yappy para pagarle, el horario de retiro y la firma (con la fecha, la hora y el navegador con que se firmó). Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}; los guardamos mientras la tienda venda con nosotros, como constancia del acuerdo.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
+    ["Qué datos recolectamos", `<ul><li><b>Cuenta:</b> correo, nombre para mostrar y contraseña (guardada cifrada; nunca la vemos).</li><li><b>Perfil:</b> foto de perfil y, si eres tienda, descripción, foto, dirección y horario del local (son públicos).</li><li><b>Anuncios:</b> fotos y datos de la carta, precio y ubicación <b>solo a nivel de barrio</b>.</li><li><b>Cuenta de vendedor:</b> tu teléfono y la dirección exacta de tu residencia, donde el equipo de ${esc(CONFIG.APP_NAME)} retira las cartas que vendes. Solo los ve nuestro equipo, para coordinar contigo el retiro; nunca se muestran en tus anuncios ni a los compradores.</li><li><b>Consultas:</b> lo que nos preguntas, la carta, el código de la consulta y, si nos lo das, tu WhatsApp para responderte (solo los ve el equipo de ${esc(CONFIG.APP_NAME)}).</li><li><b>Verificación de identidad (opcional):</b> tu nombre completo, una foto de tu cédula y una selfie sosteniéndola. Solo las ve el equipo de ${esc(CONFIG.APP_NAME)} para verificarte y <b>las borramos al terminar la revisión</b>; guardamos solo el resultado. No guardamos tu número de cédula.</li><li><b>Tiendas:</b> para verificar la tienda y firmar el acuerdo para tiendas, el nombre de la tienda, el nombre y la cédula del responsable, la dirección del local, el teléfono, el Instagram, el número de Yappy para pagarle, el horario de retiro y la firma (con la fecha, la hora y el navegador con que se firmó). Solo los ve el equipo de ${esc(CONFIG.APP_NAME)}; los guardamos mientras la tienda venda con nosotros, como constancia del acuerdo.</li><li><b>Revisión en tienda:</b> el WhatsApp que nos das para coordinar la cita, y el resultado.</li><li><b>Reseñas:</b> las que publicas. Las reseñas son públicas, con tu nombre para mostrar.</li><li><b>Reportes</b> que envías.</li><li><b>Uso de la página:</b> un identificador anónimo al azar guardado en tu navegador y qué páginas o botones usas. En esos registros no guardamos tu IP ni datos de tu dispositivo. Como cualquier servicio web, nuestros proveedores ven la IP de cada conexión y la guardan por poco tiempo en sus registros técnicos.</li></ul>`],
     ["Para qué los usamos", `<ul><li>Operar tu cuenta y publicar tus anuncios.</li><li>Identificar cartas a partir de tus fotos y estimar su precio.</li><li>Responder tus consultas y coordinar las compras.</li><li>Coordinar contigo y retirar en tu dirección las cartas que vendes.</li><li>Prevenir fraudes y atender reportes.</li><li>Entender cómo se usa la plataforma para mejorarla (con datos anónimos).</li></ul><p>No vendemos tus datos ni los usamos para publicidad de terceros.</p>`],
     ["Base legal", `<p>Tratamos tus datos con tu <b>consentimiento</b>, que das al crear tu cuenta, y porque son necesarios para <b>prestarte el servicio</b> que pides. Puedes retirar tu consentimiento cuando quieras (sección 8), aunque sin algunos datos no podremos darte el servicio.</p>`],
     ["Qué es público", `<p>En tus anuncios se muestran tu nombre para mostrar, tu foto de perfil, el barrio y distrito de la carta, y si eres tienda, su descripción y foto. <b>Tu correo, tu teléfono y tu dirección nunca se muestran.</b></p>`],
