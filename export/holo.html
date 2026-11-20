@@ -356,6 +356,8 @@ a.pcard:hover .act { background: var(--brand); color: var(--brand-ink); }
 .dprice .delta { font-size: 14px; margin-top: 8px; }
 .dprice .delta .tri { width: 11px; height: 11px; }
 .dprice .delta .vs { display: inline; }
+.dprice .wl-toggle { margin-top: 12px; }
+.dside .seller-panel { max-width: none; margin-top: 0; }
 @media (min-width: 768px) { .dprice { text-align: right; } .dprice .delta { justify-content: flex-end; } }
 .dhead .notice { margin-top: 18px; }
 .dgrid { display: grid; gap: 16px; grid-template-areas: "media" "side" "main"; }
@@ -3064,6 +3066,18 @@ async function viewHome(app, params) {
     : `<div class="empty-state"><span class="ico">${ic("search")}</span><p style="font-weight:600">No encontramos cartas con esos filtros.</p><p class="small muted" style="margin-top:4px">Prueba con otra búsqueda o <a class="link" href="#/">ve todo</a>.</p>${f.q ? `<a class="btn primary sm" style="margin-top:14px" href="${esc(watchHref(f.q, f.graded === "graded"))}">${ic("bookmark")}Agregar a mi watchlist</a>` : ""}</div>`;
 }
 
+// Listing page, three columns (>= 1200px): the first panel of the middle and right columns get the
+// same height, so the panels below them (market value / seller) start on the same line.
+function alignDetailPanels() {
+  const a = $(".dmain > .panel"), b = $(".dside > .panel");
+  if (!a || !b) return;
+  a.style.minHeight = b.style.minHeight = "";
+  if (!matchMedia("(min-width: 1200px)").matches) return;
+  const h = Math.max(a.offsetHeight, b.offsetHeight);
+  a.style.minHeight = b.style.minHeight = `${h}px`;
+}
+addEventListener("resize", () => alignDetailPanels());
+
 function sellerPanel(s) {
   const shop = s.isShop;
   return `<section class="panel flush seller-panel">
@@ -3234,7 +3248,7 @@ async function viewDetail(app, id) {
           ${meta ? `<p class="dmeta">${meta}</p>` : ""}
           <div class="dbadges">${conditionBadge(l)}${l.verificationPhoto ? verifBadge() : ""}${l.authCheck ? authBadge(l) : ""}</div>
         </div>
-        <div class="dprice"><p class="big">${formatUsd(price)}</p></div>
+        <div class="dprice"><p class="big">${formatUsd(price)}</p>${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline sm wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}</div>
       </div>
       ${l.isDemo ? `<p class="notice warn">Anuncio de ejemplo para mostrar cómo funciona la plataforma. No está a la venta.</p>` : ""}
       ${!l.isDemo && statusNote ? `<p class="notice ${l.status === "sold" ? "good" : "warn"}" style="font-weight:600">${statusNote}</p>` : ""}
@@ -3266,7 +3280,6 @@ async function viewDetail(app, id) {
           <button type="button" class="btn yappy block" id="yappyBtn" style="margin-top:14px"${l.isDemo ? " disabled" : ""}>Pagar con Yappy<img class="yappy-logo" src="img/brand/yappy.png" alt="" width="24" height="24"></button>
           <p class="xs muted" style="margin:10px 0 0">${l.isDemo ? "Anuncio de ejemplo: en los anuncios reales pagas aquí con Yappy." : `Pagas a ${esc(CONFIG.APP_NAME)} con Yappy y le pagamos al vendedor cuando la carta llega. Nunca le pagues a nadie por fuera de ${esc(CONFIG.APP_NAME)}.`}</p></section>` : ""}
         ${isOwner && forSale ? `<section class="panel" id="intPanel" hidden><h2 class="ptitle">${ic("heart")}Interesados</h2><div id="intOwner"></div></section>` : ""}
-        ${isSealed(l) || isLot(l) ? "" : `<button type="button" class="btn outline block wl-toggle" id="watchBtn" aria-pressed="false">${ic("bookmark")}Agregar a mi watchlist</button>`}
         ${sellerPanel(l.seller)}
         ${isOwner && ["active", "reserved"].includes(l.status) ? `<section class="panel"><h2 class="ptitle">${ic("tag")}¿Ya no la tienes?</h2>
           <p class="sub">Márcala como vendida para que deje de aparecer.</p>
@@ -3282,6 +3295,7 @@ async function viewDetail(app, id) {
     </div>`;
 
   loadPriceChart(l);
+  alignDetailPanels();
   const pick = (t) => {
     $("#bigArt img").src = l.photos[Number(t.dataset.i)];
     app.querySelectorAll(".thumbs img").forEach((x) => x.classList.toggle("on", x === t));
