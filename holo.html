@@ -2362,10 +2362,6 @@ function conditionBadge(l) {
   if (l.grading) return `<span class="graded">${esc(l.grading.company)} ${esc(l.grading.grade)}</span>`;
   return l.condition ? `<span class="cond" title="${esc(CONDITIONS.find((c) => c.code === l.condition)?.label ?? "")}">${esc(l.condition)}</span>` : "";
 }
-function verdictBadge(l) {
-  const v = priceVerdict(l.priceUsd, l.estimate);
-  return { "buen-precio": `<span class="b good">Buen precio</span>`, "en-rango": `<span class="b neutral">Precio justo</span>`, alto: `<span class="b warn">Sobre el mercado</span>` }[v] ?? "";
-}
 const authBadge = (l) => `<span class="b good" title="Una tienda aliada la revisó en persona. Es su opinión, no una garantía.">${ic("check")}Revisada por ${esc(l.authCheck.shop)}</span>`;
 const verifBadge = () => `<span class="b good" title="El vendedor subió una foto de la carta con un papel escrito a mano">${ic("camera")}Foto de verificación</span>`;
 const shopBadge = () => `<span class="b shop">${ic("store")}Tienda verificada</span>`;
@@ -3236,7 +3232,7 @@ async function viewDetail(app, id) {
           <h1>${esc(l.title)}</h1>
           ${l.card.setName ? `<a class="dset" href="#/?q=${encodeURIComponent(l.card.setName)}">${esc(l.card.setName)}</a>` : ""}
           ${meta ? `<p class="dmeta">${meta}</p>` : ""}
-          <div class="dbadges">${conditionBadge(l)}${l.verificationPhoto ? verifBadge() : ""}${l.authCheck ? authBadge(l) : ""}${verdictBadge(l)}</div>
+          <div class="dbadges">${conditionBadge(l)}${l.verificationPhoto ? verifBadge() : ""}${l.authCheck ? authBadge(l) : ""}</div>
         </div>
         <div class="dprice"><p class="big">${formatUsd(price)}</p></div>
       </div>
