@@ -2361,14 +2361,6 @@ const authBadge = (l) => `<span class="b good" title="Una tienda aliada la revis
 const verifBadge = () => `<span class="b good" title="El vendedor subió una foto de la carta con un papel escrito a mano">${ic("camera")}Foto de verificación</span>`;
 const shopBadge = () => `<span class="b shop">${ic("store")}Tienda verificada</span>`;
 /** Price vs. the estimate's middle value, Collectr-style: arrow + amount + percent. */
-function marketDelta(l) {
-  const est = l.estimate;
-  if (!(est?.mid > 0)) return "";
-  const diff = l.priceUsd - est.mid, pct = Math.abs(diff / est.mid) * 100;
-  const tone = { "buen-precio": "good", "en-rango": "neutral", alto: "warn" }[priceVerdict(l.priceUsd, est)] ?? "neutral";
-  if (pct < 0.5) return `<p class="delta ${tone}"><span>En el valor estimado</span></p>`;
-  return `<p class="delta ${tone}" title="Comparado con el valor estimado de ${esc(fmtEstimate(est.mid))}">${diff < 0 ? TRI.down : TRI.up}<span>${diff < 0 ? "−" : "+"}${fmtEstimate(Math.abs(diff))} (${fmtPct(pct)}%)</span><span class="vs">vs. estimado</span></p>`;
-}
 function tile(l, i = 0, opts = {}) {
   const { before = "", after = "", onSale = false, badge = "" } = Array.isArray(opts) ? {} : opts; // list.map(tile) passes the array third
   return `<li style="--i:${Math.min(i, 16)}">${before}<a class="pcard" href="#/carta/${encodeURIComponent(l.id)}">
@@ -2380,7 +2372,7 @@ function tile(l, i = 0, opts = {}) {
     <p class="set">${esc([l.card.setName, l.card.number].filter(Boolean).join(" · "))}</p>
     <p class="meta">${ic("pin")}<span>${esc(l.location.neighborhood)}, ${esc(l.location.district)}</span></p>
     ${tileSeller(l.seller)}
-    <div class="foot"><div style="min-width:0"><p class="price">${formatUsd(toCents(l.priceUsd))}</p>${marketDelta(l)}</div><span class="act" aria-hidden="true">${ic("arrowRight")}</span></div>
+    <div class="foot"><div style="min-width:0"><p class="price">${formatUsd(toCents(l.priceUsd))}</p></div><span class="act" aria-hidden="true">${ic("arrowRight")}</span></div>
   </a>${after}</li>`;
 }
 const skeletonGrid = (n) => `<ul class="grid" aria-hidden="true">${Array.from({ length: n }, () => `<li><div class="pcard sk-card"><div class="sk card-ratio"></div><div class="sk" style="height:16px;width:85%;margin-top:12px"></div><div class="sk" style="height:12px;width:55%;margin-top:8px"></div><div class="sk" style="height:20px;width:40%;margin-top:18px"></div></div></li>`).join("")}</ul><p class="sr-only" role="status">Cargando cartas…</p>`;
