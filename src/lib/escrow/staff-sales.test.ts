@@ -25,7 +25,7 @@ describe("staff_create_sale", () => {
   it("only staff create sales, and the amounts come from the listing and the settings (7% + ITBMS)", async () => {
     await expect(create(BUYER, LISTING.charizard)).rejects.toThrow(/staff only/);
     const s = await create(STAFF, LISTING.charizard, { buyer: BUYER });
-    expect(s).toMatchObject({ status: "nueva", price_cents: 12000, shipping_cents: 400, commission_cents: 840, itbms_cents: 59,
+    expect(s).toMatchObject({ status: "nueva", price_cents: 12000, shipping_cents: 300, commission_cents: 840, itbms_cents: 59,
       payout_cents: 11101, seller_id: SHOP, buyer_phone: "+50760001111" });
     expect(s.code).toMatch(/^V-[2-9A-HJ-NP-Z]{6}$/);
     expect(await listingStatus(LISTING.charizard)).toBe("active"); // not reserved until it is paid

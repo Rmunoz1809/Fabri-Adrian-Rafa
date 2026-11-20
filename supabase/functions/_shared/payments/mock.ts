@@ -36,6 +36,8 @@ export class YappyMockProvider implements PaymentProvider {
     if (!isValidOrderId(req.orderId)) throw new ProviderError("orderId must be 1-15 letters or digits", "E002");
     if (req.subtotalCents + req.taxesCents !== req.totalCents) throw new ProviderError("El monto no coincide.", "E010");
     if (this.charges.has(req.orderId)) throw new ProviderError("Este pago ya se había iniciado.", "E007");
+    // Like Yappy with a phone that has no Yappy (the holo-pay mock uses the same number).
+    if (req.aliasYappy === "60000005") throw new ProviderError("Ese número no está registrado en Yappy.", "E005");
     this.charges.set(req.orderId, req);
     return { transactionId: `MOCK${req.orderId}`, token: "mock-token", documentName: "mock", simulated: true };
   }
@@ -58,5 +60,10 @@ export class YappyMockProvider implements PaymentProvider {
       domain: this.cfg.domain,
       confirmationNumber: status === "E" ? `MOCK-${Date.now().toString(36).toUpperCase()}` : null,
     };
+  }
+
+  /** The charge created for this orderId, as the provider received it (tests). */
+  charge(orderId: string): ChargeRequest | undefined {
+    return this.charges.get(orderId);
   }
 }

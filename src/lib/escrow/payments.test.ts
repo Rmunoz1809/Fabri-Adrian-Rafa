@@ -152,7 +152,7 @@ describe("IPN endpoint against the database", () => {
     await sellerConfirm(db, o);
     const r = await startPayment(o.id);
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ simulated: true, total_cents: 8400, purpose: "orden" });
+    expect(r.body).toMatchObject({ simulated: true, total_cents: 8300, purpose: "orden" });
     expect(r.body.attempt).toMatch(/^[A-Z0-9]{1,15}$/);
   });
 
@@ -171,7 +171,7 @@ describe("IPN endpoint against the database", () => {
     expect((await order(db, o.id)).status).toBe("esperando_entrega_vendedor");
     const charges = await db.q("select * from public.ledger_entries where order_id = $1 and kind = 'cobro'", [o.id]);
     expect(charges).toHaveLength(1);
-    expect(await escrow(db, o)).toBe(3900);
+    expect(await escrow(db, o)).toBe(3800);
     const log = await db.q<{ result: string; processed: boolean }>(
       "select result, processed from public.payment_notifications where attempt_id = $1 order by id", [body.attempt]);
     expect(log).toEqual([

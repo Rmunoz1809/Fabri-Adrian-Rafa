@@ -67,8 +67,8 @@ export function quoteProtected(priceCents: number, cfg: FeeConfig = DEFAULT_FEES
   };
 }
 
-/** Default shipping the buyer pays; the live value is holo_settings.shipping_cents (migration 0029). */
-export const DEFAULT_SHIPPING_CENTS = 400;
+/** Default shipping the buyer pays ($3, decisions 2026-11-12); the live value is holo_settings.shipping_cents (0029, 0043). */
+export const DEFAULT_SHIPPING_CENTS = 300;
 
 export interface OrderQuote extends ProtectedQuote {
   shippingCents: number;
