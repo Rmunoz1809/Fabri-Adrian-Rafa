@@ -280,7 +280,10 @@ label.f .hint { font-weight: 400; color: var(--fg-2); }
 .overlay[data-state="closed"] { animation: fadeOut .5s var(--ease-drawer) forwards; }
 
 /* product grid + card */
-.grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.grid { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; grid-auto-rows: 1fr; }
+/* every box is as tall as the tallest one in the list; the price row sits at the bottom */
+.grid > li { display: flex; flex-direction: column; min-width: 0; }
+.grid > li > .pcard { flex: 1; }
 @media (min-width: 640px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; } }
 @media (min-width: 1280px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .grid.live > li { animation: enter .6s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 45ms); --tw-enter-opacity: 0; --tw-enter-translate-y: 1rem; --tw-enter-scale: .97; }
