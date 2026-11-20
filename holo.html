@@ -1251,7 +1251,12 @@ const CATEGORIES = [
   { slug: "nba", name: "NBA" },
   { slug: "nfl", name: "NFL" },
 ];
-const categoryName = (s) => CATEGORIES.find((c) => c.slug === s)?.name ?? s;
+const categoryName = (s) => CATEGORIES.find((c) => c.slug === s)?.name ?? BROWSE_CATEGORIES.find((c) => c.slug === s)?.name ?? s;
+// Browsing filters: Pokémon, and "Coleccionables" for everything that is not Pokémon (NBA, NFL, …).
+// Listings keep their own category (CATEGORIES); only the filters group them.
+const BROWSE_CATEGORIES = [{ slug: "pokemon", name: "Pokémon" }, { slug: "coleccionables", name: "Coleccionables" }];
+const browseSlug = (category) => (category === "pokemon" ? "pokemon" : "coleccionables");
+const inCategory = (category, filter) => !filter || browseSlug(category) === filter;
 const CONDITIONS = [
   { code: "NM", label: "Near Mint", hint: "Como nueva, a lo sumo detalles mínimos" },
   { code: "LP", label: "Lightly Played", hint: "Desgaste leve en bordes o esquinas" },
@@ -1926,7 +1931,7 @@ function openSearch() {
     options.forEach((o, i) => { o.id = `cmdo${i}`; o.addEventListener("pointermove", () => { if (active !== i) setActive(i); }); });
     setActive(0);
   };
-  const quick = () => paint(`<p class="cmd-group">Explorar</p>${[...CATEGORIES.map((c) => [c.name, `#/?cat=${c.slug}`]), ["Cartas graduadas", "#/?tipo=graded"]]
+  const quick = () => paint(`<p class="cmd-group">Explorar</p>${[...BROWSE_CATEGORIES.map((c) => [c.name, `#/?cat=${c.slug}`]), ["Cartas graduadas", "#/?tipo=graded"]]
     .map(([t, h]) => `<a class="cmd-item" role="option" href="${h}"><span class="th ic">${ic("arrowRight")}</span><span class="tx"><span class="t1">${esc(t)}</span></span></a>`).join("")}`);
   const row = (l) => `<a class="cmd-item" role="option" href="#/carta/${encodeURIComponent(l.id)}">${thumbArt(l)}<span class="tx"><span class="t1">${esc(l.title)}</span><span class="t2">${esc([categoryName(l.card.category), l.card.setName, l.location.neighborhood].filter(Boolean).join(" · "))}</span></span><span class="pr">${formatUsd(toCents(l.priceUsd))}</span></a>`;
   const all = (q) => `<a class="cmd-item" role="option" href="#/?q=${encodeURIComponent(q)}"><span class="th ic">${ic("search")}</span><span class="tx"><span class="t1">Ver todos los resultados para “${esc(q)}”</span></span></a>`;
@@ -2126,7 +2131,8 @@ async function fetchRealListings(f) {
       q = q.not("seller_id", "in", `(${shops.join(",")})`);
     }
   }
-  if (f.category) q = q.eq("category", f.category);
+  if (f.category === "pokemon") q = q.eq("category", "pokemon");
+  else if (f.category === "coleccionables") q = q.neq("category", "pokemon");
   if (f.graded === "graded") q = q.not("grading_company", "is", null);
   if (f.graded === "raw") q = q.is("grading_company", null);
   if (f.graded === "raw" && sealedCols) q = q.eq("product_type", "card");
@@ -2167,7 +2173,7 @@ async function fetchRealListing(id) {
 function matchesFilters(l, f) {
   if (f.seller === "tiendas" && !isVerifiedShop(l.seller)) return false;
   if (f.seller === "particulares" && isVerifiedShop(l.seller)) return false;
-  if (f.category && l.card.category !== f.category) return false;
+  if (!inCategory(l.card.category, f.category)) return false;
   if (f.graded === "graded" && !l.grading) return false;
   if (f.graded === "raw" && (l.grading || isSealed(l) || isLot(l))) return false;
   if (f.graded === "lot" && !isLot(l)) return false;
@@ -2202,7 +2208,7 @@ function filtersFrom(params) {
   const tipo = params.get("tipo"), orden = params.get("orden"), vendedor = params.get("vendedor");
   return {
     seller: vendedor === "tiendas" || vendedor === "particulares" ? vendedor : undefined,
-    q: params.get("q")?.trim() || undefined, category: params.get("cat") || undefined,
+    q: params.get("q")?.trim() || undefined, category: params.get("cat") ? browseSlug(params.get("cat")) : undefined, // old ?cat=nba / nfl links land on Coleccionables
     graded: ["raw", "graded", "sealed", "lot"].includes(tipo) ? tipo : undefined, province: params.get("provincia") || undefined,
     minPrice: num("min"), maxPrice: num("max"), sort: orden === "precio-asc" || orden === "precio-desc" ? orden : "recientes",
   };
@@ -2990,7 +2996,7 @@ async function viewHome(app, params) {
       <div class="toolbar">
         <nav class="chips" aria-label="Categorías">
           <a class="chip ${!f.category ? "on" : ""}" href="${hrefWith(f, { cat: undefined })}"${!f.category ? ' aria-current="true"' : ""}>Todo</a>
-          ${CATEGORIES.map((c) => `<a class="chip ${f.category === c.slug ? "on" : ""}" href="${hrefWith(f, { cat: c.slug })}"${f.category === c.slug ? ' aria-current="true"' : ""}>${c.name}</a>`).join("")}
+          ${BROWSE_CATEGORIES.map((c) => `<a class="chip ${f.category === c.slug ? "on" : ""}" href="${hrefWith(f, { cat: c.slug })}"${f.category === c.slug ? ' aria-current="true"' : ""}>${c.name}</a>`).join("")}
         </nav>
         <div class="tools">
           <button type="button" class="btn outline sm" id="sortBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Ordenar: ${SORT_LABELS[f.sort]}">${ic("sort")}<span class="lg-only lbl-k">Ordenar:</span><span class="muted">${SORT_LABELS[f.sort]}</span>${ic("chevronDown")}</button>
@@ -3130,8 +3136,8 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
       html: (i) => collectionTile(c, i, cardBtn(intKey("p", c.id)), ownerView, cardTag(intKey("p", c.id))) })),
   ].sort((a, b) => (ownerView ? b.people - a.people : 0) || b.at - a.at); // the owner sees the most wanted first
   setTitle(s.displayName);
-  let cat = CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null, onlySale = params.get("venta") === "1";
-  const count = (c, sale) => entries.filter((e) => (!c || e.category === c) && (!sale || e.sale)).length;
+  let cat = BROWSE_CATEGORIES.some((c) => c.slug === params.get("cat")) ? params.get("cat") : null, onlySale = params.get("venta") === "1";
+  const count = (c, sale) => entries.filter((e) => inCategory(e.category, c) && (!sale || e.sale)).length;
   const who = ownerView ? "Tu" : "Su", name = esc(s.displayName);
   const meta = [sellerScore(s),
     since ? `En ${esc(CONFIG.APP_NAME)} desde ${new Date(since).toLocaleDateString("es-PA", { month: "long", year: "numeric" })}` : ""].filter(Boolean).join(" · ");
@@ -3167,10 +3173,10 @@ async function viewSeller(app, id, params = new URLSearchParams()) {
   </div>`;
   const chip = (slug, label) => `<button type="button" class="chip ${cat === slug ? "on" : ""}" data-cat="${slug ?? ""}" aria-pressed="${cat === slug}">${label}<span class="chip-n">${count(slug, onlySale)}</span></button>`;
   const renderList = () => {
-    const list = entries.filter((e) => (!cat || e.category === cat) && (!onlySale || e.sale));
+    const list = entries.filter((e) => inCategory(e.category, cat) && (!onlySale || e.sale));
     $("#sellerCount").textContent = `${fmtN(list.length)} ${list.length === 1 ? "carta" : "cartas"}`;
     const chips = app.querySelector(".seller-chips");
-    if (chips) chips.innerHTML = `${chip(null, "Todo")}${CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}`;
+    if (chips) chips.innerHTML = `${chip(null, "Todo")}${BROWSE_CATEGORIES.map((c) => chip(c.slug, c.name)).join("")}`;
     app.querySelectorAll(".coll-seg button").forEach((b) => {
       const sale = b.dataset.sale === "1", on = sale === onlySale;
       b.classList.toggle("on", on); b.setAttribute("aria-pressed", String(on));
@@ -3219,7 +3225,7 @@ async function viewDetail(app, id) {
 
   app.innerHTML = `
     <section class="dhead"><div class="wrap">
-      <nav class="crumbs" aria-label="Ruta"><a href="#/">Inicio</a>${ic("chevronRight")}<a href="#/?cat=${esc(l.card.category)}">${esc(categoryName(l.card.category))}</a>${ic("chevronRight")}<span aria-current="page">${esc(l.card.subject)}</span></nav>
+      <nav class="crumbs" aria-label="Ruta"><a href="#/">Inicio</a>${ic("chevronRight")}<a href="#/?cat=${browseSlug(l.card.category)}">${esc(categoryName(browseSlug(l.card.category)))}</a>${ic("chevronRight")}<span aria-current="page">${esc(l.card.subject)}</span></nav>
       <div class="dhead-row">
         <div style="min-width:0">
           <h1>${esc(l.title)}</h1>
