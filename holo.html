@@ -219,7 +219,7 @@ label.f .hint { font-weight: 400; color: var(--fg-2); }
 .loading { display: flex; align-items: center; gap: 10px; padding: 48px 0; color: var(--fg-2); font-size: 14px; }
 .sk { position: relative; overflow: hidden; border-radius: 10px; background: var(--muted); }
 .sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(var(--band-angle), transparent 25%, rgb(244 246 251 / .06), transparent 75%); transform: translate(-100%); animation: shine 2s linear infinite; }
-.empty-state { margin-top: 8px; padding: 48px 24px; text-align: center; border: 1px dashed var(--input); border-radius: var(--radius-xl); background: linear-gradient(180deg, rgb(244 246 251 / .02), transparent); }
+.empty-state { display: flex; flex-direction: column; align-items: center; margin-top: 8px; padding: 48px 24px; text-align: center; border: 1px dashed var(--input); border-radius: var(--radius-xl); background: linear-gradient(180deg, rgb(244 246 251 / .02), transparent); }
 .empty-state .ico { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 32%; background: var(--muted); color: var(--fg-2); margin-bottom: 12px; }
 .empty-state .ico .i { width: 20px; height: 20px; }
 
@@ -591,7 +591,7 @@ label.f.muted-label { font-size: 12px; font-weight: 400; color: var(--fg-2); }
 .seller-seg.pf-tabs { align-self: stretch; margin: 0; grid-template-columns: 1fr 1fr; }
 @media (min-width: 640px) { .seller-seg.pf-tabs { align-self: flex-start; grid-template-columns: repeat(2, auto); } }
 .pf-sales .tseller { display: none; } /* they are all mine */
-.pf-sales-sec .notice { margin-bottom: 14px; }
+.pf-sales-sec .notice { margin: 18px 0 12px; } /* even gap under the heading (its margin is -6px) and above the grid */
 .pf-sales-sec .rhead, .pf-mine { margin: 4px 0 -6px; }
 .seller-side > [hidden], .dside > [hidden] { display: none; } /* shop events and reviews stay hidden until they have something */
 .int-count { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; font-weight: 600; color: var(--fg-3); }
@@ -927,10 +927,10 @@ fieldset.plain legend { padding: 0; margin-bottom: 8px; font-size: 13px; font-we
 /* toasts (Sonner) */
 .toaster { position: fixed; z-index: 100; right: 24px; bottom: 24px; width: 356px; display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; pointer-events: none; }
 @media (max-width: 600px) { .toaster { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); width: auto; } }
-.toast { display: flex; align-items: center; gap: 6px; padding: 16px; background: var(--fg); border: 1px solid rgb(11 18 34 / .06); border-radius: 14px; box-shadow: 0 18px 40px -16px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .2); color: var(--bg); font-size: 13px; pointer-events: auto; opacity: 0; transform: translateY(100%) scale(.96); transition: transform .5s var(--ease-spring), opacity .35s var(--ease), box-shadow .2s; }
+.toast { display: flex; align-items: flex-start; gap: 6px; padding: 16px; background: var(--fg); border: 1px solid rgb(11 18 34 / .06); border-radius: 14px; box-shadow: 0 18px 40px -16px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .2); color: var(--bg); font-size: 13px; pointer-events: auto; opacity: 0; transform: translateY(100%) scale(.96); transition: transform .5s var(--ease-spring), opacity .35s var(--ease), box-shadow .2s; }
 .toast[data-mounted="true"] { opacity: 1; transform: translateY(0); }
 .toast[data-removed="true"] { opacity: 0; transform: translateY(100%); }
-.toast > .i { margin: 0 4px 0 -3px; }
+.toast > .i { margin: 2px 4px 0 0; } /* centered on the first line; same inset as the right edge */
 .toast.success > .i { color: #059669; }
 .toast.error > .i { color: #e11d48; }
 .toast.info > .i { color: #2563eb; }
@@ -6755,7 +6755,7 @@ async function viewPortfolio(app, { example = false, params = new URLSearchParam
   const salesExample = !example && !sales.length && CONFIG.SHOW_DEMO_LISTINGS;
   const shownSales = salesExample ? examplePortfolio().sales : sales, salesInts = salesExample ? examplePortfolio().ints : ints;
   const saleTiles = (list) => list.map((l, i) => tile(l, i, { onSale: true, badge: interestTag(salesInts?.byKey.get(intKey("l", l.id))?.people ?? 0) })).join("");
-  const salesNote = salesExample ? `<p class="notice warn" style="margin:0"><b>Ejemplo:</b> todavía no tienes cartas en venta. Así se verán cuando publiques: cada una con cuántas personas la quieren arriba a la derecha. Estas cartas y números son de ejemplo. <a class="link" href="#/vender">Publicar una carta</a></p>` : "";
+  const salesNote = salesExample ? `<p class="notice warn"><b>Ejemplo:</b> todavía no tienes cartas en venta. Así se verán cuando publiques: cada una con cuántas personas la quieren arriba a la derecha. Estas cartas y números son de ejemplo. <a class="link" href="#/vender">Publicar una carta</a></p>` : "";
   // Two tabs at the top: the portfolio, and the cards I have on sale.
   const base = example ? "#/portafolio/ejemplo" : "#/portafolio";
   const tabs = `<nav class="seller-seg pf-tabs" aria-label="Mis cartas">
